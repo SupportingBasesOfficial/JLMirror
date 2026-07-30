@@ -6,6 +6,6 @@
   "types": "./src/index.ts",
   "files": ["src"],
   "dependencies": {
-    "zod": "^3.24.1"
+    "zod": "^4.4.3"
   }
 }
