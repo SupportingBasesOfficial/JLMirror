@@ -1,0 +1,31 @@
+# CODEOWNERS — define revisores automáticos por path.
+#
+# Cada entrada no formato: <path> <owner1> <owner2>
+# O GitHub solicita review automaticamente dos owners quando um PR altera arquivos no path.
+
+# Default — todo o repositório
+* @JLInformatica
+
+# Infraestrutura e CI/CD
+/.github/ @JLInformatica
+/turbo.json @JLInformatica
+/package.json @JLInformatica
+/docker-compose.yml @JLInformatica
+
+# Banco de dados e migrations
+/migrations/ @JLInformatica
+/packages/db/ @JLInformatica
+
+# API
+/apps/api/ @JLInformatica
+
+# Frontend
+/apps/web/ @JLInformatica
+
+# Packages compartilhados
+/packages/ @JLInformatica
+
+# Documentação
+/docs/ @JLInformatica
+/README.md @JLInformatica
+/CONTRIBUTING.md @JLInformatica

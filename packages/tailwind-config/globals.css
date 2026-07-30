@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+
+    /* JLMIRROR Design System — Light */
+    --surface-0: #F8FAFC;
+    --surface-1: #FFFFFF;
+    --surface-2: #F1F5F9;
+    --surface-3: #E2E8F0;
+    --surface-hover: #F1F5F9;
+    --surface-active: #E2E8F0;
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #94A3B8;
+    --text-disabled: #CBD5E1;
+    --border-subtle: #E2E8F0;
+    --border-default: #CBD5E1;
+    --border-strong: #94A3B8;
+    --brand-primary: #1BA898;
+    --brand-secondary: #35D0C4;
+    --brand-muted: #E6F7F5;
+    --brand-border: #1BA89833;
+    --brand-glow: rgba(27, 168, 152, 0.15);
+    --overlay-modal: rgba(0, 0, 0, 0.5);
+    --status-ok-bg: #DCFCE7;
+    --status-ok-text: #166534;
+    --status-ok-border: #86EFAC;
+    --status-info-bg: #DBEAFE;
+    --status-info-text: #1E40AF;
+    --status-info-border: #93C5FD;
+    --status-warning-bg: #FEF3C7;
+    --status-warning-text: #92400E;
+    --status-warning-border: #FCD34D;
+    --status-error-bg: #FEE2E2;
+    --status-error-text: #DC2626;
+    --status-error-border: #FCA5A5;
+    --status-critical-bg: #FECACA;
+    --status-critical-text: #991B1B;
+    --status-critical-border: #F87171;
+    --status-neutral-bg: #F1F5F9;
+    --status-neutral-text: #475569;
+    --status-neutral-border: #CBD5E1;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+
+    /* JLMIRROR Design System — Dark */
+    --surface-0: #0B1015;
+    --surface-1: #0D1218;
+    --surface-2: #10171C;
+    --surface-3: #141C24;
+    --surface-hover: #1A2330;
+    --surface-active: #1E2530;
+    --text-primary: #C9D4DA;
+    --text-secondary: #8B9DA6;
+    --text-muted: #6E7F88;
+    --text-disabled: #3D4B55;
+    --border-subtle: #1E2530;
+    --border-default: #2A3441;
+    --border-strong: #3D4B55;
+    --brand-primary: #1BA898;
+    --brand-secondary: #35D0C4;
+    --brand-muted: #0F2A26;
+    --brand-border: #1BA89833;
+    --brand-glow: rgba(27, 168, 152, 0.15);
+    --overlay-modal: rgba(0, 0, 0, 0.7);
+    --status-ok-bg: #0F2A1A;
+    --status-ok-text: #3DD68C;
+    --status-ok-border: #3DD68C44;
+    --status-info-bg: #0F1A2A;
+    --status-info-text: #5B9BD5;
+    --status-info-border: #5B9BD544;
+    --status-warning-bg: #2A2410;
+    --status-warning-text: #F0C674;
+    --status-warning-border: #F0C67444;
+    --status-error-bg: #2A1010;
+    --status-error-text: #E5484D;
+    --status-error-border: #E5484D44;
+    --status-critical-bg: #2A0A0A;
+    --status-critical-text: #FF4444;
+    --status-critical-border: #FF444444;
+    --status-neutral-bg: #1A2330;
+    --status-neutral-text: #8B9DA6;
+    --status-neutral-border: #2A3441;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar customizada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}

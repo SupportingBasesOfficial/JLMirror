@@ -1,0 +1,35 @@
+# Arquivos e diretórios ignorados no build Docker
+# Reduz o tamanho da imagem e acelera o build
+
+node_modules
+.next
+out
+dist
+.turbo
+
+.git
+.gitignore
+.husky
+
+.env
+.env.*
+!.env.example
+
+*.md
+!README.md
+
+storybook-static
+test-results
+playwright-report
+.lighthouseci
+
+.vscode
+.idea
+.history
+
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+e2e
+playwright.config.ts

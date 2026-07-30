@@ -1,0 +1,70 @@
+# --- Gerenciamento de Dependências e Cache ---
+node_modules
+.pnpm-debug.log*
+.pnpm-store
+.pnp
+.pnp.js
+
+# --- Turborepo & Build (Essencial para Monorepo) ---
+.turbo
+.next/
+out/
+build/
+dist/
+.vercel
+*.tsbuildinfo
+
+# --- Variáveis de Ambiente (Segurança Máxima) ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+!.env.example
+
+# --- Logs e Debug ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- Arquivos de Sistema e IDEs ---
+.DS_Store
+Thumbs.db
+*.pem
+
+# --- Dev Containers ---
+.devcontainer/.env
+
+# --- Cache do Windsurf/VS Code ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.history/
+
+# --- Playwright ---
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# --- Storybook ---
+storybook-static/
+
+# --- Bundle Analyzer ---
+analyze/
+
+# --- Lighthouse CI ---
+.lighthouseci/
+
+# Local Netlify folder
+.netlify
+
+# --- Temporarios e Scripts de Debug ---
+tmp-*
+scripts/fix-db.js
+scripts/check-users.js
+scripts/stress-test.js
+.db_schema_audit.txt

@@ -1,0 +1,110 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jlmirror-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: jlmirror
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jlmirror"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jlmirror-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: jlmirror-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jlmirror-net
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: jlmirror-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      API_PORT: "3001"
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/jlmirror"
+      DATABASE_MASTER_URL: "postgresql://postgres:postgres@postgres:5432/jlmirror"
+      # DATABASE_REPLICA_URL: "postgresql://postgres:postgres@postgres-replica:5432/jlmirror"
+      REDIS_URL: "redis://redis:6379"
+      JWT_PRIVATE_KEY: "${JWT_PRIVATE_KEY:-}"
+      JWT_PUBLIC_KEY: "${JWT_PUBLIC_KEY:-}"
+      JWT_ISSUER: "jlmirror"
+      JWT_AUDIENCE: "jlmirror-web"
+      ZABBIX_API_URL: "https://zabbix.jlinformatica.com.br/api_jsonrpc.php"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+      API_INTERNAL_URL: "http://api:3001"
+      VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"
+      VAPID_PRIVATE_KEY: "${VAPID_PRIVATE_KEY:-}"
+      VAPID_SUBJECT: "${VAPID_SUBJECT:-mailto:admin@jlinformatica.com.br}"
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/v1/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - jlmirror-net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jlmirror-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: "http://localhost:3001/api/v1"
+      NEXT_PUBLIC_WS_URL: "ws://localhost:3001/ws"
+      API_INTERNAL_URL: "http://api:3001"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - jlmirror-net
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  jlmirror-net:
+    driver: bridge

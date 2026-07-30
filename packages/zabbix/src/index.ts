@@ -1,0 +1,619 @@
+import crypto from "node:crypto";
+
+// ========== Tipos Zabbix ==========
+
+export interface ZabbixHost {
+  hostid: string;
+  host: string;
+  name: string;
+  status: number;
+  interfaces?: ZabbixInterface[];
+  hostGroups?: ZabbixHostGroup[];
+  groups?: ZabbixHostGroup[];
+  proxyid?: string;
+  templates?: ZabbixTemplate[];
+  macros?: ZabbixMacro[];
+}
+
+export interface ZabbixInterface {
+  interfaceid: string;
+  hostid: string;
+  ip: string;
+  dns: string;
+  type: number;
+  port: string;
+  main: number;
+  useip: number;
+}
+
+export interface ZabbixHostGroup {
+  groupid: string;
+  name: string;
+  hosts?: ZabbixHost[];
+}
+
+export interface ZabbixTemplate {
+  templateid: string;
+  host: string;
+  name: string;
+}
+
+export interface ZabbixMacro {
+  hostmacroid: string;
+  macro: string;
+  value: string;
+}
+
+export interface ZabbixItem {
+  itemid: string;
+  hostid: string;
+  name: string;
+  key_: string;
+  value_type: number;
+  type: number;
+  units: string;
+  history: string;
+  trends: string;
+  lastvalue: string;
+  lastclock: string;
+  delay: string;
+  state: number;
+  status: number;
+  error?: string;
+}
+
+export interface ZabbixTrigger {
+  triggerid: string;
+  description: string;
+  expression: string;
+  priority: number;
+  value: number;
+  state: number;
+  status: number;
+  url?: string;
+  comments?: string;
+  error?: string;
+  templateid?: string;
+  hosts?: ZabbixHost[];
+  items?: ZabbixItem[];
+  lastchange: string;
+  lastEvent?: ZabbixEvent;
+}
+
+export interface ZabbixProblem {
+  eventid: string;
+  objectid: string;
+  source: number;
+  object: number;
+  acknowledged: number;
+  clock: number;
+  ns: number;
+  name: string;
+  severity: number;
+  hosts?: ZabbixHost[];
+  relatedObject?: ZabbixTrigger;
+  suppressed?: boolean;
+}
+
+export interface ZabbixEvent {
+  eventid: string;
+  objectid: string;
+  clock: number;
+  ns: number;
+  value: number;
+  source: number;
+  object: number;
+  acknowledged: number;
+  name?: string;
+  severity?: number;
+  hosts?: ZabbixHost[];
+}
+
+export interface ZabbixHistoryEntry {
+  itemid: string;
+  clock: number;
+  ns: number;
+  value: string;
+}
+
+export interface ZabbixGraph {
+  graphid: string;
+  name: string;
+  width: number;
+  height: number;
+  yaxismin: number;
+  yaxismax: number;
+  templateid?: string;
+  items?: ZabbixGraphItem[];
+}
+
+export interface ZabbixGraphItem {
+  gitemid: string;
+  graphid: string;
+  itemid: string;
+  drawtype: number;
+  sortorder: number;
+  color: string;
+  yaxisside: number;
+  calc_fnc: number;
+  type: number;
+}
+
+export interface ZabbixMaintenance {
+  maintenanceid: string;
+  name: string;
+  maintenance_type: number;
+  state: number;
+  description: string;
+  active_since: number;
+  active_till: number;
+  hosts?: ZabbixHost[];
+  groups?: ZabbixHostGroup[];
+  timeperiods?: unknown[];
+}
+
+export interface ZabbixProxy {
+  proxyid: string;
+  name: string;
+  status: number;
+  hosts?: ZabbixHost[];
+}
+
+export interface ZabbixService {
+  serviceid: string;
+  name: string;
+  status: number;
+  sortorder: number;
+  parentid?: string;
+  children?: ZabbixService[];
+}
+
+export interface ZabbixSla {
+  slaid: string;
+  name: string;
+  status: number;
+  schedule?: unknown[];
+  excluded_downtimes?: unknown[];
+}
+
+export interface ZabbixUser {
+  userid: string;
+  username: string;
+  name: string;
+  surname: string;
+  role: number;
+}
+
+export interface ZabbixAction {
+  actionid: string;
+  name: string;
+  status: number;
+  eventsource: number;
+  r_eventid?: string;
+}
+
+export interface ZabbixDiscoveryRule {
+  ruleid: string;
+  name: string;
+  key_: string;
+  hostid: string;
+  status: number;
+}
+
+export interface ZabbixReport {
+  reportid: string;
+  name: string;
+  status: number;
+  userid: string;
+  dashboardid: string;
+  period: number;
+  cycle: number;
+}
+
+// ========== Criptografia AES-256-GCM para tokens ==========
+
+export function encryptTokenParts(
+  plaintext: string,
+  encryptionKey?: string,
+): { encrypted: string; iv: string; tag: string } {
+  const key = encryptionKey ?? process.env.ENCRYPTION_KEY ?? "";
+  if (!key) throw new Error("ENCRYPTION_KEY não configurado");
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(key, "hex"), iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+
+  return {
+    encrypted: encrypted.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: tag.toString("base64"),
+  };
+}
+
+export function decryptTokenParts(
+  encrypted: string,
+  iv: string,
+  tag: string,
+  encryptionKey?: string,
+): string | null {
+  try {
+    const key = encryptionKey ?? process.env.ENCRYPTION_KEY ?? "";
+    if (!key) throw new Error("ENCRYPTION_KEY não configurado");
+
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      Buffer.from(key, "hex"),
+      Buffer.from(iv, "base64"),
+    );
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(encrypted, "base64")),
+      decipher.final(),
+    ]);
+    return decrypted.toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+// ========== BlindedZabbixClient ==========
+
+interface BlindedZabbixClientOptions {
+  apiUrl: string;
+  apiToken: string;
+  timeout?: number;
+}
+
+export class BlindedZabbixClient {
+  private apiUrl: string;
+  private apiToken: string;
+  private timeout: number;
+  private requestId: number = 0;
+
+  constructor(opts: BlindedZabbixClientOptions) {
+    this.apiUrl = opts.apiUrl;
+    this.apiToken = opts.apiToken;
+    this.timeout = opts.timeout ?? 30_000;
+  }
+
+  // RPC generico para a API Zabbix
+  async rpc<T = unknown>(method: string, params?: Record<string, unknown>, skipAuth = false): Promise<T> {
+    const id = ++this.requestId;
+    const body = {
+      jsonrpc: "2.0",
+      method,
+      params: params ?? {},
+      id,
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json-rpc",
+      };
+      if (!skipAuth) {
+        headers["Authorization"] = `Bearer ${this.apiToken}`;
+      }
+      const res = await fetch(this.apiUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Zabbix API HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { result?: T; error?: { message: string; code?: number } };
+
+      if (json.error) {
+        throw new Error(`Zabbix API error: ${json.error.message}`);
+      }
+
+      return json.result as T;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  // API version
+  async getApiVersion(): Promise<string> {
+    return this.rpc<string>("apiinfo.version", {}, true);
+  }
+
+  // Hosts / Devices
+  async getDevices(hostGroupId?: string): Promise<ZabbixHost[]> {
+    const params: Record<string, unknown> = {
+      output: ["hostid", "host", "name", "status"],
+      selectInterfaces: ["ip", "type", "port", "dns"],
+      selectGroups: ["groupid", "name"],
+    };
+    if (hostGroupId) {
+      params.groupids = hostGroupId;
+    }
+    return this.rpc<ZabbixHost[]>("host.get", params);
+  }
+
+  async getDevice(hostId: string): Promise<ZabbixHost | null> {
+    const result = await this.rpc<ZabbixHost[]>("host.get", {
+      output: ["hostid", "host", "name", "status"],
+      selectInterfaces: ["ip", "type"],
+      selectHostGroups: ["groupid", "name"],
+      hostids: hostId,
+    });
+    return result[0] ?? null;
+  }
+
+  async createHost(data: Record<string, unknown>): Promise<{ hostids: string[] }> {
+    return this.rpc<{ hostids: string[] }>("host.create", data);
+  }
+
+  async updateHost(hostId: string, data: Record<string, unknown>): Promise<{ hostids: string[] }> {
+    return this.rpc<{ hostids: string[] }>("host.update", { hostid: hostId, ...data });
+  }
+
+  async deleteHost(hostIds: string[]): Promise<{ hostids: string[] }> {
+    return this.rpc<{ hostids: string[] }>("host.delete", hostIds as unknown as Record<string, unknown>);
+  }
+
+  // Host Groups
+  async getHostGroups(): Promise<ZabbixHostGroup[]> {
+    return this.rpc<ZabbixHostGroup[]>("hostgroup.get", {
+      output: ["groupid", "name"],
+      sortfield: "name",
+    });
+  }
+
+  async getHostGroupsWithHosts(): Promise<ZabbixHostGroup[]> {
+    return this.rpc<ZabbixHostGroup[]>("hostgroup.get", {
+      output: ["groupid", "name"],
+      selectHosts: ["hostid", "host", "name", "status"],
+      sortfield: "name",
+    });
+  }
+
+  async createHostGroup(name: string): Promise<{ groupids: string[] }> {
+    return this.rpc<{ groupids: string[] }>("hostgroup.create", { name });
+  }
+
+  async updateHostGroup(groupId: string, name: string): Promise<{ groupids: string[] }> {
+    return this.rpc<{ groupids: string[] }>("hostgroup.update", { groupid: groupId, name });
+  }
+
+  async deleteHostGroup(groupIds: string[]): Promise<{ groupids: string[] }> {
+    return this.rpc<{ groupids: string[] }>("hostgroup.delete", groupIds as unknown as Record<string, unknown>);
+  }
+
+  // Items
+  async getItems(hostId: string): Promise<ZabbixItem[]> {
+    return this.rpc<ZabbixItem[]>("item.get", {
+      hostids: hostId,
+      output: [
+        "itemid", "hostid", "name", "key_", "value_type",
+        "type", "units", "history", "trends", "lastvalue",
+        "lastclock", "delay", "state", "status",
+      ],
+      sortfield: "name",
+    });
+  }
+
+  async getKeyItems(hostIds: string[], keySearch?: string): Promise<ZabbixItem[]> {
+    const params: Record<string, unknown> = {
+      hostids: hostIds,
+      output: [
+        "itemid", "hostid", "name", "key_", "value_type",
+        "type", "units", "history", "trends", "lastvalue",
+        "lastclock", "delay", "state", "status",
+      ],
+      sortfield: "name",
+    };
+    if (keySearch) {
+      params.search = { key_: keySearch };
+      params.searchByAny = true;
+    }
+    return this.rpc<ZabbixItem[]>("item.get", params);
+  }
+
+  async createItem(data: Record<string, unknown>): Promise<{ itemids: string[] }> {
+    return this.rpc<{ itemids: string[] }>("item.create", data);
+  }
+
+  async updateItem(itemId: string, data: Record<string, unknown>): Promise<{ itemids: string[] }> {
+    return this.rpc<{ itemids: string[] }>("item.update", { itemid: itemId, ...data });
+  }
+
+  async deleteItem(itemIds: string[]): Promise<{ itemids: string[] }> {
+    return this.rpc<{ itemids: string[] }>("item.delete", itemIds as unknown as Record<string, unknown>);
+  }
+
+  // Triggers
+  async getTriggers(hostIds?: string[]): Promise<ZabbixTrigger[]> {
+    const params: Record<string, unknown> = {
+      output: "extend",
+      selectHosts: ["hostid", "host", "name"],
+      selectItems: ["itemid", "name", "key_"],
+      expandDescription: true,
+    };
+    if (hostIds) params.hostids = hostIds;
+    return this.rpc<ZabbixTrigger[]>("trigger.get", params);
+  }
+
+  async createTrigger(data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
+    return this.rpc<{ triggerids: string[] }>("trigger.create", data);
+  }
+
+  async updateTrigger(triggerId: string, data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
+    return this.rpc<{ triggerids: string[] }>("trigger.update", { triggerid: triggerId, ...data });
+  }
+
+  async deleteTrigger(triggerIds: string[]): Promise<{ triggerids: string[] }> {
+    return this.rpc<{ triggerids: string[] }>("trigger.delete", triggerIds as unknown as Record<string, unknown>);
+  }
+
+  // Problems
+  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean }): Promise<ZabbixProblem[]> {
+    const params: Record<string, unknown> = {
+      output: "extend",
+      recent: options?.recent ?? false,
+      sortfield: ["eventid"],
+      sortorder: "DESC",
+    };
+    if (hostIds) params.hostids = hostIds;
+    if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
+    if (options?.suppressed !== undefined) params.suppressed = options.suppressed;
+    return this.rpc<ZabbixProblem[]>("problem.get", params);
+  }
+
+  // Events
+  async getEvents(hostIds: string[], options?: { from?: number; to?: number; value?: number }): Promise<ZabbixEvent[]> {
+    const params: Record<string, unknown> = {
+      output: "extend",
+      hostids: hostIds,
+      sortfield: ["clock", "eventid"],
+      sortorder: "DESC",
+      limit: 100,
+    };
+    if (options?.from) params.time_from = options.from;
+    if (options?.to) params.time_till = options.to;
+    if (options?.value !== undefined) params.value = options.value;
+    return this.rpc<ZabbixEvent[]>("event.get", params);
+  }
+
+  // History
+  async getHistory(itemId: string, from: number, to: number, valueType: number): Promise<ZabbixHistoryEntry[]> {
+    return this.rpc<ZabbixHistoryEntry[]>("history.get", {
+      itemids: itemId,
+      history: valueType,
+      time_from: from,
+      time_till: to,
+      sortfield: "clock",
+      sortorder: "ASC",
+      output: "extend",
+      limit: 5000,
+    });
+  }
+
+  async getHistoryBatch(itemIds: string[], from: number, to: number, valueType?: number): Promise<ZabbixHistoryEntry[]> {
+    const params: Record<string, unknown> = {
+      itemids: itemIds,
+      time_from: from,
+      time_till: to,
+      sortfield: "clock",
+      sortorder: "ASC",
+      output: "extend",
+      limit: 10000,
+    };
+    if (valueType !== undefined) params.history = valueType;
+    return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
+  }
+
+  // Graphs
+  async getGraphs(hostId: string): Promise<ZabbixGraph[]> {
+    return this.rpc<ZabbixGraph[]>("graph.get", {
+      hostids: hostId,
+      output: ["graphid", "name", "width", "height"],
+      selectGraphItems: ["itemid", "color", "drawtype"],
+      sortfield: "name",
+    });
+  }
+
+  // Templates
+  async getTemplates(hostId?: string): Promise<ZabbixTemplate[]> {
+    const params: Record<string, unknown> = {
+      output: ["templateid", "host", "name"],
+    };
+    if (hostId) params.hostids = hostId;
+    return this.rpc<ZabbixTemplate[]>("template.get", params);
+  }
+
+  // Proxies
+  async getProxies(): Promise<ZabbixProxy[]> {
+    return this.rpc<ZabbixProxy[]>("proxy.get", {
+      output: ["proxyid", "name", "status"],
+      selectHosts: ["hostid", "host", "name"],
+    });
+  }
+
+  // Maintenance
+  async getMaintenances(hostIds?: string[]): Promise<ZabbixMaintenance[]> {
+    const params: Record<string, unknown> = {
+      output: "extend",
+      selectGroups: ["groupid", "name"],
+      selectHosts: ["hostid", "host", "name"],
+    };
+    if (hostIds) params.hostids = hostIds;
+    return this.rpc<ZabbixMaintenance[]>("maintenance.get", params);
+  }
+
+  async createMaintenance(data: Record<string, unknown>): Promise<{ maintenanceids: string[] }> {
+    return this.rpc<{ maintenanceids: string[] }>("maintenance.create", data);
+  }
+
+  async deleteMaintenance(maintenanceIds: string[]): Promise<{ maintenanceids: string[] }> {
+    return this.rpc<{ maintenanceids: string[] }>("maintenance.delete", maintenanceIds as unknown as Record<string, unknown>);
+  }
+
+  // Acknowledge events
+  async acknowledgeEvents(eventIds: string[], message: string, action: number): Promise<{ eventids: string[] }> {
+    return this.rpc<{ eventids: string[] }>("event.acknowledge", {
+      eventids: eventIds,
+      message,
+      action,
+    });
+  }
+
+  // Services (SLA)
+  async getServices(parentId?: string): Promise<ZabbixService[]> {
+    const params: Record<string, unknown> = {
+      output: "extend",
+    };
+    if (parentId) params.parentids = parentId;
+    return this.rpc<ZabbixService[]>("service.get", params);
+  }
+
+  async getSlas(): Promise<ZabbixSla[]> {
+    return this.rpc<ZabbixSla[]>("sla.get", { output: "extend" });
+  }
+
+  // Users
+  async getUsers(): Promise<ZabbixUser[]> {
+    return this.rpc<ZabbixUser[]>("user.get", {
+      output: ["userid", "username", "name", "surname", "role"],
+    });
+  }
+
+  // Actions
+  async getActions(): Promise<ZabbixAction[]> {
+    return this.rpc<ZabbixAction[]>("action.get", {
+      output: ["actionid", "name", "status", "eventsource"],
+    });
+  }
+
+  // Discovery rules
+  async getDiscoveryRules(): Promise<ZabbixDiscoveryRule[]> {
+    return this.rpc<ZabbixDiscoveryRule[]>("discoveryrule.get", {
+      output: ["ruleid", "name", "key_", "hostid", "status"],
+    });
+  }
+
+  // Reports
+  async getReports(): Promise<ZabbixReport[]> {
+    return this.rpc<ZabbixReport[]>("report.get", {
+      output: "extend",
+    });
+  }
+
+  // Ping — testa conectividade com a API Zabbix
+  async ping(): Promise<boolean> {
+    try {
+      await this.getApiVersion();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
