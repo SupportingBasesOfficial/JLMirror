@@ -50,20 +50,7 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: "http://localhost:3001/api/v1/:path*",
-      },
-      {
-        source: "/api/auth/:path*",
-        destination: "http://localhost:3001/api/v1/auth/:path*",
-      },
-      {
-        source: "/api/zabbix/:path*",
-        destination: "http://localhost:3001/api/v1/zabbix/:path*",
-      },
-    ];
+    return [];
   },
 };
 

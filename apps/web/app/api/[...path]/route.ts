@@ -65,7 +65,7 @@ async function proxyRequest(
   try {
     const params = await paramsPromise;
     const path = params.path.join("/");
-    const url = new URL(`/api/v1/${path}`, API_BASE_URL);
+    const url = new URL(`/api/${path}`, API_BASE_URL);
     url.search = request.nextUrl.search;
 
     const headers = new Headers(request.headers);
