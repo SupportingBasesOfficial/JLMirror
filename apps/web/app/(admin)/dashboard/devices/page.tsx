@@ -57,7 +57,7 @@ export default async function DevicesPage() {
     ...devices.map((d) => getDeviceItems(accessToken, refreshToken, d.hostid)),
   ]);
 
-  const triggers = triggersResult.data?.data ?? [];
+  const triggers = (triggersResult.data?.data ?? []).filter((t) => t.value === "1");
   const onlineDevices = devices.filter((d) => d.status === "0");
   const offlineDevices = devices.filter((d) => d.status !== "0");
 

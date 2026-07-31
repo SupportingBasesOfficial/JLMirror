@@ -50,7 +50,12 @@ const nextConfig = {
     ];
   },
   async rewrites() {
-    return [];
+    return [
+      {
+        source: "/api/zabbix/:path*",
+        destination: "/api/v1/zabbix/:path*",
+      },
+    ];
   },
 };
 

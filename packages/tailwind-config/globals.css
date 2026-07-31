@@ -157,3 +157,29 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.5);
 }
+
+/* Animacoes JLMIRROR — loaders e transicoes */
+@keyframes jlArrowUp {
+  0%, 100% { opacity: 0.3; transform: translateY(2px); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+
+@keyframes jlArrowDown {
+  0%, 100% { opacity: 0.3; transform: translateY(-2px); }
+  50% { opacity: 1; transform: translateY(2px); }
+}
+
+@keyframes jlTravel {
+  0% { left: -30%; }
+  100% { left: 100%; }
+}
+
+@keyframes jlFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes jlBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

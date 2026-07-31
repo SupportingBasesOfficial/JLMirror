@@ -38,7 +38,7 @@ export default async function AlertsPage() {
     refreshToken,
   );
 
-  const triggers = triggersResult.data?.data ?? [];
+  const triggers = (triggersResult.data?.data ?? []).filter((t) => t.value === "1");
   const criticalTriggers = triggers.filter((t) => t.priority === "4" || t.priority === "5");
   const warningTriggers = triggers.filter((t) => t.priority === "2" || t.priority === "3");
   const infoTriggers = triggers.filter((t) => t.priority === "0" || t.priority === "1");

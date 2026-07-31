@@ -80,12 +80,14 @@ export default async function DashboardPage() {
   const triggers = triggersResult.data?.data ?? [];
   const onlineCount = devices.filter((d) => d.status === "0").length;
   const offlineCount = devices.length - onlineCount;
-  const alertCount = triggers.length;
-  const criticalCount = triggers.filter((t) => t.priority === "4" || t.priority === "5").length;
+  // Filtra apenas triggers ativos (value === "1" = problema em andamento)
+  const activeTriggers = triggers.filter((t) => t.value === "1");
+  const alertCount = activeTriggers.length;
+  const criticalCount = activeTriggers.filter((t) => t.priority === "4" || t.priority === "5").length;
 
   // Agrupa triggers por hostid
   const triggersByHost: Record<string, ZabbixTrigger[]> = {};
-  for (const t of triggers) {
+  for (const t of activeTriggers) {
     for (const h of t.hosts ?? []) {
       if (!triggersByHost[h.hostid]) triggersByHost[h.hostid] = [];
       triggersByHost[h.hostid].push(t);
@@ -141,7 +143,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Active alerts section - em cima, prioridade maxima */}
-      {triggers.length > 0 && (
+      {activeTriggers.length > 0 && (
         <div className="space-y-4">
           {/* Header com contadores */}
           <div className="flex items-center justify-between">
@@ -153,10 +155,10 @@ export default async function DashboardPage() {
                 {criticalCount} crítico{criticalCount !== 1 ? "s" : ""}
               </StatusBadge>
               <StatusBadge variant="warning" dot>
-                {triggers.filter((t) => t.priority === "2" || t.priority === "3").length} aviso{triggers.filter((t) => t.priority === "2" || t.priority === "3").length !== 1 ? "s" : ""}
+                {activeTriggers.filter((t) => t.priority === "2" || t.priority === "3").length} aviso{activeTriggers.filter((t) => t.priority === "2" || t.priority === "3").length !== 1 ? "s" : ""}
               </StatusBadge>
               <StatusBadge variant="neutral" dot>
-                {triggers.filter((t) => t.priority === "0" || t.priority === "1").length} info
+                {activeTriggers.filter((t) => t.priority === "0" || t.priority === "1").length} info
               </StatusBadge>
             </div>
           </div>
@@ -170,7 +172,7 @@ export default async function DashboardPage() {
                 <span className="text-xs" style={{ color: "var(--text-muted)" }}>({criticalCount})</span>
               </div>
               <div className="space-y-1.5">
-                {triggers
+                {activeTriggers
                   .filter((t) => t.priority === "4" || t.priority === "5")
                   .map((t) => {
                     const hostName = t.hosts?.[0]?.name ?? "N/A";
@@ -203,15 +205,15 @@ export default async function DashboardPage() {
           )}
 
           {/* Avisos */}
-          {triggers.filter((t) => t.priority === "2" || t.priority === "3").length > 0 && (
+          {activeTriggers.filter((t) => t.priority === "2" || t.priority === "3").length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="rounded-full" style={{ width: 8, height: 8, background: "var(--status-warning-text)", boxShadow: "0 0 8px var(--status-warning-border)" }} />
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--status-warning-text)" }}>Avisos</span>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>({triggers.filter((t) => t.priority === "2" || t.priority === "3").length})</span>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>({activeTriggers.filter((t) => t.priority === "2" || t.priority === "3").length})</span>
               </div>
               <div className="space-y-1.5">
-                {triggers
+                {activeTriggers
                   .filter((t) => t.priority === "2" || t.priority === "3")
                   .map((t) => {
                     const hostName = t.hosts?.[0]?.name ?? "N/A";
@@ -244,15 +246,15 @@ export default async function DashboardPage() {
           )}
 
           {/* Info */}
-          {triggers.filter((t) => t.priority === "0" || t.priority === "1").length > 0 && (
+          {activeTriggers.filter((t) => t.priority === "0" || t.priority === "1").length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="rounded-full" style={{ width: 8, height: 8, background: "var(--text-muted)" }} />
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>Informações</span>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>({triggers.filter((t) => t.priority === "0" || t.priority === "1").length})</span>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>({activeTriggers.filter((t) => t.priority === "0" || t.priority === "1").length})</span>
               </div>
               <div className="space-y-1.5">
-                {triggers
+                {activeTriggers
                   .filter((t) => t.priority === "0" || t.priority === "1")
                   .map((t) => {
                     const hostName = t.hosts?.[0]?.name ?? "N/A";
