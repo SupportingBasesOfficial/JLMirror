@@ -320,9 +320,9 @@ export class BlindedZabbixClient {
     }
   }
 
-  // API version
+  // API version — params deve ser array vazio conforme docs do Zabbix
   async getApiVersion(): Promise<string> {
-    return this.rpc<string>("apiinfo.version", {}, true);
+    return this.rpc<string>("apiinfo.version", [], true);
   }
 
   // Hosts / Devices — selectHostGroups (renamed de selectGroups no Zabbix 7.x)
@@ -481,19 +481,17 @@ export class BlindedZabbixClient {
     return this.rpc<{ triggerids: string[] }>("trigger.delete", triggerIds as unknown as Record<string, unknown>);
   }
 
-  // Problems — adicionado selectHosts e severity_from
-  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean; severityFrom?: number }): Promise<ZabbixProblem[]> {
+  // Problems — Zabbix 7.4 nao suporta selectHosts em problem.get
+  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean }): Promise<ZabbixProblem[]> {
     const params: Record<string, unknown> = {
       output: "extend",
       recent: options?.recent ?? false,
       sortfield: ["eventid"],
       sortorder: "DESC",
-      selectHosts: ["hostid", "host", "name"],
     };
     if (hostIds) params.hostids = hostIds;
     if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
     if (options?.suppressed !== undefined) params.suppressed = options.suppressed;
-    if (options?.severityFrom !== undefined) params.severity_from = options.severityFrom;
     return this.rpc<ZabbixProblem[]>("problem.get", params);
   }
 
@@ -618,10 +616,10 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixSla[]>("sla.get", { output: "extend" });
   }
 
-  // Users
+  // Users — Zabbix 7.x usa roleid em vez de role
   async getUsers(): Promise<ZabbixUser[]> {
     return this.rpc<ZabbixUser[]>("user.get", {
-      output: ["userid", "username", "name", "surname", "role"],
+      output: ["userid", "username", "name", "surname", "roleid"],
     });
   }
 
@@ -647,12 +645,19 @@ export class BlindedZabbixClient {
   }
 
   // Ping — testa conectividade com a API Zabbix
+  // Tenta apiinfo.version (sem auth) primeiro, depois host.get com auth
   async ping(): Promise<boolean> {
     try {
       await this.getApiVersion();
       return true;
     } catch {
-      return false;
+      // Fallback: tenta uma chamada autenticada simples
+      try {
+        await this.rpc<unknown[]>("host.get", { output: ["hostid"], limit: 1 });
+        return true;
+      } catch {
+        return false;
+      }
     }
   }
 }

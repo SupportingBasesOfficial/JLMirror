@@ -122,6 +122,24 @@ function zabbixErrorResponse(error: unknown) {
   return { error: { code: "ZABBIX_API_ERROR", message } };
 }
 
+// GET /api/v1/zabbix/ping — testa conectividade com a API Zabbix
+zabbixRoute.get("/ping", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ connected: false });
+  }
+
+  try {
+    const connected = await client.ping();
+    return c.json({ connected });
+  } catch {
+    return c.json({ connected: false });
+  }
+});
+
 // GET /api/v1/zabbix/devices
 zabbixRoute.get("/devices", async (c) => {
   const user = c.get("user");
@@ -479,13 +497,12 @@ zabbixRoute.put("/devices/:hostId/prefs", async (c) => {
 
 // ==================== PROBLEMS ====================
 
-// GET /api/v1/zabbix/problems?host_id=...&acknowledged=false&severity_from=3
+// GET /api/v1/zabbix/problems?host_id=...&acknowledged=false
 zabbixRoute.get("/problems", async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
   const hostId = c.req.query("host_id");
   const acknowledged = c.req.query("acknowledged");
-  const severityFrom = c.req.query("severity_from");
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
@@ -494,9 +511,8 @@ zabbixRoute.get("/problems", async (c) => {
 
   try {
     const hostIds = hostId ? [hostId] : undefined;
-    const options: { acknowledged?: boolean; severityFrom?: number } = {};
+    const options: { acknowledged?: boolean } = {};
     if (acknowledged !== undefined) options.acknowledged = acknowledged === "true";
-    if (severityFrom) options.severityFrom = Number(severityFrom);
     const problems = await client.getProblems(hostIds, options);
     return c.json({ data: problems });
   } catch (error) {
