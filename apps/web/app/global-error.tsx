@@ -12,8 +12,8 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     logger.error(
-      { err: error, digest: error.digest },
       "Global error boundary capturou erro no root layout",
+      { err: error, digest: error.digest },
     );
   }, [error]);
 

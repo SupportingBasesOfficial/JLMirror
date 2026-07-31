@@ -71,7 +71,7 @@ export default async function DeviceDetailPage({
       items={items}
       hostId={host.hostid}
       hostName={host.name}
-      hostIp={host.interfaces[0]?.ip ?? "N/A"}
+      hostIp={host.interfaces?.[0]?.ip ?? "N/A"}
       triggers={triggers}
     />
   );

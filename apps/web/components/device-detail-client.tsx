@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { Gauge } from "@/components/gauge";
 import { MultiSparkline } from "@/components/multi-sparkline";
 import { MetricChart } from "@/components/metric-chart";
+import type { ZabbixTrigger as ZabbixTriggerZabbix } from "@repo/zabbix";
 
 const DiskSunburst = dynamic(() => import("@/components/disk-sunburst").then((m) => m.DiskSunburst), { ssr: false });
 
@@ -25,14 +26,7 @@ interface HistoryEntry {
   ns: number;
 }
 
-interface ZabbixTrigger {
-  triggerid: string;
-  description: string;
-  priority: string;
-  value: string;
-  lastchange: string;
-  hosts: { hostid: string; name: string }[];
-}
+type ZabbixTrigger = Pick<ZabbixTriggerZabbix, "triggerid" | "description" | "priority" | "value" | "lastchange" | "hosts">;
 
 interface DeviceDetailClientProps {
   items: ZabbixItem[];

@@ -86,7 +86,7 @@ export default async function DashboardPage() {
   // Agrupa triggers por hostid
   const triggersByHost: Record<string, ZabbixTrigger[]> = {};
   for (const t of triggers) {
-    for (const h of t.hosts) {
+    for (const h of t.hosts ?? []) {
       if (!triggersByHost[h.hostid]) triggersByHost[h.hostid] = [];
       triggersByHost[h.hostid].push(t);
     }
@@ -173,8 +173,8 @@ export default async function DashboardPage() {
                 {triggers
                   .filter((t) => t.priority === "4" || t.priority === "5")
                   .map((t) => {
-                    const hostName = t.hosts[0]?.name ?? "N/A";
-                    const hostId = t.hosts[0]?.hostid;
+                    const hostName = t.hosts?.[0]?.name ?? "N/A";
+                    const hostId = t.hosts?.[0]?.hostid;
                     return (
                       <Link
                         key={t.triggerid}
@@ -214,8 +214,8 @@ export default async function DashboardPage() {
                 {triggers
                   .filter((t) => t.priority === "2" || t.priority === "3")
                   .map((t) => {
-                    const hostName = t.hosts[0]?.name ?? "N/A";
-                    const hostId = t.hosts[0]?.hostid;
+                    const hostName = t.hosts?.[0]?.name ?? "N/A";
+                    const hostId = t.hosts?.[0]?.hostid;
                     return (
                       <Link
                         key={t.triggerid}
@@ -255,8 +255,8 @@ export default async function DashboardPage() {
                 {triggers
                   .filter((t) => t.priority === "0" || t.priority === "1")
                   .map((t) => {
-                    const hostName = t.hosts[0]?.name ?? "N/A";
-                    const hostId = t.hosts[0]?.hostid;
+                    const hostName = t.hosts?.[0]?.name ?? "N/A";
+                    const hostId = t.hosts?.[0]?.hostid;
                     return (
                       <Link
                         key={t.triggerid}

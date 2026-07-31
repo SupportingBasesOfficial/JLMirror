@@ -65,7 +65,7 @@ export default function MaintenancePage() {
               <div className="flex items-center gap-4 mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
                 <span>De: {new Date(Number(m.active_since) * 1000).toLocaleString("pt-BR")}</span>
                 <span>Até: {new Date(Number(m.active_till) * 1000).toLocaleString("pt-BR")}</span>
-                <span>Tipo: {m.maintenance_type === "0" ? "Coleta de dados" : "Sem coleta"}</span>
+                <span>Tipo: {String(m.maintenance_type) === "0" ? "Coleta de dados" : "Sem coleta"}</span>
               </div>
               {m.hosts && m.hosts.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">

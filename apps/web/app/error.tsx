@@ -12,8 +12,8 @@ export default function Error({
 }) {
   useEffect(() => {
     logger.error(
-      { err: error, digest: error.digest },
       "Error boundary capturou erro de runtime",
+      { err: error, digest: error.digest },
     );
   }, [error]);
 

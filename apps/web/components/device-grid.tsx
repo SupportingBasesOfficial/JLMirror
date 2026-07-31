@@ -58,7 +58,7 @@ export function DeviceGrid({
       (d) =>
         d.name.toLowerCase().includes(q) ||
         d.hostid.includes(q) ||
-        d.interfaces[0]?.ip?.includes(q),
+        d.interfaces?.[0]?.ip?.includes(q),
     );
   }, [devices, search]);
 
@@ -152,7 +152,7 @@ export function DeviceGrid({
                   <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
                     <span>#{device.hostid}</span>
                     <span>·</span>
-                    <span style={{ color: "var(--brand-secondary)" }}>{device.interfaces[0]?.ip ?? "N/A"}</span>
+                    <span style={{ color: "var(--brand-secondary)" }}>{device.interfaces?.[0]?.ip ?? "N/A"}</span>
                   </div>
                 </div>
 

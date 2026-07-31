@@ -76,8 +76,8 @@ export default async function AlertsPage() {
           </div>
           <div className="space-y-1.5">
             {criticalTriggers.map((t) => {
-              const hostName = t.hosts[0]?.name ?? "N/A";
-              const hostId = t.hosts[0]?.hostid;
+              const hostName = t.hosts?.[0]?.name ?? "N/A";
+              const hostId = t.hosts?.[0]?.hostid;
               return (
                 <Link
                   key={t.triggerid}
@@ -115,8 +115,8 @@ export default async function AlertsPage() {
           </div>
           <div className="space-y-1.5">
             {warningTriggers.map((t) => {
-              const hostName = t.hosts[0]?.name ?? "N/A";
-              const hostId = t.hosts[0]?.hostid;
+              const hostName = t.hosts?.[0]?.name ?? "N/A";
+              const hostId = t.hosts?.[0]?.hostid;
               return (
                 <Link
                   key={t.triggerid}
@@ -154,8 +154,8 @@ export default async function AlertsPage() {
           </div>
           <div className="space-y-1.5">
             {infoTriggers.map((t) => {
-              const hostName = t.hosts[0]?.name ?? "N/A";
-              const hostId = t.hosts[0]?.hostid;
+              const hostName = t.hosts?.[0]?.name ?? "N/A";
+              const hostId = t.hosts?.[0]?.hostid;
               return (
                 <Link
                   key={t.triggerid}

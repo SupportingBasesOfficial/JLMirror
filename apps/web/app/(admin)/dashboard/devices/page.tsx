@@ -64,7 +64,7 @@ export default async function DevicesPage() {
   // Agrupa triggers por hostid
   const triggersByHost: Record<string, ZabbixTrigger[]> = {};
   for (const t of triggers) {
-    for (const h of t.hosts) {
+    for (const h of t.hosts ?? []) {
       if (!triggersByHost[h.hostid]) triggersByHost[h.hostid] = [];
       triggersByHost[h.hostid].push(t);
     }
@@ -109,7 +109,7 @@ export default async function DevicesPage() {
   // Agrupa dispositivos por grupo do Zabbix (suporta Zabbix 5.x com groups e 6.x+ com host_groups)
   const devicesByGroup: Record<string, { groupName: string; devices: ZabbixHost[] }> = {};
   for (const d of devices) {
-    const groups = d.groups ?? d.hostgroups ?? d.host_groups ?? [];
+    const groups = d.groups ?? d.hostgroups ?? [];
     if (groups.length === 0) {
       const key = "__sem_grupo";
       if (!devicesByGroup[key]) devicesByGroup[key] = { groupName: "Sem categoria", devices: [] };

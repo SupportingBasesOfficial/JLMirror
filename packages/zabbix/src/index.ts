@@ -6,9 +6,10 @@ export interface ZabbixHost {
   hostid: string;
   host: string;
   name: string;
-  status: number;
+  status: string;
   interfaces?: ZabbixInterface[];
   hostGroups?: ZabbixHostGroup[];
+  hostgroups?: ZabbixHostGroup[];
   groups?: ZabbixHostGroup[];
   proxyid?: string;
   templates?: ZabbixTemplate[];
@@ -36,6 +37,7 @@ export interface ZabbixTemplate {
   templateid: string;
   host: string;
   name: string;
+  description?: string;
 }
 
 export interface ZabbixMacro {
@@ -66,10 +68,10 @@ export interface ZabbixTrigger {
   triggerid: string;
   description: string;
   expression: string;
-  priority: number;
-  value: number;
-  state: number;
-  status: number;
+  priority: string;
+  value: string;
+  state: string;
+  status: string;
   url?: string;
   comments?: string;
   error?: string;
@@ -124,7 +126,9 @@ export interface ZabbixGraph {
   yaxismin: number;
   yaxismax: number;
   templateid?: string;
+  graphtype?: number;
   items?: ZabbixGraphItem[];
+  gitems?: ZabbixGraphItem[];
 }
 
 export interface ZabbixGraphItem {
@@ -143,7 +147,7 @@ export interface ZabbixMaintenance {
   maintenanceid: string;
   name: string;
   maintenance_type: number;
-  state: number;
+  state: string;
   description: string;
   active_since: number;
   active_till: number;
@@ -155,15 +159,16 @@ export interface ZabbixMaintenance {
 export interface ZabbixProxy {
   proxyid: string;
   name: string;
-  status: number;
+  status: string;
   hosts?: ZabbixHost[];
 }
 
 export interface ZabbixService {
   serviceid: string;
   name: string;
-  status: number;
+  status: string;
   sortorder: number;
+  description?: string;
   parentid?: string;
   children?: ZabbixService[];
 }
@@ -172,6 +177,9 @@ export interface ZabbixSla {
   slaid: string;
   name: string;
   status: number;
+  state?: string;
+  slo?: number;
+  period?: string;
   schedule?: unknown[];
   excluded_downtimes?: unknown[];
 }
@@ -182,6 +190,10 @@ export interface ZabbixUser {
   name: string;
   surname: string;
   roleid: string;
+  role?: { roleid: string; name: string };
+  users_status?: string;
+  passwd?: string;
+  usrgrps?: ZabbixUserGroup[];
 }
 
 export interface ZabbixUserGroup {
@@ -194,27 +206,32 @@ export interface ZabbixUserGroup {
 export interface ZabbixAction {
   actionid: string;
   name: string;
-  status: number;
+  status: string;
   eventsource: number;
   r_eventid?: string;
+  operations?: Array<{ operationid: string; actionid: string; operationtype: number; esc_period: string; esc_step_from: number; esc_step_to: number; evaltype: number; opmessage?: unknown; opconditions?: unknown[]; opcommand?: unknown }>;
 }
 
 export interface ZabbixDiscoveryRule {
   ruleid: string;
+  druleid: string;
   name: string;
   key_: string;
   hostid: string;
-  status: number;
+  status: string;
+  iprange?: string;
+  dchecks?: Array<{ dcheckid: string; druleid: string; type: number; key_: string; ports: string; uniq: number }>;
 }
 
 export interface ZabbixReport {
   reportid: string;
   name: string;
-  status: number;
+  status: string;
   userid: string;
   dashboardid: string;
   period: number;
   cycle: number;
+  description?: string;
 }
 
 // ========== Criptografia AES-256-GCM para tokens ==========

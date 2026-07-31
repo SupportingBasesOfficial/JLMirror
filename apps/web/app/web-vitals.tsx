@@ -22,13 +22,13 @@ export function WebVitalsReporter() {
       // Em produção, envie para seu serviço de analytics
       // Ex: Sentry, Vercel Analytics, Google Analytics, Datadog
       logger.info(
-        { name: metric.name, value: metric.value, rating: metric.rating },
         "Web Vital reportado",
+        { name: metric.name, value: metric.value, rating: metric.rating },
       );
     } else {
       logger.debug(
-        { name: metric.name, value: metric.value, rating: metric.rating },
         "Web Vital (dev)",
+        { name: metric.name, value: metric.value, rating: metric.rating },
       );
     }
   });

@@ -1,0 +1,35 @@
+app/(admin)/dashboard/alerts/page.tsx(79,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(80,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(118,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(119,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(157,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(158,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/devices/[id]/page.tsx(74,15): error TS18048: 'host.interfaces' is possibly 'undefined'.
+app/(admin)/dashboard/devices/[id]/page.tsx(75,7): error TS2322: Type 'import("C:/Projects/JLMIRROR/packages/zabbix/src/index").ZabbixTrigger[]' is not assignable to type 'ZabbixTrigger[]'.
+  Type 'import("C:/Projects/JLMIRROR/packages/zabbix/src/index").ZabbixTrigger' is not assignable to type 'ZabbixTrigger'.
+    Types of property 'hosts' are incompatible.
+      Type 'ZabbixHost[] | undefined' is not assignable to type '{ hostid: string; name: string; }[]'.
+        Type 'undefined' is not assignable to type '{ hostid: string; name: string; }[]'.
+app/(admin)/dashboard/devices/page.tsx(67,21): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/devices/page.tsx(112,50): error TS2551: Property 'host_groups' does not exist on type 'ZabbixHost'. Did you mean 'hostgroups'?
+app/(admin)/dashboard/events/page.tsx(118,45): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/events/page.tsx(128,24): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/maintenance/page.tsx(68,30): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(89,21): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(176,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(177,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(217,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(218,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(258,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(259,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/problems/page.tsx(178,22): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/error.tsx(15,7): error TS2345: Argument of type '{ err: Error & { digest?: string; }; digest: string | undefined; }' is not assignable to parameter of type 'string'.
+app/global-error.tsx(15,7): error TS2345: Argument of type '{ err: Error & { digest?: string; }; digest: string | undefined; }' is not assignable to parameter of type 'string'.
+app/web-vitals.tsx(25,9): error TS2345: Argument of type '{ name: any; value: any; rating: any; }' is not assignable to parameter of type 'string'.
+app/web-vitals.tsx(30,9): error TS2345: Argument of type '{ name: any; value: any; rating: any; }' is not assignable to parameter of type 'string'.
+components/device-grid.tsx(61,9): error TS18048: 'd.interfaces' is possibly 'undefined'.
+components/device-grid.tsx(155,72): error TS18048: 'device.interfaces' is possibly 'undefined'.
+../../packages/ui/src/index.tsx(1,24): error TS7016: Could not find a declaration file for module 'react'. 'C:/Projects/JLMIRROR/node_modules/.pnpm/react@19.2.7/node_modules/react/index.js' implicitly has an 'any' type.
+  If the 'react' package actually exposes this module, consider sending a pull request to amend 'https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react'
+../../packages/ui/src/index.tsx(29,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+../../packages/ui/src/index.tsx(31,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

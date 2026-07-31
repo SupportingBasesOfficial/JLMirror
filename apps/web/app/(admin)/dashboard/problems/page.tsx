@@ -175,7 +175,7 @@ export default function ProblemsPage() {
                     <StatusBadge variant={sevVariant} dot pulse={Number(sev) >= 4}>
                       {SEVERITY_LABELS[sev]}
                     </StatusBadge>
-                    {p.acknowledged === "1" && (
+                    {String(p.acknowledged) === "1" && (
                       <StatusBadge variant="ok">
                         <CheckCheck size={10} />
                         Reconhecido

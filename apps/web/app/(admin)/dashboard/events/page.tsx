@@ -115,7 +115,7 @@ export default function EventsPage() {
                       </StatusBadge>
                     </td>
                     <td className="py-2 px-3">
-                      <StatusBadge variant={e.value === "1" ? "error" : "ok"}>
+                      <StatusBadge variant={String(e.value) === "1" ? "error" : "ok"}>
                         {VALUE_LABELS[e.value] ?? "—"}
                       </StatusBadge>
                     </td>
@@ -125,7 +125,7 @@ export default function EventsPage() {
                       {new Date(Number(e.clock) * 1000).toLocaleString("pt-BR")}
                     </td>
                     <td className="py-2 px-3">
-                      {e.acknowledged === "1" ? (
+                      {String(e.acknowledged) === "1" ? (
                         <StatusBadge variant="ok">Sim</StatusBadge>
                       ) : (
                         <StatusBadge variant="neutral">Não</StatusBadge>

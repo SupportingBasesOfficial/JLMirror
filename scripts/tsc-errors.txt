@@ -1,0 +1,118 @@
+app/(admin)/dashboard/actions/page.tsx(54,39): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/actions/page.tsx(55,20): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/actions/page.tsx(58,18): error TS2339: Property 'operations' does not exist on type 'ZabbixAction'.
+app/(admin)/dashboard/actions/page.tsx(58,34): error TS2339: Property 'operations' does not exist on type 'ZabbixAction'.
+app/(admin)/dashboard/actions/page.tsx(60,22): error TS2339: Property 'operations' does not exist on type 'ZabbixAction'.
+app/(admin)/dashboard/alerts/page.tsx(42,51): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(42,73): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(43,50): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(43,72): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(44,47): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(44,69): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/alerts/page.tsx(79,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(80,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(118,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(119,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(157,32): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/alerts/page.tsx(158,30): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/devices/[id]/page.tsx(74,15): error TS18048: 'host.interfaces' is possibly 'undefined'.
+app/(admin)/dashboard/devices/[id]/page.tsx(75,7): error TS2322: Type 'import("C:/Projects/JLMIRROR/packages/zabbix/src/index").ZabbixTrigger[]' is not assignable to type 'ZabbixTrigger[]'.
+  Type 'import("C:/Projects/JLMIRROR/packages/zabbix/src/index").ZabbixTrigger' is not assignable to type 'ZabbixTrigger'.
+    Types of property 'priority' are incompatible.
+      Type 'number' is not assignable to type 'string'.
+app/(admin)/dashboard/devices/page.tsx(61,47): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/devices/page.tsx(62,48): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/devices/page.tsx(67,21): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/devices/page.tsx(112,34): error TS2551: Property 'hostgroups' does not exist on type 'ZabbixHost'. Did you mean 'hostGroups'?
+app/(admin)/dashboard/devices/page.tsx(112,50): error TS2551: Property 'host_groups' does not exist on type 'ZabbixHost'. Did you mean 'hostGroups'?
+app/(admin)/dashboard/devices/page.tsx(144,9): error TS2322: Type '{ [k: string]: { description: string; priority: number; }[]; }' is not assignable to type 'Record<string, { description: string; priority: string; }[]>'.
+  'string' index signatures are incompatible.
+    Type '{ description: string; priority: number; }[]' is not assignable to type '{ description: string; priority: string; }[]'.
+      Type '{ description: string; priority: number; }' is not assignable to type '{ description: string; priority: string; }'.
+        Types of property 'priority' are incompatible.
+          Type 'number' is not assignable to type 'string'.
+app/(admin)/dashboard/devices/page.tsx(156,60): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/discovery/page.tsx(55,25): error TS2551: Property 'druleid' does not exist on type 'ZabbixDiscoveryRule'. Did you mean 'ruleid'?
+app/(admin)/dashboard/discovery/page.tsx(59,92): error TS2339: Property 'iprange' does not exist on type 'ZabbixDiscoveryRule'.
+app/(admin)/dashboard/discovery/page.tsx(61,39): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/discovery/page.tsx(62,20): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/discovery/page.tsx(65,18): error TS2339: Property 'dchecks' does not exist on type 'ZabbixDiscoveryRule'.
+app/(admin)/dashboard/discovery/page.tsx(65,31): error TS2339: Property 'dchecks' does not exist on type 'ZabbixDiscoveryRule'.
+app/(admin)/dashboard/discovery/page.tsx(67,22): error TS2339: Property 'dchecks' does not exist on type 'ZabbixDiscoveryRule'.
+app/(admin)/dashboard/discovery/page.tsx(67,35): error TS7006: Parameter 'c' implicitly has an 'any' type.
+app/(admin)/dashboard/events/page.tsx(118,45): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/events/page.tsx(128,24): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/graphs/page.tsx(54,32): error TS2339: Property 'graphtype' does not exist on type 'ZabbixGraph'.
+app/(admin)/dashboard/graphs/page.tsx(56,18): error TS2551: Property 'gitems' does not exist on type 'ZabbixGraph'. Did you mean 'items'?
+app/(admin)/dashboard/graphs/page.tsx(56,30): error TS2551: Property 'gitems' does not exist on type 'ZabbixGraph'. Did you mean 'items'?
+app/(admin)/dashboard/graphs/page.tsx(58,22): error TS2551: Property 'gitems' does not exist on type 'ZabbixGraph'. Did you mean 'items'?
+app/(admin)/dashboard/graphs/page.tsx(58,34): error TS7006: Parameter 'gi' implicitly has an 'any' type.
+app/(admin)/dashboard/maintenance/page.tsx(68,30): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(81,45): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(84,48): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(84,70): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(89,21): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(156,41): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(156,63): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(156,120): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(156,142): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(159,41): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(159,63): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(174,34): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(174,56): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(176,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(177,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(206,35): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(206,57): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(211,107): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(211,129): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(215,34): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(215,56): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(217,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(218,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(247,35): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(247,57): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(252,107): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(252,129): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(256,34): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(256,56): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/page.tsx(258,38): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/page.tsx(259,36): error TS18048: 't.hosts' is possibly 'undefined'.
+app/(admin)/dashboard/problems/page.tsx(178,22): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/proxies/page.tsx(41,39): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/proxies/page.tsx(42,20): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/reports/page.tsx(41,39): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/reports/page.tsx(42,20): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+app/(admin)/dashboard/reports/page.tsx(45,18): error TS2339: Property 'description' does not exist on type 'ZabbixReport'.
+app/(admin)/dashboard/reports/page.tsx(45,103): error TS2339: Property 'description' does not exist on type 'ZabbixReport'.
+app/(admin)/dashboard/services/page.tsx(58,22): error TS2339: Property 'description' does not exist on type 'ZabbixService'.
+app/(admin)/dashboard/services/page.tsx(58,109): error TS2339: Property 'description' does not exist on type 'ZabbixService'.
+app/(admin)/dashboard/slas/page.tsx(499,98): error TS2339: Property 'state' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(499,205): error TS2339: Property 'state' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(500,28): error TS2339: Property 'state' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(503,24): error TS2339: Property 'slo' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(503,98): error TS2339: Property 'slo' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(504,24): error TS2339: Property 'period' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/slas/page.tsx(506,37): error TS2339: Property 'period' does not exist on type 'ZabbixSla'.
+app/(admin)/dashboard/templates/page.tsx(79,95): error TS2339: Property 'description' does not exist on type 'ZabbixTemplate'.
+app/(admin)/dashboard/users/page.tsx(53,87): error TS2339: Property 'role' does not exist on type 'ZabbixUser'.
+app/(admin)/dashboard/users/page.tsx(55,45): error TS2339: Property 'users_status' does not exist on type 'ZabbixUser'.
+app/(admin)/dashboard/users/page.tsx(56,26): error TS2339: Property 'users_status' does not exist on type 'ZabbixUser'.
+app/error.tsx(15,7): error TS2345: Argument of type '{ err: Error & { digest?: string; }; digest: string | undefined; }' is not assignable to parameter of type 'string'.
+app/global-error.tsx(15,7): error TS2345: Argument of type '{ err: Error & { digest?: string; }; digest: string | undefined; }' is not assignable to parameter of type 'string'.
+app/web-vitals.tsx(25,9): error TS2345: Argument of type '{ name: any; value: any; rating: any; }' is not assignable to parameter of type 'string'.
+app/web-vitals.tsx(30,9): error TS2345: Argument of type '{ name: any; value: any; rating: any; }' is not assignable to parameter of type 'string'.
+components/device-grid.tsx(61,9): error TS18048: 'd.interfaces' is possibly 'undefined'.
+components/device-grid.tsx(111,30): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-grid.tsx(113,58): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-grid.tsx(113,80): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-grid.tsx(114,57): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-grid.tsx(114,79): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-grid.tsx(155,72): error TS18048: 'device.interfaces' is possibly 'undefined'.
+components/device-search.tsx(29,39): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-search.tsx(30,40): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+components/device-search.tsx(97,32): error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
+../../packages/ui/src/index.tsx(1,24): error TS7016: Could not find a declaration file for module 'react'. 'C:/Projects/JLMIRROR/node_modules/.pnpm/react@19.2.7/node_modules/react/index.js' implicitly has an 'any' type.
+  If the 'react' package actually exposes this module, consider sending a pull request to amend 'https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react'
+../../packages/ui/src/index.tsx(29,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+../../packages/ui/src/index.tsx(31,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
