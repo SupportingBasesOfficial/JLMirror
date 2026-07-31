@@ -5,6 +5,7 @@ import {
   BlindedZabbixClient,
   decryptTokenParts,
   type ZabbixItem,
+  type ZabbixUserGroup,
 } from "@repo/zabbix";
 import {
   zabbixAcknowledgeSchema,
@@ -18,6 +19,11 @@ import {
   zabbixUpdateHostGroupSchema,
   zabbixCreateMaintenanceSchema,
   zabbixDashboardPrefsSchema,
+  zabbixCreateUserSchema,
+  zabbixUpdateUserSchema,
+  zabbixCreateUserGroupSchema,
+  zabbixUpdateUserGroupSchema,
+  assignUserHostGroupSchema,
 } from "@repo/shared-validation";
 import "../types.js";
 import { syncTenantDevices } from "../lib/device-sync.js";
@@ -1116,7 +1122,245 @@ zabbixRoute.delete("/triggers/:id", async (c) => {
   }
 });
 
-// ==================== HISTORY BATCH ====================
+// ==================== ZABBIX USERS CRUD ====================
+
+// POST /api/v1/zabbix/users
+zabbixRoute.post("/users", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    const body = await c.req.json();
+    const parsed = zabbixCreateUserSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    }
+    const result = await client.createUser(parsed.data);
+    return c.json({ ok: true, userids: result.userids });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// PUT /api/v1/zabbix/users/:id
+zabbixRoute.put("/users/:id", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const userId = c.req.param("id");
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    const body = await c.req.json();
+    const parsed = zabbixUpdateUserSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    }
+    await client.updateUser(userId, parsed.data);
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// DELETE /api/v1/zabbix/users/:id
+zabbixRoute.delete("/users/:id", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const userId = c.req.param("id");
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    await client.deleteUser([userId]);
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// ==================== ZABBIX USER GROUPS ====================
+
+// GET /api/v1/zabbix/user-groups
+zabbixRoute.get("/user-groups", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    const groups = await client.getUserGroups();
+    return c.json({ data: groups });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// POST /api/v1/zabbix/user-groups
+zabbixRoute.post("/user-groups", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    const body = await c.req.json();
+    const parsed = zabbixCreateUserGroupSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    }
+    const result = await client.createUserGroup(parsed.data.name, parsed.data.permission);
+    return c.json({ ok: true, usrgrpids: result.usrgrpids });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// PUT /api/v1/zabbix/user-groups/:id
+zabbixRoute.put("/user-groups/:id", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const groupId = c.req.param("id");
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    const body = await c.req.json();
+    const parsed = zabbixUpdateUserGroupSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    }
+    await client.updateUserGroup(groupId, parsed.data);
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// DELETE /api/v1/zabbix/user-groups/:id
+zabbixRoute.delete("/user-groups/:id", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const groupId = c.req.param("id");
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    await client.deleteUserGroup([groupId]);
+    return c.json({ ok: true });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// ==================== USER HOST GROUP ASSIGNMENT ====================
+
+// GET /api/v1/zabbix/user-host-groups?user_id=...
+zabbixRoute.get("/user-host-groups", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const userId = c.req.query("user_id");
+
+  let sql = `SELECT id, user_id, zabbix_host_group_id, zabbix_host_group_name, created_at
+             FROM public.user_host_groups WHERE tenant_id = $1`;
+  const params: unknown[] = [tenantId];
+  if (userId) {
+    sql += ` AND user_id = $2`;
+    params.push(userId);
+  }
+  sql += ` ORDER BY created_at DESC`;
+
+  const result = await query(sql, params);
+  return c.json({ data: result.data?.rows ?? [] });
+});
+
+// POST /api/v1/zabbix/user-host-groups
+zabbixRoute.post("/user-host-groups", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  try {
+    const body = await c.req.json();
+    const parsed = assignUserHostGroupSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    }
+
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.user_host_groups (tenant_id, user_id, zabbix_host_group_id, zabbix_host_group_name)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (tenant_id, user_id, zabbix_host_group_id) DO UPDATE SET zabbix_host_group_name = EXCLUDED.zabbix_host_group_name
+       RETURNING id`,
+      [tenantId, parsed.data.user_id, parsed.data.zabbix_host_group_id, parsed.data.zabbix_host_group_name ?? null],
+    );
+
+    return c.json({ ok: true, id: result.data?.rows[0]?.id });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// DELETE /api/v1/zabbix/user-host-groups/:id
+zabbixRoute.delete("/user-host-groups/:id", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const assignmentId = c.req.param("id");
+
+  const result = await query(
+    "DELETE FROM public.user_host_groups WHERE id = $1 AND tenant_id = $2",
+    [assignmentId, tenantId],
+  );
+
+  if (result.error) {
+    return c.json({ error: { code: "DELETE_ERROR", message: "Erro ao remover atribuição" } }, 500);
+  }
+
+  return c.json({ ok: true });
+});
+
+// GET /api/v1/zabbix/user-host-groups/by-group/:groupId
+// Lista todos os usuarios atribuidos a um host group especifico
+zabbixRoute.get("/user-host-groups/by-group/:groupId", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const groupId = c.req.param("groupId");
+
+  const result = await query(
+    `SELECT uhg.id, uhg.user_id, uhg.zabbix_host_group_id, uhg.zabbix_host_group_name, uhg.created_at,
+            u.email, u.full_name, tu.role
+     FROM public.user_host_groups uhg
+     JOIN public.users u ON uhg.user_id = u.id
+     LEFT JOIN public.tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = uhg.tenant_id
+     WHERE uhg.tenant_id = $1 AND uhg.zabbix_host_group_id = $2
+     ORDER BY uhg.created_at DESC`,
+    [tenantId, groupId],
+  );
+
+  return c.json({ data: result.data?.rows ?? [] });
+});
 
 // GET /api/v1/zabbix/history-batch?item_ids=1,2,3&from=...&to=...&value_type=0
 zabbixRoute.get("/history-batch", async (c) => {

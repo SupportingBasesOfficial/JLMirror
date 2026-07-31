@@ -192,6 +192,53 @@ export const zabbixDashboardPrefsSchema = z.object({
 });
 export type ZabbixDashboardPrefsInput = z.infer<typeof zabbixDashboardPrefsSchema>;
 
+// ========== Zabbix User Schemas ==========
+export const zabbixCreateUserSchema = z.object({
+  username: z.string().min(1),
+  name: z.string().optional(),
+  surname: z.string().optional(),
+  roleid: z.string().min(1),
+  passwd: z.string().optional(),
+  usrgrps: z.array(z.string()).optional(),
+});
+export type ZabbixCreateUserInput = z.infer<typeof zabbixCreateUserSchema>;
+
+export const zabbixUpdateUserSchema = z.object({
+  username: z.string().optional(),
+  name: z.string().optional(),
+  surname: z.string().optional(),
+  roleid: z.string().optional(),
+  passwd: z.string().optional(),
+  usrgrps: z.array(z.string()).optional(),
+});
+export type ZabbixUpdateUserInput = z.infer<typeof zabbixUpdateUserSchema>;
+
+export const zabbixCreateUserGroupSchema = z.object({
+  name: z.string().min(1),
+  permission: z.object({
+    id: z.string().min(1),
+    permission: z.number().int().min(0).max(4),
+  }).optional(),
+});
+export type ZabbixCreateUserGroupInput = z.infer<typeof zabbixCreateUserGroupSchema>;
+
+export const zabbixUpdateUserGroupSchema = z.object({
+  name: z.string().optional(),
+  rights: z.array(z.object({
+    id: z.string().min(1),
+    permission: z.number().int().min(0).max(4),
+  })).optional(),
+});
+export type ZabbixUpdateUserGroupInput = z.infer<typeof zabbixUpdateUserGroupSchema>;
+
+// ========== User Host Group Assignment ==========
+export const assignUserHostGroupSchema = z.object({
+  user_id: z.string().uuid(),
+  zabbix_host_group_id: z.string().min(1),
+  zabbix_host_group_name: z.string().optional(),
+});
+export type AssignUserHostGroupInput = z.infer<typeof assignUserHostGroupSchema>;
+
 // ========== Monitoring Schemas ==========
 export const monitoringHistoryQuerySchema = z.object({
   device_id: z.string().min(1),

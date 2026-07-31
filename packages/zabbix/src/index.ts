@@ -181,7 +181,14 @@ export interface ZabbixUser {
   username: string;
   name: string;
   surname: string;
-  role: number;
+  roleid: string;
+}
+
+export interface ZabbixUserGroup {
+  usrgrpid: string;
+  name: string;
+  users?: ZabbixUser[];
+  rights?: Array<{ id: string; permission: number }>;
 }
 
 export interface ZabbixAction {
@@ -621,6 +628,74 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixUser[]>("user.get", {
       output: ["userid", "username", "name", "surname", "roleid"],
     });
+  }
+
+  async createUser(data: {
+    username: string;
+    name?: string;
+    surname?: string;
+    roleid: string;
+    passwd?: string;
+    usrgrps?: string[];
+  }): Promise<{ userids: string[] }> {
+    const params: Record<string, unknown> = {
+      username: data.username,
+      roleid: data.roleid,
+    };
+    if (data.name) params.name = data.name;
+    if (data.surname) params.surname = data.surname;
+    if (data.passwd) params.passwd = data.passwd;
+    if (data.usrgrps) params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
+    return this.rpc<{ userids: string[] }>("user.create", params);
+  }
+
+  async updateUser(userId: string, data: {
+    username?: string;
+    name?: string;
+    surname?: string;
+    roleid?: string;
+    passwd?: string;
+    usrgrps?: string[];
+  }): Promise<{ userids: string[] }> {
+    const params: Record<string, unknown> = { userid: userId };
+    if (data.username !== undefined) params.username = data.username;
+    if (data.name !== undefined) params.name = data.name;
+    if (data.surname !== undefined) params.surname = data.surname;
+    if (data.roleid !== undefined) params.roleid = data.roleid;
+    if (data.passwd !== undefined) params.passwd = data.passwd;
+    if (data.usrgrps !== undefined) params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
+    return this.rpc<{ userids: string[] }>("user.update", params);
+  }
+
+  async deleteUser(userIds: string[]): Promise<{ userids: string[] }> {
+    return this.rpc<{ userids: string[] }>("user.delete", userIds as unknown as Record<string, unknown>);
+  }
+
+  // User Groups
+  async getUserGroups(): Promise<ZabbixUserGroup[]> {
+    return this.rpc<ZabbixUserGroup[]>("usergroup.get", {
+      output: "extend",
+      selectUsers: ["userid", "username", "name", "surname"],
+    });
+  }
+
+  async createUserGroup(name: string, permission?: { id: string; permission: number }): Promise<{ usrgrpids: string[] }> {
+    const params: Record<string, unknown> = { name };
+    if (permission) {
+      params.rights = [{ id: permission.id, permission: permission.permission }];
+    }
+    return this.rpc<{ usrgrpids: string[] }>("usergroup.create", params);
+  }
+
+  async updateUserGroup(groupId: string, data: { name?: string; rights?: Array<{ id: string; permission: number }> }): Promise<{ usrgrpids: string[] }> {
+    const params: Record<string, unknown> = { usrgrpid: groupId };
+    if (data.name !== undefined) params.name = data.name;
+    if (data.rights !== undefined) params.rights = data.rights;
+    return this.rpc<{ usrgrpids: string[] }>("usergroup.update", params);
+  }
+
+  async deleteUserGroup(groupIds: string[]): Promise<{ usrgrpids: string[] }> {
+    return this.rpc<{ usrgrpids: string[] }>("usergroup.delete", groupIds as unknown as Record<string, unknown>);
   }
 
   // Actions
