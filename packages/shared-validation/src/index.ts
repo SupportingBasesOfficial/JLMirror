@@ -82,7 +82,7 @@ export type TestSmtpInput = z.infer<typeof testSmtpSchema>;
 
 // ========== Zabbix Schemas ==========
 export const zabbixAcknowledgeSchema = z.object({
-  event_ids: z.array(z.string()).min(1),
+  eventids: z.array(z.string()).min(1),
   message: z.string().default(""),
   action: z.number().int().default(1),
 });
@@ -147,7 +147,6 @@ export const zabbixCreateTriggerSchema = z.object({
   description: z.string().min(1),
   expression: z.string().min(1),
   priority: z.number().int().min(0).max(5).default(1),
-  hostid: z.string().min(1),
 });
 export type ZabbixCreateTriggerInput = z.infer<typeof zabbixCreateTriggerSchema>;
 
@@ -185,7 +184,11 @@ export const zabbixCreateMaintenanceSchema = z.object({
 export type ZabbixCreateMaintenanceInput = z.infer<typeof zabbixCreateMaintenanceSchema>;
 
 export const zabbixDashboardPrefsSchema = z.object({
-  prefs: z.record(z.unknown()),
+  device_type: z.string().default("auto"),
+  visible_categories: z.array(z.string()).default([]),
+  collapsed_categories: z.array(z.string()).default([]),
+  hidden_metrics: z.array(z.string()).default([]),
+  pinned_metrics: z.array(z.string()).default([]),
 });
 export type ZabbixDashboardPrefsInput = z.infer<typeof zabbixDashboardPrefsSchema>;
 

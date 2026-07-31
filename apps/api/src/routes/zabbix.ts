@@ -21,8 +21,13 @@ import {
 } from "@repo/shared-validation";
 import "../types.js";
 import { syncTenantDevices } from "../lib/device-sync.js";
+import { jwtAuth } from "../middleware/jwt-auth.js";
+import { tenantContext } from "../middleware/tenant-context.js";
 
 export const zabbixRoute = new Hono();
+
+zabbixRoute.use("/*", jwtAuth);
+zabbixRoute.use("/*", tenantContext);
 
 interface ZabbixTenantConfig {
   zabbix_api_url: string;
@@ -126,7 +131,7 @@ zabbixRoute.get("/devices", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada para o tenant" } },
-      404,
+      503,
     );
   }
 
@@ -152,7 +157,7 @@ zabbixRoute.get("/devices/:hostId", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada para o tenant" } },
-      404,
+      503,
     );
   }
 
@@ -161,7 +166,7 @@ zabbixRoute.get("/devices/:hostId", async (c) => {
     if (!host) {
       return c.json(
         { error: { code: "DEVICE_NOT_FOUND", message: "Dispositivo não encontrado no Zabbix" } },
-        404,
+        503,
       );
     }
     return c.json({ host });
@@ -188,7 +193,7 @@ zabbixRoute.post("/sync", async (c) => {
   if (configResult.error || !configResult.data?.rows[0]) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada para o tenant" } },
-      404,
+      503,
     );
   }
 
@@ -197,7 +202,7 @@ zabbixRoute.post("/sync", async (c) => {
   if (!config.zabbix_encrypted_token || !config.zabbix_token_iv || !config.zabbix_token_tag) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Token Zabbix não configurado" } },
-      404,
+      503,
     );
   }
 
@@ -233,7 +238,7 @@ zabbixRoute.get("/devices/:hostId/items", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      404,
+      503,
     );
   }
 
@@ -273,7 +278,7 @@ zabbixRoute.get("/history", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      404,
+      503,
     );
   }
 
@@ -305,7 +310,7 @@ zabbixRoute.get("/key-items", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      404,
+      503,
     );
   }
 
@@ -336,7 +341,7 @@ zabbixRoute.get("/triggers", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      404,
+      503,
     );
   }
 
@@ -361,7 +366,7 @@ zabbixRoute.get("/ping", async (c) => {
   if (!client) {
     return c.json(
       { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      404,
+      503,
     );
   }
 
@@ -484,7 +489,7 @@ zabbixRoute.get("/problems", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -514,13 +519,13 @@ zabbixRoute.get("/events", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
-    const hostIds = hostId ? [hostId] : undefined;
-    const options: { value?: string; acknowledged?: boolean; limit?: number; from?: number; to?: number } = {};
-    if (value) options.value = value;
+    const hostIds = hostId ? [hostId] : [];
+    const options: { value?: number; acknowledged?: boolean; limit?: number; from?: number; to?: number } = {};
+    if (value) options.value = Number(value);
     if (acknowledged !== undefined) options.acknowledged = acknowledged === "true";
     if (limit) options.limit = Number(limit);
     if (from) options.from = Number(from);
@@ -541,7 +546,7 @@ zabbixRoute.post("/acknowledge", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -568,7 +573,7 @@ zabbixRoute.get("/templates", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -589,7 +594,7 @@ zabbixRoute.get("/maintenances", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -608,7 +613,7 @@ zabbixRoute.post("/maintenances", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -632,7 +637,7 @@ zabbixRoute.delete("/maintenances/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -653,7 +658,7 @@ zabbixRoute.get("/services", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -673,7 +678,7 @@ zabbixRoute.get("/slas", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -694,11 +699,11 @@ zabbixRoute.get("/graphs", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
-    const graphs = await client.getGraphs(hostId);
+    const graphs = await client.getGraphs(hostId ?? undefined);
     return c.json({ data: graphs });
   } catch (error) {
     return c.json(zabbixErrorResponse(error), 502);
@@ -714,7 +719,7 @@ zabbixRoute.get("/users", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -734,7 +739,7 @@ zabbixRoute.get("/actions", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -754,7 +759,7 @@ zabbixRoute.get("/proxies", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -774,7 +779,7 @@ zabbixRoute.get("/discovery-rules", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -794,7 +799,7 @@ zabbixRoute.get("/reports", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -814,7 +819,7 @@ zabbixRoute.get("/host-groups", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -832,7 +837,7 @@ zabbixRoute.post("/host-groups", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -856,7 +861,7 @@ zabbixRoute.put("/host-groups/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -880,7 +885,7 @@ zabbixRoute.delete("/host-groups/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -900,7 +905,7 @@ zabbixRoute.post("/hosts", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -924,7 +929,7 @@ zabbixRoute.put("/hosts/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -948,7 +953,7 @@ zabbixRoute.delete("/hosts/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -968,7 +973,7 @@ zabbixRoute.post("/items", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -992,7 +997,7 @@ zabbixRoute.put("/items/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1016,7 +1021,7 @@ zabbixRoute.delete("/items/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1036,7 +1041,7 @@ zabbixRoute.post("/triggers", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1060,7 +1065,7 @@ zabbixRoute.put("/triggers/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1084,7 +1089,7 @@ zabbixRoute.delete("/triggers/:id", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1118,7 +1123,7 @@ zabbixRoute.get("/history-batch", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {
@@ -1138,7 +1143,7 @@ zabbixRoute.get("/version", async (c) => {
 
   const client = await createZabbixClient(tenantId);
   if (!client) {
-    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 404);
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
   }
 
   try {

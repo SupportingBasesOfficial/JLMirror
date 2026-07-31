@@ -7,6 +7,7 @@ import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X, Menu } from "luc
 import { LogoutButton } from "@/components/logout-button";
 import { ZabbixPingIndicator } from "@/components/zabbix-ping-indicator";
 import { NAV_SECTIONS, type NavItem, type NavSection } from "@/components/sidebar-nav-items";
+import { useModuleFlags } from "@/lib/use-module-flags";
 
 function isActive(pathname: string | null, item: NavItem): boolean {
   if (!pathname) return false;
@@ -35,17 +36,27 @@ export function AdminSidebar() {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const searchRef = useRef<HTMLInputElement>(null);
   const pathname = usePathname();
+  const { isModuleEnabled } = useModuleFlags();
 
   const sidebarWidth = collapsed ? "w-16" : "w-64";
 
   const filteredSections = useMemo(() => {
-    if (!query.trim()) return NAV_SECTIONS;
+    // Primeiro filtra por feature flags do modulo
+    const flagFiltered = NAV_SECTIONS.map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        !item.flagKey || isModuleEnabled(item.flagKey),
+      ),
+    })).filter((section) => section.items.length > 0);
+
+    // Depois filtra por busca textual
+    if (!query.trim()) return flagFiltered;
     const q = query.toLowerCase();
-    return NAV_SECTIONS.map((section) => ({
+    return flagFiltered.map((section) => ({
       ...section,
       items: section.items.filter((item) => item.label.toLowerCase().includes(q)),
     })).filter((section) => section.items.length > 0);
-  }, [query]);
+  }, [query, isModuleEnabled]);
 
   const isSearching = query.trim().length > 0;
 

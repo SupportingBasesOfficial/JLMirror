@@ -277,8 +277,8 @@ export class BlindedZabbixClient {
     this.timeout = opts.timeout ?? 30_000;
   }
 
-  // RPC generico para a API Zabbix
-  async rpc<T = unknown>(method: string, params?: Record<string, unknown>, skipAuth = false): Promise<T> {
+  // RPC generico para a API Zabbix — params aceita objeto ou array (para delete operations)
+  async rpc<T = unknown>(method: string, params?: Record<string, unknown> | unknown[], skipAuth = false): Promise<T> {
     const id = ++this.requestId;
     const body = {
       jsonrpc: "2.0",
@@ -325,12 +325,12 @@ export class BlindedZabbixClient {
     return this.rpc<string>("apiinfo.version", {}, true);
   }
 
-  // Hosts / Devices
+  // Hosts / Devices — selectHostGroups (renamed de selectGroups no Zabbix 7.x)
   async getDevices(hostGroupId?: string): Promise<ZabbixHost[]> {
     const params: Record<string, unknown> = {
       output: ["hostid", "host", "name", "status"],
       selectInterfaces: ["ip", "type", "port", "dns"],
-      selectGroups: ["groupid", "name"],
+      selectHostGroups: ["groupid", "name"],
     };
     if (hostGroupId) {
       params.groupids = hostGroupId;
@@ -348,12 +348,34 @@ export class BlindedZabbixClient {
     return result[0] ?? null;
   }
 
+  // createHost — transforma groupids/templateids do schema para formato esperado pela API Zabbix 7.x
   async createHost(data: Record<string, unknown>): Promise<{ hostids: string[] }> {
-    return this.rpc<{ hostids: string[] }>("host.create", data);
+    const apiData: Record<string, unknown> = { ...data };
+    // Zabbix 7.x espera groups: [{groupid: "1"}] em vez de groupids: ["1"]
+    if (Array.isArray(data.groupids)) {
+      apiData.groups = (data.groupids as string[]).map((id) => ({ groupid: id }));
+      delete apiData.groupids;
+    }
+    // Zabbix 7.x espera templates: [{templateid: "1"}] em vez de templateids: ["1"]
+    if (Array.isArray(data.templateids)) {
+      apiData.templates = (data.templateids as string[]).map((id) => ({ templateid: id }));
+      delete apiData.templateids;
+    }
+    return this.rpc<{ hostids: string[] }>("host.create", apiData);
   }
 
+  // updateHost — transforma groupids/templateids se presentes
   async updateHost(hostId: string, data: Record<string, unknown>): Promise<{ hostids: string[] }> {
-    return this.rpc<{ hostids: string[] }>("host.update", { hostid: hostId, ...data });
+    const apiData: Record<string, unknown> = { ...data };
+    if (Array.isArray(data.groupids)) {
+      apiData.groups = (data.groupids as string[]).map((id) => ({ groupid: id }));
+      delete apiData.groupids;
+    }
+    if (Array.isArray(data.templateids)) {
+      apiData.templates = (data.templateids as string[]).map((id) => ({ templateid: id }));
+      delete apiData.templateids;
+    }
+    return this.rpc<{ hostids: string[] }>("host.update", { hostid: hostId, ...apiData });
   }
 
   async deleteHost(hostIds: string[]): Promise<{ hostids: string[] }> {
@@ -430,20 +452,25 @@ export class BlindedZabbixClient {
     return this.rpc<{ itemids: string[] }>("item.delete", itemIds as unknown as Record<string, unknown>);
   }
 
-  // Triggers
+  // Triggers — expandDescription removido (deprecated no Zabbix 7.x, descriptions sempre expandidas)
   async getTriggers(hostIds?: string[]): Promise<ZabbixTrigger[]> {
     const params: Record<string, unknown> = {
       output: "extend",
       selectHosts: ["hostid", "host", "name"],
       selectItems: ["itemid", "name", "key_"],
-      expandDescription: true,
     };
     if (hostIds) params.hostids = hostIds;
     return this.rpc<ZabbixTrigger[]>("trigger.get", params);
   }
 
+  // createTrigger — Zabbix 7.x espera expression como string e hostid no formato correto
   async createTrigger(data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
-    return this.rpc<{ triggerids: string[] }>("trigger.create", data);
+    const apiData: Record<string, unknown> = { ...data };
+    // Zabbix 7.x usa description em vez de comments para triggers
+    if (data.description && !data.comments) {
+      apiData.description = data.description;
+    }
+    return this.rpc<{ triggerids: string[] }>("trigger.create", apiData);
   }
 
   async updateTrigger(triggerId: string, data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
@@ -454,47 +481,52 @@ export class BlindedZabbixClient {
     return this.rpc<{ triggerids: string[] }>("trigger.delete", triggerIds as unknown as Record<string, unknown>);
   }
 
-  // Problems
-  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean }): Promise<ZabbixProblem[]> {
+  // Problems — adicionado selectHosts e severity_from
+  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean; severityFrom?: number }): Promise<ZabbixProblem[]> {
     const params: Record<string, unknown> = {
       output: "extend",
       recent: options?.recent ?? false,
       sortfield: ["eventid"],
       sortorder: "DESC",
+      selectHosts: ["hostid", "host", "name"],
     };
     if (hostIds) params.hostids = hostIds;
     if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
     if (options?.suppressed !== undefined) params.suppressed = options.suppressed;
+    if (options?.severityFrom !== undefined) params.severity_from = options.severityFrom;
     return this.rpc<ZabbixProblem[]>("problem.get", params);
   }
 
-  // Events
-  async getEvents(hostIds: string[], options?: { from?: number; to?: number; value?: number }): Promise<ZabbixEvent[]> {
+  // Events — adicionado acknowledged, limit e selectHosts
+  async getEvents(hostIds: string[], options?: { from?: number; to?: number; value?: number; acknowledged?: boolean; limit?: number }): Promise<ZabbixEvent[]> {
     const params: Record<string, unknown> = {
       output: "extend",
-      hostids: hostIds,
       sortfield: ["clock", "eventid"],
       sortorder: "DESC",
-      limit: 100,
+      limit: options?.limit ?? 100,
+      selectHosts: ["hostid", "host", "name"],
     };
+    if (hostIds.length > 0) params.hostids = hostIds;
     if (options?.from) params.time_from = options.from;
     if (options?.to) params.time_till = options.to;
     if (options?.value !== undefined) params.value = options.value;
+    if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
     return this.rpc<ZabbixEvent[]>("event.get", params);
   }
 
-  // History
-  async getHistory(itemId: string, from: number, to: number, valueType: number): Promise<ZabbixHistoryEntry[]> {
-    return this.rpc<ZabbixHistoryEntry[]>("history.get", {
+  // History — valueType opcional (quando undefined, Zabbix busca em todas as tabelas)
+  async getHistory(itemId: string, from: number, to: number, valueType?: number): Promise<ZabbixHistoryEntry[]> {
+    const params: Record<string, unknown> = {
       itemids: itemId,
-      history: valueType,
       time_from: from,
       time_till: to,
       sortfield: "clock",
       sortorder: "ASC",
       output: "extend",
       limit: 5000,
-    });
+    };
+    if (valueType !== undefined) params.history = valueType;
+    return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
   }
 
   async getHistoryBatch(itemIds: string[], from: number, to: number, valueType?: number): Promise<ZabbixHistoryEntry[]> {
@@ -511,14 +543,15 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
   }
 
-  // Graphs
-  async getGraphs(hostId: string): Promise<ZabbixGraph[]> {
-    return this.rpc<ZabbixGraph[]>("graph.get", {
-      hostids: hostId,
+  // Graphs — hostId opcional (quando undefined, retorna todos os grafos)
+  async getGraphs(hostId?: string): Promise<ZabbixGraph[]> {
+    const params: Record<string, unknown> = {
       output: ["graphid", "name", "width", "height"],
       selectGraphItems: ["itemid", "color", "drawtype"],
       sortfield: "name",
-    });
+    };
+    if (hostId) params.hostids = hostId;
+    return this.rpc<ZabbixGraph[]>("graph.get", params);
   }
 
   // Templates
@@ -538,19 +571,25 @@ export class BlindedZabbixClient {
     });
   }
 
-  // Maintenance
+  // Maintenance — selectHostGroups (renamed de selectGroups no Zabbix 7.x)
   async getMaintenances(hostIds?: string[]): Promise<ZabbixMaintenance[]> {
     const params: Record<string, unknown> = {
       output: "extend",
-      selectGroups: ["groupid", "name"],
+      selectHostGroups: ["groupid", "name"],
       selectHosts: ["hostid", "host", "name"],
     };
     if (hostIds) params.hostids = hostIds;
     return this.rpc<ZabbixMaintenance[]>("maintenance.get", params);
   }
 
+  // createMaintenance — transforma hostids para hosts: [{hostid: "1"}] (formato Zabbix 7.x)
   async createMaintenance(data: Record<string, unknown>): Promise<{ maintenanceids: string[] }> {
-    return this.rpc<{ maintenanceids: string[] }>("maintenance.create", data);
+    const apiData: Record<string, unknown> = { ...data };
+    if (Array.isArray(data.hostids)) {
+      apiData.hosts = (data.hostids as string[]).map((id) => ({ hostid: id }));
+      delete apiData.hostids;
+    }
+    return this.rpc<{ maintenanceids: string[] }>("maintenance.create", apiData);
   }
 
   async deleteMaintenance(maintenanceIds: string[]): Promise<{ maintenanceids: string[] }> {

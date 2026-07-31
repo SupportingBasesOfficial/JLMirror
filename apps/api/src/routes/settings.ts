@@ -10,6 +10,7 @@ import {
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { clearModuleFlagCache } from "../middleware/require-module.js";
 import "../types.js";
 
 export const settingsRoute = new Hono();
@@ -263,4 +264,77 @@ settingsRoute.get("/usage", requirePermission("settings:read"), async (c) => {
       scheduled_tasks: { current: getCount(taskCount), max: limits.max_scheduled_tasks ?? 25 },
     },
   });
+});
+
+// ========== Modules Management ==========
+
+// GET /api/v1/settings/modules — lista todos os modulos com status ativo/inativo
+settingsRoute.get("/modules", requirePermission("settings:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const result = await query(
+    `SELECT key, name, description, default_value, is_active
+     FROM public.feature_flags
+     WHERE key LIKE 'module_%' AND (tenant_id IS NULL OR tenant_id = $1)
+     ORDER BY key`,
+    [tenantId],
+  );
+
+  const modules = (result.data?.rows ?? []).map((row) => ({
+    key: row.key as string,
+    name: row.name as string,
+    description: row.description as string,
+    enabled: row.default_value === true || row.default_value === "true",
+    is_active: row.is_active as boolean,
+  }));
+
+  return c.json({ modules });
+});
+
+// PUT /api/v1/settings/modules/:key — ativa ou desativa um modulo
+settingsRoute.put("/modules/:key", requirePermission("settings:write"), async (c) => {
+  const moduleKey = c.req.param("key");
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  // Valida que a key comeca com module_
+  if (!moduleKey.startsWith("module_")) {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "Chave de módulo inválida" } }, 400);
+  }
+
+  const body = await c.req.json<{ enabled: boolean }>();
+  if (typeof body.enabled !== "boolean") {
+    return c.json({ error: { code: "VALIDATION_ERROR", message: "Campo 'enabled' deve ser boolean" } }, 400);
+  }
+
+  // Verifica se a flag existe (global ou do tenant)
+  const flagResult = await query<{ id: string }>(
+    `SELECT id FROM public.feature_flags
+     WHERE key = $1 AND (tenant_id IS NULL OR tenant_id = $2)
+     ORDER BY tenant_id NULLS LAST LIMIT 1`,
+    [moduleKey, tenantId],
+  );
+
+  if (!flagResult.data?.rows[0]) {
+    return c.json({ error: { code: "NOT_FOUND", message: "Módulo não encontrado" } }, 404);
+  }
+
+  // Atualiza o default_value da flag
+  await query(
+    `UPDATE public.feature_flags SET default_value = $1::jsonb, updated_at = NOW()
+     WHERE key = $2 AND (tenant_id IS NULL OR tenant_id = $3)`,
+    [JSON.stringify(body.enabled), moduleKey, tenantId],
+  );
+
+  // Limpa o cache do middleware require-module para que a mudanca tenha efeito imediato
+  clearModuleFlagCache();
+
+  // Registra no audit log
+  await query(
+    "SELECT public.write_audit_log($1, NULL, 'settings.module.toggle', 'feature_flags', NULL, $2, NULL, NULL)",
+    [user.sub, JSON.stringify({ module: moduleKey, enabled: body.enabled })],
+  );
+
+  return c.json({ key: moduleKey, enabled: body.enabled });
 });

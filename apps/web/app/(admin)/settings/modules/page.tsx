@@ -1,0 +1,313 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { ArrowLeft, RefreshCw, Puzzle, Check, X, Loader2 } from "lucide-react";
+import Link from "next/link";
+import { LoadingState } from "@/components/ui/state-display";
+import { useApi } from "@/lib/use-api";
+import { apiFetch } from "@/lib/zabbix-fetch";
+
+const COLORS = {
+  bg: "var(--surface-0)",
+  card: "var(--surface-2)",
+  border: "var(--border-default)",
+  text: "var(--text-primary)",
+  muted: "var(--text-muted)",
+  teal: "var(--brand-primary)",
+  green: "var(--status-ok-text)",
+  red: "var(--status-error-text)",
+  amber: "var(--status-warning-text)",
+};
+
+interface ModuleFlag {
+  key: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  is_active: boolean;
+}
+
+interface ModulesResponse {
+  modules: ModuleFlag[];
+}
+
+// Categorias para agrupar os modulos na UI
+const CATEGORIES: { title: string; prefixes: string[] }[] = [
+  { title: "Núcleo", prefixes: ["module_auth", "module_dashboard", "module_zabbix", "module_rbac", "module_mfa", "module_settings", "module_profile", "module_feature_flags"] },
+  { title: "Monitoramento & Infraestrutura", prefixes: ["module_devices", "module_monitoring", "module_system_health", "module_capacity", "module_assets", "module_backup", "module_k8s", "module_ssl", "module_firewall", "module_patches"] },
+  { title: "Operações", prefixes: ["module_tickets", "module_changes", "module_kb", "module_tasks", "module_scripts", "module_executions", "module_workflows", "module_notifications", "module_push", "module_chatops"] },
+  { title: "Segurança & Compliance", prefixes: ["module_compliance", "module_lgpd", "module_audit", "module_security_audit", "module_escalation", "module_correlation"] },
+  { title: "Inteligência & Analytics", prefixes: ["module_anomaly", "module_predictions", "module_apm", "module_logs", "module_traces", "module_executive_dashboard", "module_reports", "module_finops"] },
+  { title: "Integrações & Extensões", prefixes: ["module_api_keys", "module_webhooks", "module_itsm", "module_discovery", "module_drift", "module_marketplace", "module_data_transfer", "module_client_portal", "module_status_page", "module_admin", "module_sla"] },
+];
+
+function getCategory(key: string): string {
+  for (const cat of CATEGORIES) {
+    if (cat.prefixes.includes(key)) return cat.title;
+  }
+  return "Outros";
+}
+
+export default function ModulesPage() {
+  const { data, isLoading, mutate } = useApi<ModulesResponse>("/api/v1/settings/modules");
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const modules = data?.modules ?? [];
+
+  const groupedModules = useMemo(() => {
+    const groups: Record<string, ModuleFlag[]> = {};
+    for (const mod of modules) {
+      const cat = getCategory(mod.key);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(mod);
+    }
+    return groups;
+  }, [modules]);
+
+  const activeCount = modules.filter((m) => m.enabled).length;
+  const inactiveCount = modules.length - activeCount;
+
+  async function toggleModule(key: string, enabled: boolean) {
+    setToggling(key);
+    setError(null);
+    try {
+      await apiFetch(`/api/v1/settings/modules/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      await mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao alterar módulo");
+    } finally {
+      setToggling(null);
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen p-6" style={{ background: COLORS.bg }}>
+        <LoadingState label="Carregando módulos..." />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-6" style={{ background: COLORS.bg }}>
+      <div className="max-w-5xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <Link
+            href="/settings"
+            className="flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-70"
+            style={{ color: COLORS.muted }}
+          >
+            <ArrowLeft size={14} />
+            Configurações
+          </Link>
+        </div>
+
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center justify-center rounded-xl"
+              style={{
+                width: 44,
+                height: 44,
+                background: "var(--brand-glow)",
+                border: `1px solid ${COLORS.teal}33`,
+              }}
+            >
+              <Puzzle size={22} style={{ color: COLORS.teal }} />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold" style={{ color: COLORS.text }}>Módulos do Sistema</h1>
+              <p className="text-xs" style={{ color: COLORS.muted }}>
+                {activeCount} ativos · {inactiveCount} inativos · {modules.length} total
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => mutate()}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all hover:opacity-80"
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+            }}
+          >
+            <RefreshCw size={13} />
+            Atualizar
+          </button>
+        </div>
+
+        {error && (
+          <div
+            className="rounded-lg px-4 py-3 mb-6 text-xs font-medium"
+            style={{
+              background: `${COLORS.red}11`,
+              border: `1px solid ${COLORS.red}33`,
+              color: COLORS.red,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* Modulos agrupados por categoria */}
+        <div className="space-y-8">
+          {Object.entries(groupedModules).map(([category, mods]) => (
+            <div key={category}>
+              <h2
+                className="text-[10px] font-bold uppercase tracking-widest mb-3"
+                style={{ color: COLORS.muted }}
+              >
+                {category}
+              </h2>
+              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+                {mods.map((mod) => (
+                  <ModuleCard
+                    key={mod.key}
+                    module={mod}
+                    toggling={toggling === mod.key}
+                    onToggle={(enabled) => toggleModule(mod.key, enabled)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModuleCard({
+  module: mod,
+  toggling,
+  onToggle,
+}: {
+  module: ModuleFlag;
+  toggling: boolean;
+  onToggle: (enabled: boolean) => void;
+}) {
+  const isCore = [
+    "module_auth",
+    "module_dashboard",
+    "module_zabbix",
+    "module_rbac",
+    "module_mfa",
+    "module_settings",
+    "module_profile",
+    "module_feature_flags",
+  ].includes(mod.key);
+
+  return (
+    <div
+      className="rounded-xl p-4 transition-all"
+      style={{
+        background: COLORS.card,
+        border: `1px solid ${mod.enabled ? `${COLORS.teal}33` : COLORS.border}`,
+      }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold truncate" style={{ color: COLORS.text }}>
+              {mod.name}
+            </h3>
+            {isCore && (
+              <span
+                className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
+                style={{
+                  background: "var(--brand-glow)",
+                  color: COLORS.teal,
+                }}
+              >
+                Núcleo
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: COLORS.muted }}>
+            {mod.description}
+          </p>
+        </div>
+        <ToggleSwitch
+          enabled={mod.enabled}
+          disabled={isCore || toggling}
+          loading={toggling}
+          onToggle={onToggle}
+        />
+      </div>
+      <div className="flex items-center gap-1.5 mt-2">
+        {mod.enabled ? (
+          <>
+            <Check size={12} style={{ color: COLORS.green }} />
+            <span className="text-[10px] font-medium" style={{ color: COLORS.green }}>Ativo</span>
+          </>
+        ) : (
+          <>
+            <X size={12} style={{ color: COLORS.muted }} />
+            <span className="text-[10px] font-medium" style={{ color: COLORS.muted }}>Inativo</span>
+          </>
+        )}
+        <span className="text-[10px] ml-auto font-mono" style={{ color: COLORS.muted, opacity: 0.5 }}>
+          {mod.key}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ToggleSwitch({
+  enabled,
+  disabled,
+  loading,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled: boolean;
+  loading: boolean;
+  onToggle: (enabled: boolean) => void;
+}) {
+  return (
+    <button
+      onClick={() => !disabled && onToggle(!enabled)}
+      disabled={disabled}
+      className="relative shrink-0 transition-all"
+      style={{
+        width: 36,
+        height: 20,
+        borderRadius: 10,
+        background: enabled ? COLORS.teal : "var(--surface-3, #333)",
+        border: "none",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled && !enabled ? 0.5 : 1,
+      }}
+      title={disabled && isCoreModule(disabled, enabled) ? "Módulo de núcleo — sempre ativo" : undefined}
+    >
+      {loading ? (
+        <Loader2
+          size={12}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin"
+          style={{ color: "white" }}
+        />
+      ) : (
+        <span
+          className="absolute top-1/2 -translate-y-1/2 rounded-full transition-all"
+          style={{
+            width: 14,
+            height: 14,
+            background: "white",
+            left: enabled ? 20 : 3,
+          }}
+        />
+      )}
+    </button>
+  );
+}
+
+function isCoreModule(_disabled: boolean, _enabled: boolean): boolean {
+  return false;
+}

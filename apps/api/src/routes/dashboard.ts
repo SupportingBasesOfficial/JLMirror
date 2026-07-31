@@ -21,6 +21,26 @@ function safeRows(result: { data?: { rows?: Array<Record<string, unknown>> } | n
 
 // ========== Cross-Feature Dashboard ==========
 
+// GET /api/v1/dashboard — redireciona para overview
+dashboardRoute.get("/", httpCache(30), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const [totalDevicesR, onlineDevicesR, openTicketsR, criticalTicketsR] = await Promise.all([
+    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1", [tenantId]),
+    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1 AND status = 'active'", [tenantId]),
+    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
+    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND priority = 'urgent' AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
+  ]);
+
+  return c.json({
+    kpis: {
+      devices: { total: safeCount(totalDevicesR), online: safeCount(onlineDevicesR) },
+      tickets: { open: safeCount(openTicketsR), critical: safeCount(criticalTicketsR) },
+    },
+  });
+});
+
 dashboardRoute.get("/overview", httpCache(30), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
