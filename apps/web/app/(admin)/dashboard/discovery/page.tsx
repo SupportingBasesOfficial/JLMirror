@@ -24,7 +24,7 @@ const CHECK_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function DiscoveryPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixDiscoveryRule[] }>("/api/zabbix/discovery-rules");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixDiscoveryRule[] }>("/api/zabbix/discovery-rules");
   const rules = data?.data ?? [];
 
   return (
@@ -46,7 +46,7 @@ export default function DiscoveryPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : rules.length === 0 ? (
         <EmptyState title="Nenhuma regra de discovery configurada" />
       ) : (

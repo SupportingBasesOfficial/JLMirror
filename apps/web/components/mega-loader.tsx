@@ -5,9 +5,12 @@ import type { CSSProperties } from "react";
 interface MegaLoaderProps {
   fullscreen?: boolean;
   label?: string;
+  progress?: number | null;
 }
 
-export function MegaLoader({ fullscreen = false, label }: MegaLoaderProps) {
+export function MegaLoader({ fullscreen = false, label, progress }: MegaLoaderProps) {
+  const hasProgress = progress !== null && progress !== undefined && progress >= 0;
+  const pct = hasProgress ? Math.min(100, Math.max(0, progress!)) : null;
   const containerStyle: CSSProperties = fullscreen
     ? {
         minHeight: "100vh",
@@ -74,19 +77,39 @@ export function MegaLoader({ fullscreen = false, label }: MegaLoaderProps) {
           )}
         </div>
 
-        {/* Barra indeterminada — segmento que viaja */}
+        {/* Barra de progresso — determinada quando pct disponivel, indeterminada caso contrario */}
         <div
           className="relative h-[2px] w-48 overflow-hidden rounded-full"
           style={{ background: "var(--surface-2)" }}
         >
-          <div
-            className="absolute top-0 h-full w-[30%] rounded-full"
-            style={{
-              background: "var(--brand-primary)",
-              animation: "jlTravel 1.4s ease-in-out infinite",
-            }}
-          />
+          {pct !== null ? (
+            <div
+              className="absolute top-0 h-full rounded-full transition-[width] duration-150 ease-out"
+              style={{
+                width: `${pct}%`,
+                background: "var(--brand-primary)",
+              }}
+            />
+          ) : (
+            <div
+              className="absolute top-0 h-full w-[30%] rounded-full"
+              style={{
+                background: "var(--brand-primary)",
+                animation: "jlTravel 1.4s ease-in-out infinite",
+              }}
+            />
+          )}
         </div>
+
+        {/* Percentual numerico quando determinado */}
+        {pct !== null && (
+          <div
+            className="text-[10px] tabular-nums tracking-[0.1em]"
+            style={{ color: "var(--text-muted)" }}
+          >
+            {pct}%
+          </div>
+        )}
       </div>
     </div>
   );

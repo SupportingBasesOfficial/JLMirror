@@ -7,7 +7,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/state-disp
 import type { ZabbixUser } from "@repo/zabbix";
 
 export default function UsersPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixUser[] }>("/api/zabbix/users");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixUser[] }>("/api/zabbix/users");
   const users = data?.data ?? [];
 
   return (
@@ -29,7 +29,7 @@ export default function UsersPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : users.length === 0 ? (
         <EmptyState title="Nenhum usuário encontrado" />
       ) : (

@@ -40,7 +40,7 @@ export default function ProblemsPage() {
   if (filterAck === "acknowledged") params.set("acknowledged", "true");
   if (filterAck === "unacknowledged") params.set("acknowledged", "false");
   if (filterSeverity !== "all") params.set("severity_from", filterSeverity);
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixProblem[] }>(`/api/zabbix/problems?${params.toString()}`);
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixProblem[] }>(`/api/zabbix/problems?${params.toString()}`);
   const problems = data?.data ?? [];
 
   async function handleAcknowledge() {
@@ -142,7 +142,7 @@ export default function ProblemsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando problemas..." />
+        <LoadingState label="Carregando problemas..." progress={progress} />
       ) : problems.length === 0 ? (
         <EmptyState title="Nenhum problema ativo" message="Não há problemas ativos no momento." />
       ) : (

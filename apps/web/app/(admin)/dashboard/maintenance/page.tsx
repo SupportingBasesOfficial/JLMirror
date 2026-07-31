@@ -8,7 +8,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/state-disp
 import type { ZabbixMaintenance } from "@repo/zabbix";
 
 export default function MaintenancePage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixMaintenance[] }>("/api/zabbix/maintenances");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixMaintenance[] }>("/api/zabbix/maintenances");
   const maintenances = data?.data ?? [];
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -41,7 +41,7 @@ export default function MaintenancePage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : maintenances.length === 0 ? (
         <EmptyState title="Nenhuma janela de manutenção ativa" />
       ) : (

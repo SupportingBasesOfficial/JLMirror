@@ -21,7 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function ServicesPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixService[] }>("/api/zabbix/services");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixService[] }>("/api/zabbix/services");
   const services = data?.data ?? [];
 
   return (
@@ -43,7 +43,7 @@ export default function ServicesPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : services.length === 0 ? (
         <EmptyState title="Nenhum serviço configurado" />
       ) : (

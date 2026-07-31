@@ -7,7 +7,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/state-disp
 import type { ZabbixProxy } from "@repo/zabbix";
 
 export default function ProxiesPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixProxy[] }>("/api/zabbix/proxies");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixProxy[] }>("/api/zabbix/proxies");
   const proxies = data?.data ?? [];
 
   return (
@@ -29,7 +29,7 @@ export default function ProxiesPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : proxies.length === 0 ? (
         <EmptyState title="Nenhum proxy configurado" />
       ) : (

@@ -1,11 +1,12 @@
 import useSWR, { type SWRConfiguration } from "swr";
-import { apiFetch } from "@/lib/zabbix-fetch";
+import { useState, useCallback } from "react";
+import { apiFetchWithProgress } from "@/lib/zabbix-fetch";
 
 // Hook generico para fetch com SWR — cache client-side, revalidacao automatica e retry.
-// Substitui o padrao manual useEffect + useState + apiFetch em todas as paginas.
+// Agora com progresso real de download (0-100) baseado em bytes recebidos vs Content-Length.
 //
 // Uso:
-//   const { data, error, isLoading, mutate } = useApi<{ data: ZabbixUser[] }>("/api/zabbix/users");
+//   const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixUser[] }>("/api/zabbix/users");
 //
 // Configuracao padrao:
 //   - revalidateOnFocus: true (revalida ao voltar a aba do navegador)
@@ -16,9 +17,21 @@ export function useApi<T>(
   url: string | null,
   config?: SWRConfiguration,
 ) {
+  const [progress, setProgress] = useState(0);
+
+  const fetcher = useCallback(
+    (u: string) => {
+      setProgress(0);
+      return apiFetchWithProgress<T>(u, undefined, (pct) => {
+        setProgress(pct);
+      });
+    },
+    [],
+  );
+
   const { data, error, isLoading, mutate } = useSWR<T>(
     url,
-    (u: string) => apiFetch<T>(u),
+    fetcher,
     {
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
@@ -32,6 +45,7 @@ export function useApi<T>(
     data,
     error: error instanceof Error ? error.message : null,
     isLoading: isLoading && !data,
+    progress: data ? 100 : progress,
     mutate,
   };
 }

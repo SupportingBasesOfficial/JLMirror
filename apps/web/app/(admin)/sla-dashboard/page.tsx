@@ -90,7 +90,7 @@ function slaColorPct(sla: number, target: number): string {
 }
 
 export default function SLADashboardPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: SLADashboard; cached: boolean }>("/api/v1/sla/dashboard");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: SLADashboard; cached: boolean }>("/api/v1/sla/dashboard");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {

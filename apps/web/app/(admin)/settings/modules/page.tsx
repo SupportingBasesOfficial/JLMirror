@@ -49,7 +49,7 @@ function getCategory(key: string): string {
 }
 
 export default function ModulesPage() {
-  const { data, isLoading, mutate } = useApi<ModulesResponse>("/api/v1/settings/modules");
+  const { data, isLoading, progress, mutate } = useApi<ModulesResponse>("/api/v1/settings/modules");
   const [toggling, setToggling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,7 +88,7 @@ export default function ModulesPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen p-6" style={{ background: COLORS.bg }}>
-        <LoadingState label="Carregando módulos..." />
+        <LoadingState label="Carregando módulos..." progress={progress} />
       </div>
     );
   }

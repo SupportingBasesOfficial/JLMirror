@@ -11,7 +11,7 @@ export default function TemplatesPage() {
   const [search, setSearch] = useState("");
   const params = new URLSearchParams();
   if (hostId) params.set("host_id", hostId);
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixTemplate[] }>(`/api/zabbix/templates?${params.toString()}`);
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixTemplate[] }>(`/api/zabbix/templates?${params.toString()}`);
   const templates = data?.data ?? [];
 
   const filtered = templates.filter((t) =>
@@ -58,7 +58,7 @@ export default function TemplatesPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : filtered.length === 0 ? (
         <EmptyState title="Nenhum template encontrado" />
       ) : (

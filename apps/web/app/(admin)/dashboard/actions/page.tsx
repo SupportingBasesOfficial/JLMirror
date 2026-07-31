@@ -15,7 +15,7 @@ const EVENT_SOURCE_LABELS: Record<string, string> = {
 };
 
 export default function ActionsPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixAction[] }>("/api/zabbix/actions");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixAction[] }>("/api/zabbix/actions");
   const actions = data?.data ?? [];
 
   return (
@@ -37,7 +37,7 @@ export default function ActionsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : actions.length === 0 ? (
         <EmptyState title="Nenhuma ação configurada" />
       ) : (

@@ -111,7 +111,7 @@ export default function TracesPage() {
   traceParams.set("limit", String(limit));
   traceParams.set("offset", String(offset));
 
-  const { data: traceData, error, isLoading, mutate } = useApi<{ traces: TraceSummary[]; total: number }>(`/api/traces/search?${traceParams.toString()}`);
+  const { data: traceData, error, isLoading, progress, mutate } = useApi<{ traces: TraceSummary[]; total: number }>(`/api/traces/search?${traceParams.toString()}`);
   const { data: stats } = useApi<TraceStats>("/api/traces/stats");
 
   const traces = traceData?.traces ?? [];
@@ -301,7 +301,7 @@ export default function TracesPage() {
         style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
       >
         {isLoading ? (
-          <LoadingState label="Carregando traces..." />
+          <LoadingState label="Carregando traces..." progress={progress} />
         ) : traces.length === 0 ? (
           <div className="p-8 text-center text-sm" style={{ color: COLORS.muted }}>Nenhum trace encontrado</div>
         ) : (
@@ -443,7 +443,7 @@ export default function TracesPage() {
 
             {/* Timeline Gantt */}
             {loadingDetail ? (
-              <LoadingState label="Carregando spans..." />
+              <LoadingState label="Carregando spans..." progress={progress} />
             ) : (
               <div className="space-y-1">
                 {(() => {

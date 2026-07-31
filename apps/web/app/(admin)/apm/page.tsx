@@ -47,7 +47,7 @@ function formatDuration(ms: string | number): string {
 
 export default function ApmDashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const { data, error, isLoading, mutate } = useApi<ApmOverview>("/api/apm/overview", {
+  const { data, error, isLoading, progress, mutate } = useApi<ApmOverview>("/api/apm/overview", {
     refreshInterval: autoRefresh ? 5000 : 0,
   });
 
@@ -97,7 +97,7 @@ export default function ApmDashboardPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando APM..." />
+        <LoadingState label="Carregando APM..." progress={progress} />
       ) : data ? (
         <>
           {/* KPIs principais */}

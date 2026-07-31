@@ -41,7 +41,7 @@ export default function EventsPage() {
   if (filterAck === "acknowledged") params.set("acknowledged", "true");
   if (filterAck === "unacknowledged") params.set("acknowledged", "false");
   params.set("limit", "200");
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixEvent[] }>(`/api/zabbix/events?${params.toString()}`);
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixEvent[] }>(`/api/zabbix/events?${params.toString()}`);
   const events = data?.data ?? [];
 
   return (
@@ -86,7 +86,7 @@ export default function EventsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando eventos..." />
+        <LoadingState label="Carregando eventos..." progress={progress} />
       ) : events.length === 0 ? (
         <EmptyState title="Nenhum evento encontrado" message="Não há eventos para os filtros selecionados." />
       ) : (

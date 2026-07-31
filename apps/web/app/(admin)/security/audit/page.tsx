@@ -92,7 +92,7 @@ export default function AuditPage() {
   auditParams.set("limit", String(limit));
   auditParams.set("offset", String(offset));
 
-  const { data: auditData, error, isLoading, mutate } = useApi<{ logs: AuditLog[]; total: number }>(`/api/audit/logs?${auditParams.toString()}`);
+  const { data: auditData, error, isLoading, progress, mutate } = useApi<{ logs: AuditLog[]; total: number }>(`/api/audit/logs?${auditParams.toString()}`);
   const { data: stats } = useApi<AuditStats>("/api/audit/stats");
 
   const logs = auditData?.logs ?? [];
@@ -232,7 +232,7 @@ export default function AuditPage() {
         style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
       >
         {isLoading ? (
-          <LoadingState label="Carregando auditoria..." />
+          <LoadingState label="Carregando auditoria..." progress={progress} />
         ) : logs.length === 0 ? (
           <div className="p-8 text-center text-sm" style={{ color: COLORS.muted }}>
             Nenhum log encontrado

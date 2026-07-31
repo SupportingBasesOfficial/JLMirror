@@ -53,10 +53,10 @@ const STATUS_VARIANT: Record<string, "ok" | "info" | "warning" | "error" | "neut
 };
 
 export default function DashboardOverview() {
-  const { data, isLoading, mutate } = useApi<DashboardData>("/api/dashboard/overview");
+  const { data, isLoading, progress, mutate } = useApi<DashboardData>("/api/dashboard/overview");
 
   if (isLoading) {
-    return <LoadingState label="Carregando KPIs..." />;
+    return <LoadingState label="Carregando KPIs..." progress={progress} />;
   }
 
   if (!data) {

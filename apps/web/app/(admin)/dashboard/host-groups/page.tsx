@@ -8,7 +8,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/state-disp
 import type { ZabbixHostGroup } from "@repo/zabbix";
 
 export default function HostGroupsPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixHostGroup[] }>("/api/zabbix/host-groups");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixHostGroup[] }>("/api/zabbix/host-groups");
   const groups = data?.data ?? [];
   const [actionError, setActionError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -107,7 +107,7 @@ export default function HostGroupsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : groups.length === 0 ? (
         <EmptyState title="Nenhum grupo encontrado" />
       ) : (

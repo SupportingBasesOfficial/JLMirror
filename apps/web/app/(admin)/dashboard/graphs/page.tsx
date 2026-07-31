@@ -10,7 +10,7 @@ export default function GraphsPage() {
   const [hostId, setHostId] = useState<string>("");
   const params = new URLSearchParams();
   if (hostId) params.set("host_id", hostId);
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixGraph[] }>(`/api/zabbix/graphs?${params.toString()}`);
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixGraph[] }>(`/api/zabbix/graphs?${params.toString()}`);
   const graphs = data?.data ?? [];
 
   return (
@@ -41,7 +41,7 @@ export default function GraphsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : graphs.length === 0 ? (
         <EmptyState title="Nenhum gráfico encontrado" />
       ) : (

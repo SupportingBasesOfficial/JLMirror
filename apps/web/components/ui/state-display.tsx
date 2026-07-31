@@ -55,7 +55,9 @@ export function ErrorState({ title, message, action }: { title: string; message?
   return <StateDisplay variant="error" title={title} message={message} action={action} />;
 }
 
-export function LoadingState({ label = "Carregando..." }: { label?: string }) {
+export function LoadingState({ label = "Carregando...", progress }: { label?: string; progress?: number }) {
+  const hasProgress = progress !== undefined && progress >= 0;
+  const pct = hasProgress ? Math.min(100, Math.max(0, progress!)) : null;
   return (
     <div
       className="flex flex-col items-center justify-center gap-4 rounded-xl py-16"
@@ -89,16 +91,26 @@ export function LoadingState({ label = "Carregando..." }: { label?: string }) {
         className="relative h-[2px] w-32 overflow-hidden rounded-full"
         style={{ background: "var(--surface-3)" }}
       >
-        <div
-          className="absolute top-0 h-full w-[30%] rounded-full"
-          style={{
-            background: "var(--brand-primary)",
-            animation: "jlTravel 1.4s ease-in-out infinite",
-          }}
-        />
+        {pct !== null ? (
+          <div
+            className="absolute top-0 h-full rounded-full transition-[width] duration-150 ease-out"
+            style={{
+              width: `${pct}%`,
+              background: "var(--brand-primary)",
+            }}
+          />
+        ) : (
+          <div
+            className="absolute top-0 h-full w-[30%] rounded-full"
+            style={{
+              background: "var(--brand-primary)",
+              animation: "jlTravel 1.4s ease-in-out infinite",
+            }}
+          />
+        )}
       </div>
       <span className="text-[11px] uppercase tracking-[0.2em]" style={{ color: "var(--text-muted)" }}>
-        {label}
+        {pct !== null ? `${pct}% — ${label}` : label}
       </span>
     </div>
   );

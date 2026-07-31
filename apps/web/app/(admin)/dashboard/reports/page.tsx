@@ -7,7 +7,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/state-disp
 import type { ZabbixReport } from "@repo/zabbix";
 
 export default function ReportsPage() {
-  const { data, error, isLoading, mutate } = useApi<{ data: ZabbixReport[] }>("/api/zabbix/reports");
+  const { data, error, isLoading, progress, mutate } = useApi<{ data: ZabbixReport[] }>("/api/zabbix/reports");
   const reports = data?.data ?? [];
 
   return (
@@ -29,7 +29,7 @@ export default function ReportsPage() {
       )}
 
       {isLoading ? (
-        <LoadingState label="Carregando..." />
+        <LoadingState label="Carregando..." progress={progress} />
       ) : reports.length === 0 ? (
         <EmptyState title="Nenhum relatório programado" />
       ) : (

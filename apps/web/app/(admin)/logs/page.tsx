@@ -104,7 +104,7 @@ export default function LogsPage() {
   logParams.set("limit", String(limit));
   logParams.set("offset", String(offset));
 
-  const { data: logData, error, isLoading, mutate } = useApi<{ logs: SystemLog[]; total: number }>(`/api/logs/search?${logParams.toString()}`);
+  const { data: logData, error, isLoading, progress, mutate } = useApi<{ logs: SystemLog[]; total: number }>(`/api/logs/search?${logParams.toString()}`);
   const { data: stats } = useApi<LogStats>("/api/logs/stats");
 
   const logs = logData?.logs ?? [];
@@ -373,7 +373,7 @@ export default function LogsPage() {
         style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
       >
         {isLoading ? (
-          <LoadingState label="Carregando logs..." />
+          <LoadingState label="Carregando logs..." progress={progress} />
         ) : logs.length === 0 ? (
           <div className="p-8 text-center text-sm" style={{ color: COLORS.muted }}>
             Nenhum log encontrado

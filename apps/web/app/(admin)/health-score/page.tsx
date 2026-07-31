@@ -135,7 +135,7 @@ function DimensionBar({ item }: { item: HealthBreakdown }) {
 }
 
 export default function HealthScorePage() {
-  const { data, isLoading, mutate } = useApi<HealthScoreData>("/api/v1/system-health/score");
+  const { data, isLoading, progress, mutate } = useApi<HealthScoreData>("/api/v1/system-health/score");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {
