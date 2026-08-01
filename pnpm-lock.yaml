@@ -388,7 +388,11 @@ importers:
         specifier: ^19.0.0
         version: 19.2.3(@types/react@19.2.17)
 
-  packages/zabbix: {}
+  packages/zabbix:
+    dependencies:
+      '@repo/cache':
+        specifier: workspace:*
+        version: link:../cache
 
 packages:
 

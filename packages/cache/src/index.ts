@@ -3,6 +3,8 @@
 import Redis from "ioredis";
 import { query } from "@repo/db";
 
+export { circuitCanCall, circuitOnSuccess, circuitOnFailure, circuitGetState } from "./circuit-breaker.js";
+
 // Cliente Redis singleton para cache geral
 let cacheClient: Redis | null = null;
 let bullmqConnection: Redis | null = null;

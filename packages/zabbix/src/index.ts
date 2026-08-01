@@ -290,6 +290,7 @@ interface BlindedZabbixClientOptions {
   apiUrl: string;
   apiToken: string;
   timeout?: number;
+  circuitKey?: string;
 }
 
 export class BlindedZabbixClient {
@@ -297,15 +298,26 @@ export class BlindedZabbixClient {
   private apiToken: string;
   private timeout: number;
   private requestId: number = 0;
+  private circuitKey: string;
 
   constructor(opts: BlindedZabbixClientOptions) {
     this.apiUrl = opts.apiUrl;
     this.apiToken = opts.apiToken;
     this.timeout = opts.timeout ?? 30_000;
+    // Circuit breaker key baseado na URL da API (compartilhado entre tenants do mesmo Zabbix)
+    this.circuitKey = opts.circuitKey ?? `zabbix:${this.apiUrl}`;
   }
 
   // RPC generico para a API Zabbix — params aceita objeto ou array (para delete operations)
+  // Circuit breaker protege contra cascata de falhas quando Zabbix esta indisponivel
   async rpc<T = unknown>(method: string, params?: Record<string, unknown> | unknown[], skipAuth = false): Promise<T> {
+    // Verifica circuit breaker (import dinamico para evitar dependencia circular)
+    const { circuitCanCall, circuitOnSuccess, circuitOnFailure } = await import("@repo/cache");
+    const canCall = await circuitCanCall(this.circuitKey);
+    if (!canCall) {
+      throw new Error("Zabbix API indisponivel (circuit breaker aberto)");
+    }
+
     const id = ++this.requestId;
     const body = {
       jsonrpc: "2.0",
@@ -332,16 +344,25 @@ export class BlindedZabbixClient {
       });
 
       if (!res.ok) {
+        await circuitOnFailure(this.circuitKey);
         throw new Error(`Zabbix API HTTP ${res.status}`);
       }
 
       const json = (await res.json()) as { result?: T; error?: { message: string; code?: number } };
 
       if (json.error) {
+        // Erro de negocio (parametros invalidos, etc) — nao conta como falha de circuito
         throw new Error(`Zabbix API error: ${json.error.message}`);
       }
 
+      await circuitOnSuccess(this.circuitKey);
       return json.result as T;
+    } catch (err) {
+      // Erro de rede/timeout — conta como falha do circuito
+      if (err instanceof Error && !err.message.includes("circuit breaker")) {
+        await circuitOnFailure(this.circuitKey);
+      }
+      throw err;
     } finally {
       clearTimeout(timeout);
     }

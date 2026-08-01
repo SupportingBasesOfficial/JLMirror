@@ -5,5 +5,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "files": ["src"],
-  "dependencies": {}
+  "dependencies": {
+    "@repo/cache": "workspace:*"
+  }
 }
