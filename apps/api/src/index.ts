@@ -57,7 +57,6 @@ import { slaRoute } from "./routes/sla.js";
 import { wsRoute, setupWebSocket } from "./routes/ws.js";
 import type { Server } from "http";
 import { devicesRoute } from "./routes/devices.js";
-import { monitoringRoute } from "./routes/monitoring.js";
 import { zabbixRoute } from "./routes/zabbix.js";
 import { docsRoute } from "./routes/docs.js";
 import { errorHandler } from "./middleware/error-handler.js";
@@ -168,7 +167,6 @@ app.route("/api/v1/auth", authRoute);
 // Padrão sem /* para garantir que o Hono matcheie tanto a rota raiz quanto sub-rotas
 const protectedPaths = [
   "/api/v1/devices",
-  "/api/v1/monitoring",
   "/api/v1/mfa",
   "/api/v1/audit",
   "/api/v1/rbac",
@@ -227,9 +225,6 @@ app.route("/api/v1/ws", wsRoute);
 // Rotas protegidas — modulos DESATIVADOS (requireModule bloqueia se flag off)
 app.use("/api/v1/devices/*", requireModule("module_devices"));
 app.route("/api/v1/devices", devicesRoute);
-
-app.use("/api/v1/monitoring/*", requireModule("module_monitoring"));
-app.route("/api/v1/monitoring", monitoringRoute);
 
 app.use("/api/v1/audit/*", requireModule("module_audit"));
 app.route("/api/v1/audit", auditRoute);

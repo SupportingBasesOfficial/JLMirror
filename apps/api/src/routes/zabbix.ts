@@ -381,27 +381,6 @@ zabbixRoute.get("/triggers", async (c) => {
   }
 });
 
-// GET /api/v1/zabbix/ping
-zabbixRoute.get("/ping", async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-
-  const client = await createZabbixClient(tenantId);
-  if (!client) {
-    return c.json(
-      { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } },
-      503,
-    );
-  }
-
-  try {
-    const connected = await client.ping();
-    return c.json({ connected });
-  } catch {
-    return c.json({ connected: false });
-  }
-});
-
 // GET /api/v1/zabbix/devices/:hostId/prefs
 zabbixRoute.get("/devices/:hostId/prefs", async (c) => {
   const user = c.get("user");
@@ -1391,6 +1370,52 @@ zabbixRoute.get("/history-batch", async (c) => {
     return c.json({ data: history });
   } catch (error) {
     return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
+// ==================== OVERVIEW ====================
+
+// GET /api/v1/zabbix/overview — resumo consolidado para dashboard de monitoramento
+zabbixRoute.get("/overview", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json(
+      { error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Zabbix não configurado para este tenant" } },
+      404,
+    );
+  }
+
+  try {
+    const hosts = await client.getDevices();
+    const hostIds = hosts.map((h) => h.hostid);
+    const [problems, triggers] = await Promise.all([
+      client.getProblems(hostIds.length > 0 ? hostIds : undefined, { recent: true }),
+      client.getTriggers(hostIds.length > 0 ? hostIds : undefined),
+    ]);
+
+    const severityCount = (arr: { severity: number }[], minSeverity: number): number =>
+      arr.filter((p) => p.severity >= minSeverity).length;
+
+    return c.json({
+      hosts_total: hostIds.length,
+      problems_total: problems.length,
+      problems_critical: severityCount(problems, 4),
+      problems_warning: severityCount(problems, 2) - severityCount(problems, 4),
+      problems_info: severityCount(problems, 0) - severityCount(problems, 2),
+      triggers_active: triggers.length,
+      triggers_disaster: triggers.filter((t) => t.priority === "5").length,
+      triggers_high: triggers.filter((t) => t.priority === "4").length,
+      triggers_average: triggers.filter((t) => t.priority === "3").length,
+      triggers_warning: triggers.filter((t) => t.priority === "2").length,
+      triggers_information: triggers.filter((t) => t.priority === "1").length,
+      recent_problems: problems.slice(0, 10),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido";
+    return c.json({ error: { code: "ZABBIX_API_ERROR", message } }, 502);
   }
 });
 
