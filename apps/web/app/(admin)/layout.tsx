@@ -1,7 +1,9 @@
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AdminSidebar } from "@/components/admin-sidebar";
+import { ClientSidebar } from "@/components/client-sidebar";
 import { TopBar } from "@/components/top-bar";
 import { RealtimeWrapper } from "@/components/realtime-wrapper";
+import { ScopeAwareSidebar } from "@/components/scope-aware-sidebar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -29,7 +31,7 @@ export default function AdminLayout({
           fontFamily: "var(--font-inter), system-ui, sans-serif",
         }}
       >
-        <AdminSidebar />
+        <ScopeAwareSidebar />
         <main className="flex-1 p-4 md:p-6 overflow-auto">
           <TopBar />
           <div style={{ animation: "fadeIn 0.2s ease-out" }}>
