@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { BlindedZabbixClient, decryptTokenParts, type ZabbixProblem } from "@repo/zabbix";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { deliverNotification } from "./notification-delivery.js";
@@ -51,14 +52,14 @@ export async function startAlertingEngine(): Promise<void> {
     try {
       await pollZabbixAndAlert();
     } catch (err) {
-      console.error("[alerting] Erro no poll:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no poll de alertas", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
 
 export function stopAlertingEngine(): void {
   // Workers e filas são fechados centralmente por stopAllQueues no lifecycle
-  console.warn("[alerting] Engine parada");
+  logger.info("Alerting engine parada");
 }
 
 async function pollZabbixAndAlert(): Promise<void> {
@@ -80,7 +81,7 @@ async function pollZabbixAndAlert(): Promise<void> {
     try {
       await processTenantAlerts(tenant);
     } catch (err) {
-      console.error(`[alerting] Erro tenant ${tenant.tenant_id}:`, err instanceof Error ? err.message : String(err));
+      logger.error("Erro no tenant (alerting)", { tenantId: tenant.tenant_id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 }

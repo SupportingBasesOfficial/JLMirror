@@ -2,6 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { closePool, query } from "@repo/db";
 import { closeCache } from "@repo/cache";
+import { logger } from "@repo/logger";
 import { stopTaskScheduler } from "./task-scheduler.js";
 import { stopAlertingEngine } from "./alerting-engine.js";
 import { stopDeviceSync } from "./device-sync.js";
@@ -45,12 +46,11 @@ export function validateEnv(): void {
   }
 
   if (missing.length > 0) {
-    console.error("[startup] Variaveis de ambiente obrigatorias faltando:");
-    missing.forEach(v => console.error(`  - ${v}`));
+    logger.error("Variaveis de ambiente obrigatorias faltando", { missing });
     process.exit(1);
   }
 
-  console.warn("[startup] Validacao de env: OK");
+  logger.info("Validacao de env: OK");
 }
 
 // Retry de conexao com DB com backoff exponencial
@@ -58,16 +58,16 @@ export async function waitForDatabase(maxRetries: number = 5, baseDelayMs: numbe
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const result = await query("SELECT 1 as ok");
     if (!result.error) {
-      console.warn(`[startup] Conexao com DB estabelecida (tentativa ${attempt}/${maxRetries})`);
+      logger.info("Conexao com DB estabelecida", { attempt, maxRetries });
       await runMigrations();
       return;
     }
 
     const delay = baseDelayMs * Math.pow(2, attempt - 1);
-    console.warn(`[startup] DB indisponivel (tentativa ${attempt}/${maxRetries}), tentando novamente em ${delay}ms...`);
+    logger.warn("DB indisponivel, tentando novamente", { attempt, maxRetries, delayMs: delay });
 
     if (attempt === maxRetries) {
-      console.error(`[startup] Nao foi possivel conectar ao DB apos ${maxRetries} tentativas`);
+      logger.error("Nao foi possivel conectar ao DB", { maxRetries });
       process.exit(1);
     }
 
@@ -85,15 +85,15 @@ async function runMigrations(): Promise<void> {
     // Tenta adquirir lock advisory — ID fixo e arbitrario para migrations
     const lockResult = await client.query("SELECT pg_try_advisory_lock($1) as acquired", [42_001]);
     if (!lockResult.rows[0]?.acquired) {
-      console.warn("[startup] Migrations: outra replica ja esta migrando, pulando");
+      logger.warn("Migrations: outra replica ja esta migrando, pulando");
       return;
     }
-    console.warn("[startup] Lock de migrations adquirido");
+    logger.info("Lock de migrations adquirido");
     const { runMigrations: migrate } = await import("@repo/db/migrate");
     await migrate();
-    console.warn("[startup] Migrations aplicadas com sucesso");
+    logger.info("Migrations aplicadas com sucesso");
   } catch (err) {
-    console.error("[startup] Erro ao aplicar migrations:", err instanceof Error ? err.message : String(err));
+    logger.error("Erro ao aplicar migrations", { error: err instanceof Error ? err.message : String(err) });
     // Nao aborta — migrations podem ja estar aplicadas
   } finally {
     if (client) {
@@ -109,31 +109,31 @@ let isShuttingDown = false;
 export function setupGracefulShutdown(): void {
   const shutdown = async (signal: string) => {
     if (isShuttingDown) {
-      console.warn(`[shutdown] Ja em andamento (${signal} ignorado)`);
+      logger.warn("Shutdown ja em andamento, sinal ignorado", { signal });
       return;
     }
     isShuttingDown = true;
 
-    console.warn(`[shutdown] Sinal ${signal} recebido — iniciando graceful shutdown`);
+    logger.info("Sinal recebido, iniciando graceful shutdown", { signal });
 
     // 1. Para workers em background
-    console.warn("[shutdown] Parando task scheduler...");
+    logger.info("Parando task scheduler");
     stopTaskScheduler();
 
-    console.warn("[shutdown] Parando alerting engine...");
+    logger.info("Parando alerting engine");
     stopAlertingEngine();
 
-    console.warn("[shutdown] Parando device sync...");
+    logger.info("Parando device sync");
     stopDeviceSync();
 
-    console.warn("[shutdown] Parando partition manager...");
+    logger.info("Parando partition manager");
     stopPartitionManager();
 
-    console.warn("[shutdown] Parando correlation engine...");
+    logger.info("Parando correlation engine");
     stopCorrelationEngine();
 
     // 2. Para filas BullMQ e workers
-    console.warn("[shutdown] Parando filas BullMQ...");
+    logger.info("Parando filas BullMQ");
     try {
       await stopAllQueues();
     } catch {
@@ -141,7 +141,7 @@ export function setupGracefulShutdown(): void {
     }
 
     // 3. Fecha Redis
-    console.warn("[shutdown] Fechando conexao Redis...");
+    logger.info("Fechando conexao Redis");
     try {
       await closeCache();
     } catch {
@@ -149,14 +149,14 @@ export function setupGracefulShutdown(): void {
     }
 
     // 4. Fecha pool do Postgres
-    console.warn("[shutdown] Fechando pool do Postgres...");
+    logger.info("Fechando pool do Postgres");
     try {
       await closePool();
     } catch {
       // Silencioso
     }
 
-    console.warn("[shutdown] Graceful shutdown concluido");
+    logger.info("Graceful shutdown concluido");
 
     // 5. Fecha Sentry
     await Sentry.close(2000).catch(() => {});
@@ -169,17 +169,17 @@ export function setupGracefulShutdown(): void {
 
   // Previne crash em unhandled rejection — loga e continua
   process.on("unhandledRejection", (reason) => {
-    console.error("[startup] Unhandled rejection:", reason instanceof Error ? reason.message : String(reason));
+    logger.error("Unhandled rejection", { reason: reason instanceof Error ? reason.message : String(reason) });
   });
 
   // Captura exceptions nao tratadas — loga mas nao crasha
   process.on("uncaughtException", (err) => {
-    console.error("[startup] Uncaught exception:", err.message);
+    logger.error("Uncaught exception", { error: err.message });
     if (process.env.NODE_ENV === "production") {
       // Em producao, inicia graceful shutdown
       shutdown("uncaughtException");
     }
   });
 
-  console.warn("[startup] Graceful shutdown registrado (SIGTERM, SIGINT)");
+  logger.info("Graceful shutdown registrado (SIGTERM, SIGINT)");
 }

@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import { verifyToken } from "@repo/auth";
+import { logger } from "@repo/logger";
 import { publish, psubscribe } from "@repo/cache";
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -32,7 +33,7 @@ export function setupWebSocket(server: Server): void {
     psubscribe(CHANNEL_TENANT_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
     psubscribe(CHANNEL_USER_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
     redisSubscribed = true;
-    console.warn("[ws] Redis Pub/Sub subscreveu canais de notificação (PSUBSCRIBE)");
+    logger.info("Redis Pub/Sub subscreveu canais de notificacao (PSUBSCRIBE)");
   }
 
   wss.on("connection", (ws: WebSocket, req) => {

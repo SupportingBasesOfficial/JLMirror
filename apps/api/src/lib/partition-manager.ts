@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { registerRepeatableJob, startWorker } from "./queue.js";
 
 // Partition Manager — cria partições mensais futuras e droppa partições antigas
@@ -33,13 +34,13 @@ export async function startPartitionManager(): Promise<void> {
       await createFuturePartitions();
       await dropOldPartitions();
     } catch (err) {
-      console.error("[partition] Erro:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no partition manager", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
 
 export function stopPartitionManager(): void {
-  console.warn("[partition] Manager parado");
+  logger.info("Partition manager parado");
 }
 
 async function createFuturePartitions(): Promise<void> {
@@ -75,9 +76,9 @@ async function createFuturePartitions(): Promise<void> {
       );
 
       if (createResult.error) {
-        console.error(`[partition] Erro ao criar ${partitionName}: ${createResult.error.message}`);
+        logger.error("Erro ao criar particao", { partition: partitionName, error: createResult.error.message });
       } else {
-        console.warn(`[partition] Partição criada: ${partitionName} (${monthStart.toISOString().substring(0, 10)} a ${monthEnd.toISOString().substring(0, 10)})`);
+        logger.info("Particao criada", { partition: partitionName, start: monthStart.toISOString().substring(0, 10), end: monthEnd.toISOString().substring(0, 10) });
       }
     }
   }
@@ -115,9 +116,9 @@ async function dropOldPartitions(): Promise<void> {
           `DROP TABLE IF EXISTS public.${row.tablename} CASCADE`,
         );
         if (dropResult.error) {
-          console.error(`[partition] Erro ao droppar ${row.tablename}: ${dropResult.error.message}`);
+          logger.error("Erro ao droppar particao", { partition: row.tablename, error: dropResult.error.message });
         } else {
-          console.warn(`[partition] Partição droppada: ${row.tablename} (mais antiga que ${table.retentionMonths} meses)`);
+          logger.info("Particao droppada (retention)", { partition: row.tablename, retentionMonths: table.retentionMonths });
         }
       }
     }

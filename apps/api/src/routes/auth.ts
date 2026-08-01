@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import argon2 from "argon2";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import {
   signAccessToken,
   signRefreshToken,
@@ -170,7 +171,7 @@ authRoute.post("/login", async (c) => {
   );
 
   if (sessionResult.error) {
-    console.error("Erro ao criar sessão:", sessionResult.error.message);
+    logger.error("Erro ao criar sessao", { error: sessionResult.error.message });
   }
 
   // Registra ou atualiza dispositivo confiável

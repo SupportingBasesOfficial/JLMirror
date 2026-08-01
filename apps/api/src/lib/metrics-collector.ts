@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { registerRepeatableJob, startWorker } from "./queue.js";
 
 // Metrics Collector — coleta metricas internas do JLMIRROR e escreve em system_metrics
@@ -28,13 +29,13 @@ export async function startMetricsCollector(): Promise<void> {
     try {
       await collectAndStoreMetrics();
     } catch (err) {
-      console.error("[metrics-collector] Erro:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no metrics collector", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
 
 export function stopMetricsCollector(): void {
-  console.warn("[metrics-collector] Parado");
+  logger.info("Metrics collector parado");
 }
 
 async function collectAndStoreMetrics(): Promise<void> {
@@ -73,5 +74,5 @@ async function collectAndStoreMetrics(): Promise<void> {
     [names, values, labels],
   );
 
-  console.warn(`[metrics-collector] ${metrics.length} metricas coletadas em ${Date.now() - now}ms`);
+  logger.info("Metricas coletadas", { count: metrics.length, durationMs: Date.now() - now });
 }

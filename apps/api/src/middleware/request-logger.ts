@@ -2,6 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
 import { randomUUID } from "node:crypto";
+import { logger } from "@repo/logger";
 
 function getCorrelationId(c: { req: { header: (name: string) => string | undefined }; get: (key: string) => unknown; set: (key: string, value: unknown) => void }): string {
   const incoming = c.req.header("x-request-id");
@@ -38,9 +39,9 @@ export const requestLogger = createMiddleware(
     const logLine = JSON.stringify(logEntry);
 
     if (c.res.status >= 500) {
-      console.error(logLine);
+      logger.error("HTTP request", logEntry);
     } else {
-      console.warn(logLine);
+      logger.info("HTTP request", logEntry);
     }
   },
 );

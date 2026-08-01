@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { registerRepeatableJob, startWorker } from "./queue.js";
 
@@ -40,14 +41,14 @@ export async function startTaskScheduler(): Promise<void> {
     try {
       await pollAndExecuteDueTasks();
     } catch (err) {
-      console.error("[scheduler] Erro no poll:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no poll do scheduler", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
 
 export function stopTaskScheduler(): void {
   // Workers e filas são fechados centralmente por stopAllQueues no lifecycle
-  console.warn("[scheduler] Task scheduler parado");
+  logger.info("Task scheduler parado");
 }
 
 async function pollAndExecuteDueTasks(): Promise<void> {
@@ -269,7 +270,7 @@ async function executeTaskAsync(task: DueTask): Promise<void> {
      nextRunResult.data?.rows[0]?.next_run ?? null, task.id],
   );
 
-  console.warn(`[scheduler] Task ${task.name} (${task.id}): ${status} em ${durationMs}ms`);
+  logger.info("Task executada", { taskName: task.name, taskId: task.id, status, durationMs });
 
   // Notifica via WebSocket se a task falhou
   if (status !== "success") {

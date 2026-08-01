@@ -3,6 +3,7 @@
 // Web Push — envio de push notifications via Web Push API com VAPID
 import webpush from "web-push";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 
 export interface PushSubscriptionRow {
   id: string;
@@ -20,7 +21,7 @@ export function configureVapid(): void {
   const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@jlinformatica.com.br";
 
   if (!publicKey || !privateKey) {
-    console.warn("[web-push] VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY não configurados — Web Push desativado");
+    logger.warn("VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY nao configurados — Web Push desativado");
     return;
   }
 

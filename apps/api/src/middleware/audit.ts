@@ -3,6 +3,7 @@
 import { createMiddleware } from "hono/factory";
 import { randomUUID } from "node:crypto";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { cacheGet, cacheSet } from "@repo/cache";
 
 // Middleware de auditoria — registra mutações (POST/PUT/DELETE/PATCH) em system_logs
@@ -101,6 +102,6 @@ export const auditMiddleware = createMiddleware(async (c, next) => {
     await cacheSet(AUDIT_CACHE_KEY, hash, AUDIT_CACHE_TTL_SECONDS);
   } catch (err) {
     // Auditoria não deve bloquear a resposta — loga erro e continua
-    console.error("[audit] Falha ao registrar auditoria:", err instanceof Error ? err.message : String(err));
+    logger.error("Falha ao registrar auditoria", { error: err instanceof Error ? err.message : String(err) });
   }
 });

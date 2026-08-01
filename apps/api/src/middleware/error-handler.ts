@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#logic-core
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
+import { logger } from "@repo/logger";
 
 export const errorHandler = createMiddleware(
   async (c, next) => {
@@ -26,7 +27,7 @@ export const errorHandler = createMiddleware(
         );
       }
 
-      console.error("Erro não tratado:", error);
+      logger.error("Erro nao tratado", { error: error instanceof Error ? error.message : String(error) });
       return c.json(
         {
           error: {

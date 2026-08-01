@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { BlindedZabbixClient, decryptTokenParts } from "@repo/zabbix";
 import { registerRepeatableJob, startWorker } from "./queue.js";
 
@@ -31,14 +32,14 @@ export async function startDeviceSync(): Promise<void> {
     try {
       await syncAllTenants();
     } catch (err) {
-      console.error("[device-sync] Erro no sync:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no device sync", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 }
 
 export function stopDeviceSync(): void {
   // Workers e filas são fechados centralmente por stopAllQueues no lifecycle
-  console.warn("[device-sync] Worker parado");
+  logger.info("Device sync worker parado");
 }
 
 export async function syncAllTenants(): Promise<void> {
@@ -72,13 +73,12 @@ export async function syncAllTenants(): Promise<void> {
       const r = results[j];
       if (r.status === "rejected") {
         failed++;
-        console.error(`[device-sync] Erro tenant ${chunk[j].tenant_id}:`,
-          r.reason instanceof Error ? r.reason.message : String(r.reason));
+        logger.error("Erro no sync do tenant", { tenantId: chunk[j].tenant_id, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
       }
     }
   }
 
-  console.warn(`[device-sync] Sync concluido: ${completed}/${total} tenants processados, ${failed} falhas`);
+  logger.info("Sync concluido", { completed, total, failed });
 }
 
 export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced: number; total: number }> {
@@ -124,6 +124,6 @@ export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced:
     }
   }
 
-  console.warn(`[device-sync] Tenant ${tenant.tenant_id}: ${synced}/${devices.length} devices sincronizados`);
+  logger.info("Tenant sincronizado", { tenantId: tenant.tenant_id, synced, total: devices.length });
   return { synced, total: devices.length };
 }

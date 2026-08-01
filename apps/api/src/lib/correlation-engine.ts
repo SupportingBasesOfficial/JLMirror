@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { BlindedZabbixClient, decryptTokenParts, type ZabbixProblem } from "@repo/zabbix";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { deliverNotification } from "./notification-delivery.js";
@@ -66,15 +67,15 @@ export async function startCorrelationEngine(): Promise<void> {
     try {
       await pollAndCorrelate();
     } catch (err) {
-      console.error("[correlation] Erro no poll:", err instanceof Error ? err.message : String(err));
+      logger.error("Erro no poll de correlacao", { error: err instanceof Error ? err.message : String(err) });
     }
   });
 
-  console.warn("[correlation] Engine iniciada");
+  logger.info("Correlation engine iniciada");
 }
 
 export function stopCorrelationEngine(): void {
-  console.warn("[correlation] Engine parada");
+  logger.info("Correlation engine parada");
 }
 
 async function pollAndCorrelate(): Promise<void> {
@@ -95,7 +96,7 @@ async function pollAndCorrelate(): Promise<void> {
     try {
       await processTenantCorrelation(tenant);
     } catch (err) {
-      console.error(`[correlation] Erro tenant ${tenant.tenant_id}:`, err instanceof Error ? err.message : String(err));
+      logger.error("Erro no tenant (correlacao)", { tenantId: tenant.tenant_id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 }

@@ -3,6 +3,7 @@
 import { Queue, Worker, type Processor } from "bullmq";
 import Redlock from "redlock";
 import { createBullMQConnection, createCacheClient } from "@repo/cache";
+import { logger } from "@repo/logger";
 
 interface RedlockLock {
   release(): Promise<void>;
@@ -67,7 +68,7 @@ export async function registerRepeatableJob(
         jobData ?? {},
         { repeat: repeatPattern, removeOnComplete: 100, removeOnFail: 50 },
       );
-      console.warn(`[queue] Repeatable job "${jobName}" registrado na fila "${queueName}"`);
+      logger.info("Repeatable job registrado", { queue: queueName, job: jobName });
     }
   } finally {
     await lock.release();
@@ -85,27 +86,27 @@ export function startWorker(queueName: string, processor: Processor): Worker {
   });
 
   worker.on("completed", (job) => {
-    console.warn(`[queue:${queueName}] Job ${job.id} (${job.name}) concluido`);
+    logger.info("Job concluido", { queue: queueName, jobId: job.id, jobName: job.name });
   });
 
   worker.on("failed", (job, err) => {
-    console.error(`[queue:${queueName}] Job ${job?.id ?? "?"} (${job?.name ?? "?"}) falhou: ${err.message}`);
+    logger.error("Job falhou", { queue: queueName, jobId: job?.id, jobName: job?.name, error: err.message });
   });
 
   workers.push(worker);
-  console.warn(`[queue:${queueName}] Worker iniciado (concurrency: ${concurrency})`);
+  logger.info("Worker iniciado", { queue: queueName, concurrency });
   return worker;
 }
 
 // Para todos os workers e fecha filas graciosamente
 export async function stopAllQueues(): Promise<void> {
-  console.warn("[queue] Parando workers...");
+  logger.info("Parando workers");
   await Promise.allSettled(workers.map((w) => w.close()));
   workers.length = 0;
 
-  console.warn("[queue] Fechando filas...");
+  logger.info("Fechando filas");
   await Promise.allSettled([...queues.values()].map((q) => q.close()));
   queues.clear();
 
-  console.warn("[queue] Workers e filas encerrados");
+  logger.info("Workers e filas encerrados");
 }
