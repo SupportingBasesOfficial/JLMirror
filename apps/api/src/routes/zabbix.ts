@@ -29,6 +29,7 @@ import {
 } from "@repo/shared-validation";
 import "../types.js";
 import { syncTenantDevices } from "../lib/device-sync.js";
+import { downsamplePoints } from "../lib/downsample.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
@@ -369,7 +370,11 @@ zabbixRoute.get("/history", async (c) => {
 
   try {
     const history = await client.getHistory(itemId, from, to, valueType);
-    return c.json({ data: history });
+    const points = downsamplePoints(
+      history.map((h) => ({ clock: h.clock, value: h.value })),
+      500,
+    );
+    return c.json({ data: points, downsampled: history.length > 500 });
   } catch (error) {
     return c.json(
       { error: { code: "ZABBIX_API_ERROR", message: error instanceof Error ? error.message : "Erro na API Zabbix" } },
@@ -813,13 +818,14 @@ zabbixRoute.get("/graphs/:graphid/data", async (c) => {
     // Busca history em batch
     const history = await client.getHistoryBatch(itemIds, timeFrom, timeTo);
 
-    // Agrupa por itemid
+    // Agrupa por itemid com downsampling (max 500 pontos por serie)
     const series = itemIds.map((itemId) => {
       const item = itemsData.find((i) => i.itemid === itemId);
       const gitem = (graph.gitems ?? graph.items ?? []).find((gi) => gi.itemid === itemId);
-      const points = history
+      const rawPoints = history
         .filter((h) => h.itemid === itemId)
         .map((h) => ({ clock: h.clock, value: h.value }));
+      const points = downsamplePoints(rawPoints, 500);
       return {
         itemid: itemId,
         name: item?.name ?? `Item ${itemId}`,
@@ -828,6 +834,7 @@ zabbixRoute.get("/graphs/:graphid/data", async (c) => {
         color: gitem?.color ?? "#666666",
         drawtype: gitem?.drawtype ?? 0,
         points,
+        downsampled: rawPoints.length > 500,
       };
     });
 
@@ -1493,7 +1500,18 @@ zabbixRoute.get("/history-batch", async (c) => {
 
   try {
     const history = await client.getHistoryBatch(itemIds, from, to, valueType);
-    return c.json({ data: history });
+    // Agrupa por itemid com downsampling
+    const series = itemIds.map((itemId) => {
+      const rawPoints = history
+        .filter((h) => h.itemid === itemId)
+        .map((h) => ({ clock: h.clock, value: h.value }));
+      return {
+        itemid: itemId,
+        points: downsamplePoints(rawPoints, 500),
+        downsampled: rawPoints.length > 500,
+      };
+    });
+    return c.json({ data: series });
   } catch (error) {
     return c.json(zabbixErrorResponse(error), 502);
   }
