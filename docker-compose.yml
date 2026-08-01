@@ -20,6 +20,37 @@ services:
     networks:
       - jlmirror-net
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: jlmirror-pgbouncer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: postgres
+      DB_NAME: jlmirror
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      MIN_POOL_SIZE: "5"
+      RESERVE_POOL_SIZE: "5"
+      RESERVE_POOL_TIMEOUT: "3"
+      SERVER_RESET_QUERY: "DISCARD ALL"
+      QUERY_WAIT_TIMEOUT: "10"
+      AUTH_TYPE: trust
+    ports:
+      - "6432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jlmirror-net
+
   redis:
     image: redis:7-alpine
     container_name: jlmirror-redis
@@ -45,13 +76,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       NODE_ENV: production
       API_PORT: "3001"
-      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/jlmirror"
-      DATABASE_MASTER_URL: "postgresql://postgres:postgres@postgres:5432/jlmirror"
+      DATABASE_URL: "postgresql://postgres:postgres@pgbouncer:5432/jlmirror"
+      DATABASE_MASTER_URL: "postgresql://postgres:postgres@pgbouncer:5432/jlmirror"
+      DB_POOL_MAX: "10"
       # DATABASE_REPLICA_URL: "postgresql://postgres:postgres@postgres-replica:5432/jlmirror"
       REDIS_URL: "redis://redis:6379"
       JWT_PRIVATE_KEY: "${JWT_PRIVATE_KEY:-}"
