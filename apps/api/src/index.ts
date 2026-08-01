@@ -82,6 +82,7 @@ import { startAlertingEngine } from "./lib/alerting-engine.js";
 import { startDeviceSync } from "./lib/device-sync.js";
 import { startPartitionManager } from "./lib/partition-manager.js";
 import { startCorrelationEngine } from "./lib/correlation-engine.js";
+import { startMetricsCollector } from "./lib/metrics-collector.js";
 import { initializeSecrets } from "@repo/secrets";
 import { validateEnv, waitForDatabase, setupGracefulShutdown } from "./lib/lifecycle.js";
 import "./types.js";
@@ -395,6 +396,7 @@ async function bootstrap(): Promise<void> {
   await startDeviceSync();
   await startPartitionManager();
   await startCorrelationEngine();
+  await startMetricsCollector();
 }
 
 void bootstrap();
