@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Registry, Counter, Histogram, Gauge, collectDefaultMetrics } from "prom-client";
+import type { Context, MiddlewareHandler } from "hono";
 
 // Registry customizado — nao usa o global para evitar conflitos
 export const registry = new Registry();
@@ -64,14 +65,13 @@ export const zabbixCircuitState = new Gauge({
 });
 
 // Middleware Hono para coletar metricas HTTP
-export function metricsMiddleware(c: any, next: any) {
+export const metricsMiddleware: MiddlewareHandler = async (c: Context, next) => {
   const start = Date.now();
-  return next().then(() => {
-    const duration = (Date.now() - start) / 1000;
-    const route = c.req.routePath ?? c.req.path ?? "unknown";
-    const method = c.req.method;
-    const status = c.res.status;
-    httpRequestDuration.labels(method, route, String(status)).observe(duration);
-    httpRequestTotal.labels(method, route, String(status)).inc();
-  });
-}
+  await next();
+  const duration = (Date.now() - start) / 1000;
+  const route = c.req.routePath ?? c.req.path ?? "unknown";
+  const method = c.req.method;
+  const status = c.res.status;
+  httpRequestDuration.labels(method, route, String(status)).observe(duration);
+  httpRequestTotal.labels(method, route, String(status)).inc();
+};
