@@ -9,6 +9,7 @@ import { authRoute } from "./routes/auth.js";
 import { mfaRoute } from "./routes/mfa.js";
 import { auditRoute } from "./routes/audit.js";
 import { rbacRoute } from "./routes/rbac.js";
+import { usersRoute } from "./routes/users.js";
 import { logsRoute } from "./routes/logs.js";
 import { tracesRoute } from "./routes/traces.js";
 import { scriptsRoute } from "./routes/scripts.js";
@@ -170,6 +171,7 @@ const protectedPaths = [
   "/api/v1/mfa",
   "/api/v1/audit",
   "/api/v1/rbac",
+  "/api/v1/users",
   "/api/v1/logs",
   "/api/v1/traces",
   "/api/v1/scripts",
@@ -216,6 +218,7 @@ for (const p of protectedPaths) {
 app.route("/api/v1/zabbix", zabbixRoute);
 app.route("/api/v1/mfa", mfaRoute);
 app.route("/api/v1/rbac", rbacRoute);
+app.route("/api/v1/users", usersRoute);
 app.route("/api/v1/feature-flags", featureFlagRoute);
 app.route("/api/v1/profile", profileRoute);
 app.route("/api/v1/settings", settingsRoute);

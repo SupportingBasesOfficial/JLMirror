@@ -121,6 +121,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Administração",
     items: [
       { label: "Admin Global", href: "/admin", icon: <Settings {...iconProps} />, flagKey: "module_admin" },
+      { label: "Gestão de Usuários", href: "/admin/users", icon: <UserCog {...iconProps} />, flagKey: "module_admin" },
       { label: "Onboarding", href: "/admin/onboarding", icon: <UserPlus {...iconProps} />, flagKey: "module_admin" },
       { label: "Módulos", href: "/settings/modules", icon: <Puzzle {...iconProps} />, flagKey: "module_settings" },
       { label: "Client Portal", href: "/client-portal", icon: <Users {...iconProps} />, flagKey: "module_client_portal" },
