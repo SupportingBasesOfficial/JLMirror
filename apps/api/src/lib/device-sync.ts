@@ -6,6 +6,7 @@ import { registerRepeatableJob, startWorker } from "./queue.js";
 
 // Device Sync — sincroniza devices do Zabbix para public.devices
 // Usa BullMQ com fila durável Redis — sobrevive a restarts e múltiplas réplicas
+// Processa tenants em paralelo com limite de concorrência para não saturar pool PG
 
 interface TenantConfig {
   tenant_id: string;
@@ -17,6 +18,7 @@ interface TenantConfig {
 
 const QUEUE_NAME = "device-sync";
 const SYNC_INTERVAL_MS = 300_000;
+const SYNC_CONCURRENCY = 10;
 
 export async function startDeviceSync(): Promise<void> {
   await registerRepeatableJob(
@@ -53,13 +55,30 @@ export async function syncAllTenants(): Promise<void> {
 
   if (tenantsResult.error || !tenantsResult.data?.rows.length) return;
 
-  for (const tenant of tenantsResult.data.rows) {
-    try {
-      await syncTenantDevices(tenant);
-    } catch (err) {
-      console.error(`[device-sync] Erro tenant ${tenant.tenant_id}:`, err instanceof Error ? err.message : String(err));
+  const tenants = tenantsResult.data.rows;
+  const total = tenants.length;
+  let completed = 0;
+  let failed = 0;
+
+  // Processa em chunks de SYNC_CONCURRENCY para não saturar pool PG nem API Zabbix
+  for (let i = 0; i < total; i += SYNC_CONCURRENCY) {
+    const chunk = tenants.slice(i, i + SYNC_CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map((tenant) => syncTenantDevices(tenant)),
+    );
+
+    for (let j = 0; j < results.length; j++) {
+      completed++;
+      const r = results[j];
+      if (r.status === "rejected") {
+        failed++;
+        console.error(`[device-sync] Erro tenant ${chunk[j].tenant_id}:`,
+          r.reason instanceof Error ? r.reason.message : String(r.reason));
+      }
     }
   }
+
+  console.warn(`[device-sync] Sync concluido: ${completed}/${total} tenants processados, ${failed} falhas`);
 }
 
 export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced: number; total: number }> {
