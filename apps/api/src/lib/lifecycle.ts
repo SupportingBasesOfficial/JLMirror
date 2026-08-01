@@ -76,14 +76,30 @@ export async function waitForDatabase(maxRetries: number = 5, baseDelayMs: numbe
 }
 
 // Executa migrations pendentes automaticamente no startup
+// Usa pg_advisory_lock para evitar race condition em multi-replica
 async function runMigrations(): Promise<void> {
+  const { pool } = await import("@repo/db");
+  let client;
   try {
+    client = await pool().connect();
+    // Tenta adquirir lock advisory — ID fixo e arbitrario para migrations
+    const lockResult = await client.query("SELECT pg_try_advisory_lock($1) as acquired", [42_001]);
+    if (!lockResult.rows[0]?.acquired) {
+      console.warn("[startup] Migrations: outra replica ja esta migrando, pulando");
+      return;
+    }
+    console.warn("[startup] Lock de migrations adquirido");
     const { runMigrations: migrate } = await import("@repo/db/migrate");
     await migrate();
     console.warn("[startup] Migrations aplicadas com sucesso");
   } catch (err) {
     console.error("[startup] Erro ao aplicar migrations:", err instanceof Error ? err.message : String(err));
     // Nao aborta — migrations podem ja estar aplicadas
+  } finally {
+    if (client) {
+      try { await client.query("SELECT pg_advisory_unlock($1)", [42_001]); } catch {}
+      client.release();
+    }
   }
 }
 
