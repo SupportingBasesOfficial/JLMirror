@@ -99,6 +99,29 @@ export async function cacheDel(key: string): Promise<void> {
   }
 }
 
+// Invalida todas as chaves que comecam com o prefixo (SCAN + DEL)
+export async function cacheDelByPrefix(prefix: string): Promise<void> {
+  try {
+    const client = createCacheClient();
+    let cursor = "0";
+    do {
+      const [nextCursor, keys] = await client.scan(
+        cursor,
+        "MATCH",
+        `${prefix}*`,
+        "COUNT",
+        100,
+      );
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await client.del(...keys);
+      }
+    } while (cursor !== "0");
+  } catch {
+    // Silencioso
+  }
+}
+
 // Query com cache — busca do Redis primeiro, fallback para DB
 export async function cachedQuery<T>(
   cacheKey: string,

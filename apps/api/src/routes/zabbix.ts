@@ -2,7 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { cachedQuery, cacheDel } from "@repo/cache";
+import { cachedQuery, cacheDel, cacheDelByPrefix } from "@repo/cache";
 import {
   BlindedZabbixClient,
   decryptTokenParts,
@@ -31,11 +31,70 @@ import "../types.js";
 import { syncTenantDevices } from "../lib/device-sync.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
 
 export const zabbixRoute = new Hono();
 
 zabbixRoute.use("/*", jwtAuth);
 zabbixRoute.use("/*", tenantContext);
+
+// Invalida cache de responses Zabbix do tenant apos mutacoes
+async function invalidateZabbixResponseCache(tenantId: string): Promise<void> {
+  await cacheDelByPrefix(`zabbix:resp:${tenantId}:`);
+}
+
+// Middleware de cache para GETs do Zabbix — evita thundering herd
+// TTL: 10s para listagens, 5s para history/data, sem cache para ping
+const CACHE_TTL_MAP: Array<{ pattern: RegExp; ttl: number }> = [
+  { pattern: /\/history|\/graphs\/.*\/data/, ttl: 5 },
+  { pattern: /\/ping/, ttl: 0 },
+];
+const DEFAULT_CACHE_TTL = 10;
+
+zabbixRoute.use("/*", async (c, next) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id;
+  if (!tenantId) return next();
+
+  // Para mutacoes (POST/PUT/DELETE), invalida cache do tenant apos executar
+  if (c.req.method !== "GET") {
+    await next();
+    if (c.res.status >= 200 && c.res.status < 300) {
+      await invalidateZabbixResponseCache(tenantId);
+    }
+    return;
+  }
+
+  // Para GETs, aplica cache
+  const path = c.req.path;
+  const url = new URL(c.req.url);
+  const query = url.searchParams.toString();
+  const cacheKey = `zabbix:resp:${tenantId}:${path}:${query}`;
+
+  // Determina TTL baseado no path
+  const ttlEntry = CACHE_TTL_MAP.find((m) => m.pattern.test(path));
+  const ttl = ttlEntry ? ttlEntry.ttl : DEFAULT_CACHE_TTL;
+  if (ttl === 0) return next();
+
+  // Tenta cache
+  const cached = await cacheGetJSON<unknown>(cacheKey);
+  if (cached) {
+    return c.json(cached);
+  }
+
+  await next();
+
+  // Cacheia resposta de sucesso (2xx)
+  if (c.res.status >= 200 && c.res.status < 300) {
+    try {
+      const cloned = c.res.clone();
+      const body = await cloned.json();
+      await cacheSetJSON(cacheKey, body, ttl);
+    } catch {
+      // Se nao for JSON, ignora
+    }
+  }
+});
 
 interface ZabbixTenantConfig {
   zabbix_api_url: string;
