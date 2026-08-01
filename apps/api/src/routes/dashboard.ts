@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
 import "../types.js";
 
@@ -11,6 +12,7 @@ export const dashboardRoute = new Hono();
 
 dashboardRoute.use("/*", jwtAuth);
 dashboardRoute.use("/*", tenantContext);
+dashboardRoute.use("/*", requirePermission("dashboard:read"));
 
 function safeCount(result: { data?: { rows?: Array<Record<string, unknown>> } | null }): number {
   const row = result.data?.rows?.[0];

@@ -2,9 +2,12 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { tenantQuery, getTenantSchema } from "@repo/db";
+import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const devicesRoute = new Hono();
+
+devicesRoute.use("/*", requirePermission("zabbix:devices:read"));
 
 // GET /api/v1/devices
 devicesRoute.get("/", async (c) => {

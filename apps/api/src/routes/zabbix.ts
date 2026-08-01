@@ -32,6 +32,7 @@ import { syncTenantDevices } from "../lib/device-sync.js";
 import { downsamplePoints } from "../lib/downsample.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitTenant } from "../middleware/rate-limit.js";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
 
@@ -40,6 +41,14 @@ export const zabbixRoute = new Hono();
 zabbixRoute.use("/*", jwtAuth);
 zabbixRoute.use("/*", tenantContext);
 zabbixRoute.use("/*", rateLimitTenant);
+// Permissao base — leitura para todos os endpoints autenticados
+// Mutacoes (POST/PUT/DELETE) exigem zabbix:write adicional
+zabbixRoute.use("/*", requirePermission("zabbix:read"));
+// Mutacoes (POST/PUT/DELETE/PATCH) exigem zabbix:write adicional
+zabbixRoute.use("/*", (c, next) => {
+  if (c.req.method === "GET") return next();
+  return requirePermission("zabbix:write")(c, next);
+});
 
 // Invalida cache de responses Zabbix do tenant apos mutacoes
 async function invalidateZabbixResponseCache(tenantId: string): Promise<void> {

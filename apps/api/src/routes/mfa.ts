@@ -16,12 +16,13 @@ import {
 } from "@repo/shared-validation";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const mfaRoute = new Hono();
 
 // POST /api/v1/mfa/setup — inicia configuração TOTP (retorna secret + QR code + recovery codes)
-mfaRoute.post("/setup", jwtAuth, tenantContext, async (c) => {
+mfaRoute.post("/setup", jwtAuth, tenantContext, requirePermission("self:mfa:write"), async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
@@ -79,7 +80,7 @@ mfaRoute.post("/setup", jwtAuth, tenantContext, async (c) => {
 });
 
 // POST /api/v1/mfa/setup/verify — confirma setup TOTP com primeiro código
-mfaRoute.post("/setup/verify", jwtAuth, tenantContext, async (c) => {
+mfaRoute.post("/setup/verify", jwtAuth, tenantContext, requirePermission("self:mfa:write"), async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
@@ -295,7 +296,7 @@ mfaRoute.post("/verify", async (c) => {
 });
 
 // POST /api/v1/mfa/disable — desabilita MFA (requer auth + código TOTP)
-mfaRoute.post("/disable", jwtAuth, tenantContext, async (c) => {
+mfaRoute.post("/disable", jwtAuth, tenantContext, requirePermission("self:mfa:write"), async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
@@ -347,7 +348,7 @@ mfaRoute.post("/disable", jwtAuth, tenantContext, async (c) => {
 });
 
 // GET /api/v1/mfa/status — verifica se MFA está habilitado
-mfaRoute.get("/status", jwtAuth, tenantContext, async (c) => {
+mfaRoute.get("/status", jwtAuth, tenantContext, requirePermission("self:mfa:read"), async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(

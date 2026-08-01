@@ -12,12 +12,14 @@ import {
 } from "@repo/shared-validation";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const profileRoute = new Hono();
 
 profileRoute.use("/*", jwtAuth);
 profileRoute.use("/*", tenantContext);
+profileRoute.use("/*", requirePermission("self:profile:read"));
 
 // ========== Get Profile ==========
 
@@ -68,7 +70,7 @@ profileRoute.get("/", async (c) => {
 
 // ========== Update Profile ==========
 
-profileRoute.put("/", async (c) => {
+profileRoute.put("/", requirePermission("self:profile:write"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const body = await c.req.json<UpdateProfileInput>();
@@ -122,7 +124,7 @@ profileRoute.put("/", async (c) => {
 
 // ========== Update Avatar ==========
 
-profileRoute.put("/avatar", async (c) => {
+profileRoute.put("/avatar", requirePermission("self:profile:write"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const body = await c.req.json<UpdateAvatarInput>();
@@ -184,7 +186,7 @@ profileRoute.get("/preferences", async (c) => {
   return c.json({ preferences: result.data?.rows[0] ?? {} });
 });
 
-profileRoute.put("/preferences", async (c) => {
+profileRoute.put("/preferences", requirePermission("self:profile:write"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const body = await c.req.json<UpdatePreferencesInput>();
@@ -250,7 +252,7 @@ profileRoute.get("/sessions", async (c) => {
   return c.json({ sessions: result.data?.rows ?? [] });
 });
 
-profileRoute.delete("/sessions/:sessionId", async (c) => {
+profileRoute.delete("/sessions/:sessionId", requirePermission("self:profile:write"), async (c) => {
   const sessionId = c.req.param("sessionId");
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
@@ -268,7 +270,7 @@ profileRoute.delete("/sessions/:sessionId", async (c) => {
   return c.json({ revoked: true });
 });
 
-profileRoute.delete("/sessions", async (c) => {
+profileRoute.delete("/sessions", requirePermission("self:profile:write"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
