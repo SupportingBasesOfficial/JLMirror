@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Corrige funcao search_system_logs para usar colunas do schema particionado
 -- A migration 20260728000000_partitioning.sql recriou system_logs com colunas diferentes
 -- metadata->payload, trace_id->correlation_id, tags/span_id/host/service removidos

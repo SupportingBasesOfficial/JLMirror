@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import useSWR, { type SWRConfiguration } from "swr";
 import { useState, useCallback } from "react";
 import { apiFetchWithProgress } from "@/lib/zabbix-fetch";

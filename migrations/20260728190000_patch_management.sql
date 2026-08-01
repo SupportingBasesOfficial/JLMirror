@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Patch Management ===
 -- Rastreia patches de segurança e atualizações de software nos dispositivos do tenant
 -- Permite scan de vulnerabilidades, aprovação e deploy de patches

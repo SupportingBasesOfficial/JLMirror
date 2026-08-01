@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#logic-core
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Workflow Builder por Servidor ===
 -- Workflows são sequências de steps (scripts, comandos, verificações) vinculados a um servidor específico.
 -- Nada executa automaticamente — um responsável dispara manualmente.

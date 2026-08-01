@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
 import { randomUUID } from "node:crypto";
 

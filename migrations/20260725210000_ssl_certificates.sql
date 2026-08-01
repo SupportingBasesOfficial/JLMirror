@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: SSL/TLS certificate management — monitoramento de expiração com alertas
 
 CREATE TABLE IF NOT EXISTS public.ssl_certificates (

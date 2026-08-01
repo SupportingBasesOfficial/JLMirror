@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: LGPD Compliance — Export e Delete de Dados Pessoais ===
 -- Cria tabela para rastrear solicitações LGPD (Lei Geral de Proteção de Dados)
 -- Permite exportar e anonimizar/deletar dados pessoais de usuários

@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#ingress
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Webhook Management — webhooks de saída, assinaturas HMAC, retries, logs de entrega
 
 CREATE TABLE IF NOT EXISTS public.webhooks (

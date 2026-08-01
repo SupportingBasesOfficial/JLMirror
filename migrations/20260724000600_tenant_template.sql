@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 006_tenant_template ===
 -- Schema template para novos tenants
 -- clone_schema() copia este schema para tenant_{slug} durante onboarding

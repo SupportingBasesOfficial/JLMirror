@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 const shimmerStyle = {
   background: "linear-gradient(90deg, #10171C 0%, #1E2530 50%, #10171C 100%)",
   backgroundSize: "200% 100%",

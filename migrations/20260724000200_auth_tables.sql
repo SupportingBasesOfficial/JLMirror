@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 002_auth_tables ===
 -- Tabelas de autenticação global (Cluster 0)
 -- users NÃO tem tenant_id — o mapeamento é em tenant_users

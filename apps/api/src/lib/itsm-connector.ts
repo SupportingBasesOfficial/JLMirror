@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // ITSM Connector Framework — framework agnostico para integracao com ITSM externo
 // Suporta Jira, FreshService, ServiceNow, Zendesk e custom via mapeamento de campos
 

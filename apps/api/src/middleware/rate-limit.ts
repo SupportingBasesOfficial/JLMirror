@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Rate limiting por IP e tenant usando sliding window
 // Produção: Redis via @repo/cache (distribuído entre instâncias)
 // Dev: in-memory Map (sem Redis necessário)

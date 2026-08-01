@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Utilitário de paginação para endpoints de listagem da API
 // Padroniza query params: ?page=1&limit=20&sort=created_at&order=desc
 

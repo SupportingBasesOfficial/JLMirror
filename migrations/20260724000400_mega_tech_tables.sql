@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 004_mega_tech_tables ===
 -- Tabelas multi-tenant globais (Cluster 0)
 -- tenants, tenant_routes, tenant_users

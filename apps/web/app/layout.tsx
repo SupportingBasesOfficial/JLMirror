@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import "@repo/tailwind-config/globals.css";
 import { Toaster } from "@repo/ui";
 

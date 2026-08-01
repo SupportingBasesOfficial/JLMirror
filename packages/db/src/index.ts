@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#state-store
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Pool, type PoolClient, type QueryResult } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
 

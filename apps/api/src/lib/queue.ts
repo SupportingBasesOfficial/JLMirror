@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Queue, Worker, type Processor } from "bullmq";
 import Redlock from "redlock";
 import { createBullMQConnection, createCacheClient } from "@repo/cache";

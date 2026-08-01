@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Security Auditing Automatizado ===
 -- Cria tabelas para regras de auditoria de segurança automatizadas
 -- Permite scan de conformidade, detecção de vulnerabilidades e findings

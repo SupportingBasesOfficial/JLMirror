@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Predictive Failure ===
 -- Predicao de falhas baseada em tendencias de metricas e degradacao historica
 

@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Tabela de logs centralizados com busca avançada e regex
 -- Suporta logs de API, dispositivos, scripts, automações, etc.
 

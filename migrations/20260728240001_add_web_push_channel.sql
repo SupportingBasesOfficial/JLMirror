@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Adicionar web_push como channel_type ===
 -- Estende o CHECK constraint de notification_channels para incluir web_push
 

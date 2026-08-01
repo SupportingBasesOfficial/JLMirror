@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Backup & Restore management — agendamento, snapshots, verificação de integridade
 
 CREATE TABLE IF NOT EXISTS public.backup_jobs (

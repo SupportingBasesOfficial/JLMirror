@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: White-label Branding & Admin Delivery Control ===
 -- Branding automatizado por tenant (logo, cores, nome, footer)
 -- Admin controla: (a) se relatorios automaticos estao ativados, (b) meio de entrega

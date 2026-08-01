@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Gerador real de PDF e CSV para relatórios
 import PDFDocument from "pdfkit";
 

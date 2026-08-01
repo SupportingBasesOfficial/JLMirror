@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Correcao de encoding dos nomes e descricoes dos modulos
 -- Os dados foram inseridos com encoding errado, causando perda de acentos
 

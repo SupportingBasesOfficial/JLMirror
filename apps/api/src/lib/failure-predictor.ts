@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Predictive Failure Engine — predicao de falhas baseada em tendencias de metricas
 // Modelos: Linear Trend (regressao linear), Exponential, Moving Average, Threshold Proximity
 

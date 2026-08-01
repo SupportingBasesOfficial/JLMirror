@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Kubernetes monitoring — clusters, cache de recursos e eventos
 
 CREATE TABLE IF NOT EXISTS public.k8s_clusters (

@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Configuração de CORS por tenant
 // Em produção, origens permitidas são lidas de variáveis de ambiente
 // Formato: CORS_ALLOWED_ORIGINS=https://app1.jlmirror.com,https://app2.jlmirror.com

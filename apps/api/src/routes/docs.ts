@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Endpoint de documentação OpenAPI 3.0 + Swagger UI
 // Serve spec JSON em /api/v1/docs e UI interativa em /api/v1/docs/ui
 // Protegido por DOCS_PASSWORD env var (Basic Auth)

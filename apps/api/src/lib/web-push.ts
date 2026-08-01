@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Web Push — envio de push notifications via Web Push API com VAPID
 import webpush from "web-push";
 import { query } from "@repo/db";

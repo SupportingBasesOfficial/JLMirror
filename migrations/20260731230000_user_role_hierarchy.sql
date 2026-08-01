@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: user_role_hierarchy ===
 -- Evolui o modelo de roles para duas camadas hierárquicas:
 -- 1. Camada global (JL staff): roles customizáveis com cross-tenant access

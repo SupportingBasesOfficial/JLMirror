@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#ingress
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: API Key Management — chaves, escopos, rate limiting, rotação
 
 CREATE TABLE IF NOT EXISTS public.api_keys (

@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Session Security com Device Fingerprinting ===
 -- Adiciona campos de fingerprint, IP e User-Agent na tabela sessions
 -- Cria tabela de dispositivos confiáveis para permitir múltiplos dispositivos

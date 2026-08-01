@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { describe, it, expect } from "vitest";
 
 // Replica da função zabbixErrorResponse do zabbix.ts para testar classificacao

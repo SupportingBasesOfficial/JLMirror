@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Event Correlation Engine ===
 -- Engine de correlação de eventos: agrupa alertas Zabbix por janela temporal,
 -- host group, tags e severidade. Reduz alert fatigue e cria incidentes correlacionados.

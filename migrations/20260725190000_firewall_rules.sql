@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#ingress
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Firewall rules management — iptables/nftables com dry-run e diff
 -- Suporta regras versionadas, aplicação com dry-run e visualização de diff
 

@@ -1,6 +1,5 @@
 import nextConfig from "@repo/eslint-config/next";
 import reactHooks from "eslint-plugin-react-hooks";
-import tseslint from "@typescript-eslint/eslint-plugin";
 import nextPlugin from "@next/eslint-plugin-next";
 
 /**
@@ -18,7 +17,6 @@ export default [
   {
     plugins: {
       "react-hooks": reactHooks,
-      "@typescript-eslint": tseslint,
       "@next/next": nextPlugin,
     },
     rules: {

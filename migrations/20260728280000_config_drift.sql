@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Config Drift Detection ===
 -- Detecta mudancas de configuracao de dispositivos vs baseline
 -- Armazena baselines e eventos de drift

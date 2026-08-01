@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Client Portal ===
 -- Portal do cliente com visão limitada (status, incidentes, SLA)
 -- Ativavel por tenant via feature flag "client_portal_enabled"

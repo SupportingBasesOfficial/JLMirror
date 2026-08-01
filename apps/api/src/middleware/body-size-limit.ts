@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Middleware de limite de tamanho de body para prevenir DoS
 // Rejeita requests com Content-Length maior que o limite configurado
 

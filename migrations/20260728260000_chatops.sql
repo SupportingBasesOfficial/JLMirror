@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: ChatOps Integrado ===
 -- Comandos via Slack/Teams slash commands executam operacoes no JLMIRROR
 -- Ex: /jlmirror status, /jlmirror ack <eventid>, /jlmirror resolve <eventid>

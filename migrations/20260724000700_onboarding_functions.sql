@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 007_onboarding_functions ===
 -- Função clone_schema() copia estrutura do tenant_template para novo schema
 -- Função onboard_tenant_schema() orquestra o onboarding com validação anti-injection

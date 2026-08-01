@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Scheduled Reports — templates, relatórios agendados, entregas
 
 CREATE TABLE IF NOT EXISTS public.report_templates (

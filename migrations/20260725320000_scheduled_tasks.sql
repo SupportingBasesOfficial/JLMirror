@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#logic-core
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Scheduled Tasks & Cron Jobs — tarefas agendadas, execuções, logs
 
 CREATE TABLE IF NOT EXISTS public.scheduled_tasks (

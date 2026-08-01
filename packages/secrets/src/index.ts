@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Registry de segredos com suporte a rotação dinâmica
 // Lê de env vars e mantém cache em memória
 

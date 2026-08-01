@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Helpdesk & Ticketing — categorias, tickets, comentários, anexos, SLA
 
 CREATE TABLE IF NOT EXISTS public.ticket_categories (

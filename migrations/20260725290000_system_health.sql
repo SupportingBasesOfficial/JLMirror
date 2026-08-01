@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: System Health & Diagnostics — health checks, incidentes, snapshots de métricas
 
 CREATE TABLE IF NOT EXISTS public.system_health_checks (

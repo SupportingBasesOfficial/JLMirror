@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: dashboard_prefs ===
 -- Tabela de preferências de dashboard por usuário + dispositivo
 -- Permite que admin/cliente escolha quais categorias de métricas são visíveis por padrão

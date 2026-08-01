@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Automação de scripts — execução remota com approval workflow
 -- Suporta scripts versionados, execuções com status tracking e aprovação dupla
 

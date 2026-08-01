@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { cookies } from "next/headers";
 import { serverApiGetWithToken } from "@/lib/api-client";
 import { LoadingState } from "@/components/ui/state-display";

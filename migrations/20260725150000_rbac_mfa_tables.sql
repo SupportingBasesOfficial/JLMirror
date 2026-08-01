@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: rbac_mfa_tables ===
 -- Tabelas para RBAC granular, MFA (TOTP + WebAuthn) e ABAC
 -- Todas em public (globais, cluster 0)

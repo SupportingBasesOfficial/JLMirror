@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 type ProgressCallback = (progress: number) => void;

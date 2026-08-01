@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
 import { BlindedZabbixClient, decryptTokenParts, type ZabbixProblem } from "@repo/zabbix";
 import { pushNotificationToTenant } from "../routes/ws.js";

@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: create_public_devices ===
 -- Cria tabela public.devices com RLS para suportar JOINs cross-modulo
 -- (drift, anomaly, predictions, discovery, settings, report-generator)

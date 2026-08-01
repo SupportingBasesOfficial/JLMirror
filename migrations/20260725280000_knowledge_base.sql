@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Knowledge Base — categorias, artigos, versionamento, tags
 
 CREATE TABLE IF NOT EXISTS public.kb_categories (

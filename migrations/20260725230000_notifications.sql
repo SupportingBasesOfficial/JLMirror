@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Notification & Alerting system — canais, regras de roteamento e log
 
 CREATE TABLE IF NOT EXISTS public.notification_channels (

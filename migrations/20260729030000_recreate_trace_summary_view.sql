@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#ingress
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Recria view trace_summary dropada pelo CASCADE do partitioning
 -- A migration 20260728000000_partitioning.sql fez DROP TABLE ... CASCADE
 -- que dropou a view trace_summary sem recriá-la

@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Asset Inventory — inventário de ativos de rede, hardware, software, licenças
 
 CREATE TABLE IF NOT EXISTS public.assets (

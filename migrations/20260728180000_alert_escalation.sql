@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Alerting com Multi-Tier Escalation ===
 -- Cria tabelas para políticas de escalonamento de alertas
 -- Permite configurar tiers que escalonam alertas não resolvidos após tempo definido

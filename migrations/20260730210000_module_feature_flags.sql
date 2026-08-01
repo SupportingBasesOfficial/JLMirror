@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Seed de feature flags para controle de modulos do sistema
 -- Modulos ativos (fase 1): auth, dashboard, zabbix, rbac, mfa, settings, profile, feature_flags
 -- Todos os demais modulos comecam desativados (default_value = false)

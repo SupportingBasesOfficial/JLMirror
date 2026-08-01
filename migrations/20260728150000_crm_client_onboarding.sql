@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: CRM + Client Onboarding ===
 -- Adiciona must_change_password em users para forçar troca de senha no primeiro acesso
 -- Cria tabela client_contacts para CRM de clientes

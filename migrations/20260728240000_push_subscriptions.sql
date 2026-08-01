@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: PWA Push Notifications ===
 -- Inscricoes Web Push por usuario (Web Push API + VAPID)
 

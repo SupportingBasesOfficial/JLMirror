@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Tabela de atrelamento entre usuarios do sistema e host groups do Zabbix
 -- Permite que cada usuario tenha acesso apenas aos host groups atribuidos
 CREATE TABLE IF NOT EXISTS public.user_host_groups (

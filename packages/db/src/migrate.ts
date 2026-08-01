@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#state-store
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pool } from "./index.js";

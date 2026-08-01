@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#logic-core
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: SLA & Serviços — catálogo de serviços de negócio e SLA tracking
 
 -- Tabela de serviços de negócio (ex: "Email Corporate", "VPN Site-to-Site")

@@ -1,0 +1,73 @@
+# AI Black Box v2 — .aiignore
+# Prevents IDEs from indexing irrelevant files into AI context
+
+# Dependencies
+node_modules/
+vendor/
+.pnp/
+.pnp.js
+
+# Build outputs
+build/
+dist/
+.next/
+.nuxt/
+.output/
+target/
+bin/
+obj/
+
+# Caches
+.cache/
+.turbo/
+.gradle/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
+logs/
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+
+# Media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.webp
+*.ico
+*.svg
+*.ttf
+*.woff
+*.woff2
+*.eot
+*.mp4
+*.mp3
+
+# Archives
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Zero-error internal
+.zero-error/.validator-cache.json
+.zero-error/.integrity

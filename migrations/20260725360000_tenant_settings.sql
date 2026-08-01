@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Tenant Settings — branding, integrações, SMTP, limites
 
 CREATE TABLE IF NOT EXISTS public.tenant_settings (

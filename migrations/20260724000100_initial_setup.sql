@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 001_initial_setup ===
 -- Extensões, roles e função de timestamp global
 -- Roles precisam existir antes das policies em 002_auth_tables

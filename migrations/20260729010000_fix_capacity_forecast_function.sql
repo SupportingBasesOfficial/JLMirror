@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Corrige funcao calculate_linear_forecast para usar colunas do schema particionado
 -- A migration 20260728000000_partitioning.sql recriou capacity_metrics com colunas diferentes
 -- mas nao atualizou a funcao que as referencia

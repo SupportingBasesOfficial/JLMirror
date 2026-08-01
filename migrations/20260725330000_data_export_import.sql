@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Data Export & Import — exportações, importações, templates
 
 CREATE TABLE IF NOT EXISTS public.data_export_templates (

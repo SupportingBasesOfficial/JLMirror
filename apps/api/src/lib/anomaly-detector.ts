@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // AI Anomaly Detection — deteccao estatistica de anomalias em metricas
 // Algoritmos: Z-score, IQR (Interquartile Range), EWMA (Exponentially Weighted Moving Average)
 

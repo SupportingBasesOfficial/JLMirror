@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Gera um fingerprint único do dispositivo baseado em características do navegador.
 // Usa canvas fingerprinting, timezone, idioma, resolução de tela e cores.
 // O fingerprint é enviado no login para rastrear sessões por dispositivo.

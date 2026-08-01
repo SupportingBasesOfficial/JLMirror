@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Auto-Discovery de Topologia (SNMP/LLDP) ===
 -- Descoberta automatica de dispositivos e topologia de rede via SNMP/LLDP
 

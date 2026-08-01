@@ -1,15 +1,14 @@
-// Configuracao base do ESLint — compartilhada entre todos os packages e apps
-module.exports = {
-  parser: "@typescript-eslint/parser",
-  plugins: ["@typescript-eslint"],
-  extends: [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-  ],
-  rules: {
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-    "no-console": ["warn", { allow: ["warn", "error"] }],
+// Configuracao base do ESLint flat config — compartilhada entre todos os packages e apps
+import tseslint from "typescript-eslint";
+
+export default tseslint.config(
+  ...tseslint.configs.recommended,
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+    },
+    ignores: ["dist/", "node_modules/", ".next/"],
   },
-  ignorePatterns: ["dist/", "node_modules/", ".next/"],
-};
+);

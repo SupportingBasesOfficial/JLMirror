@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { closePool, query } from "@repo/db";
 import { closeCache } from "@repo/cache";
 import { stopTaskScheduler } from "./task-scheduler.js";

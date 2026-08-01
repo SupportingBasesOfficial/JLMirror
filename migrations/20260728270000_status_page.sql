@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Public Status Page ===
 -- Pagina de status publica (sem auth) por tenant
 -- Acessivel via /status/<slug> — mostra servicos, incidentes e manutencao

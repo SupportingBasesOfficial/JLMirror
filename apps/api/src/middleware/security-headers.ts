@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Security headers middleware usando hono/secure-headers
 // Configura CSP, HSTS, X-Frame-Options, X-Content-Type-Options, etc.
 

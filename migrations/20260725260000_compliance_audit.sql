@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Compliance & Audit Trail — políticas, scans, violações, relatórios
 
 CREATE TABLE IF NOT EXISTS public.compliance_policies (

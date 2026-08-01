@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#logic-core
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
 
 export const errorHandler = createMiddleware(

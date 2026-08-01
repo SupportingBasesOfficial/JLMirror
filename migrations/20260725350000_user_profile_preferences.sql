@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: User Profile & Preferences — perfil, preferências, sessões
 
 CREATE TABLE IF NOT EXISTS public.user_profiles (

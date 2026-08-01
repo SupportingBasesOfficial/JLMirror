@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { ClientSidebar } from "@/components/client-sidebar";

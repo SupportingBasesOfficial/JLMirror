@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#logic-core
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import {

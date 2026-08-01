@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: ITSM Connector Framework ===
 -- Framework agnostico de connector para ITSM externo (Jira, FreshService, ServiceNow, etc)
 -- Mapeamento de campos customizavel por tenant

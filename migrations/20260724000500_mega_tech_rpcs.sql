@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: 005_mega_tech_rpcs ===
 -- Funções SECURITY DEFINER para acesso controlado aos metadados
 -- Todas fixam search_path para evitar search_path injection

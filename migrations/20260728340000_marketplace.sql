@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: Marketplace de Integracoes ===
 -- Catalogo de integracoes instalaveis por tenant
 

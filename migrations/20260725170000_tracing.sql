@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: Tracing distribuido — trace_spans para armazenar spans OpenTelemetry
 -- Suporta visualizacao de timeline/Gantt por trace_id
 

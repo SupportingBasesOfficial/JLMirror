@@ -1,6 +1,10 @@
-module.exports = {
-  extends: ["./base.js"],
-  rules: {
-    "@typescript-eslint/no-explicit-any": "off",
+import base from "./base.js";
+
+export default [
+  ...base,
+  {
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
   },
-};
+];

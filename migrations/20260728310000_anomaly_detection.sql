@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- === Migration: AI Anomaly Detection ===
 -- Deteccao estatistica de anomalias em metricas (Z-score, IQR, EWMA)
 
