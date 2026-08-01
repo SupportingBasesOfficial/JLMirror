@@ -269,7 +269,7 @@ adminRoute.post("/tenants/:tenantId/users", requirePermission("admin:tenants:wri
     return c.json({ error: { code: "VALIDATION_ERROR", message: "user_id e role são obrigatórios" } }, 400);
   }
 
-  const validRoles = ["global:admin", "tenant:admin", "tenant:operator", "tenant:viewer"];
+  const validRoles = ["global:admin", "jl:superadmin", "jl:engineer", "jl:technician", "jl:manager", "jl:finance", "jl:viewer", "tenant:admin", "tenant:operator", "tenant:viewer"];
   if (!validRoles.includes(body.role)) {
     return c.json({ error: { code: "INVALID_ROLE", message: "Role inválido" } }, 400);
   }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {RefreshCw, ArrowLeft, Plus, Users, Mail, Phone, Shield, KeyRound, UserPlus } from "lucide-react";
+import {RefreshCw, ArrowLeft, Plus, Users, Mail, Phone, Shield, KeyRound, UserPlus, UserCog } from "lucide-react";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
 
@@ -294,6 +294,7 @@ export default function AdminPage() {
         <div className="flex gap-2">
           <button onClick={() => { mutateTenants(); mutateStats(); }} className="text-[12px] px-3 py-1.5 rounded border" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted, cursor: "pointer" }}><RefreshCw size={12} className="inline" /> Atualizar</button>
           <button onClick={() => setShowCreate(true)} className="text-[12px] px-3 py-1.5 rounded font-bold" style={{ background: COLORS.teal, color: COLORS.bg, cursor: "pointer" }}><Plus size={12} className="inline" /> Novo Tenant</button>
+          <a href="/admin/users" className="text-[12px] px-3 py-1.5 rounded font-bold" style={{ background: `color-mix(in srgb, var(--brand-primary) 15%, transparent)`, border: `1px solid ${COLORS.teal}`, color: COLORS.teal, cursor: "pointer", textDecoration: "none" }}><UserCog size={12} className="inline" /> Gestão de Usuários</a>
           <a href="/admin/onboarding" className="text-[12px] px-3 py-1.5 rounded font-bold" style={{ background: `color-mix(in srgb, var(--brand-primary) 15%, transparent)`, border: `1px solid ${COLORS.teal}`, color: COLORS.teal, cursor: "pointer", textDecoration: "none" }}><UserPlus size={12} className="inline" /> Onboarding Wizard</a>
           <a href="/dashboard" className="text-[12px] px-3 py-1.5 rounded border" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted }}><ArrowLeft size={12} className="inline" /> Dashboard</a>
         </div>
@@ -524,9 +525,19 @@ export default function AdminPage() {
             <div className="space-y-1">
               <label htmlFor="cu-r" className="text-[10px] font-bold uppercase" style={{ color: COLORS.muted }}>Role</label>
               <select id="cu-r" value={cuRole} onChange={(e) => setCuRole(e.target.value)} className="w-full rounded-md px-3 py-2 text-[12px]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text }}>
-                <option value="tenant:admin">Admin do Tenant</option>
-                <option value="tenant:operator">Operador</option>
-                <option value="tenant:viewer">Visualizador</option>
+                <optgroup label="JL Staff (Global)">
+                  <option value="jl:superadmin">JL Superadmin</option>
+                  <option value="jl:engineer">JL Engineer</option>
+                  <option value="jl:technician">JL Technician</option>
+                  <option value="jl:manager">JL Manager</option>
+                  <option value="jl:finance">JL Finance</option>
+                  <option value="jl:viewer">JL Viewer</option>
+                </optgroup>
+                <optgroup label="Tenant (Cliente)">
+                  <option value="tenant:admin">Admin do Tenant</option>
+                  <option value="tenant:operator">Operador</option>
+                  <option value="tenant:viewer">Visualizador</option>
+                </optgroup>
               </select>
             </div>
 
