@@ -3,7 +3,7 @@
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import { verifyToken } from "@repo/auth";
-import { publish, subscribe } from "@repo/cache";
+import { publish, psubscribe } from "@repo/cache";
 import type { Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 
@@ -12,7 +12,8 @@ import { WebSocketServer, WebSocket } from "ws";
 //
 // Arquitetura distribuída: cada instância da API mantém apenas as conexões
 // TCP locais. Notificações são publicadas em canais Redis Pub/Sub. Todas as
-// instâncias subscrevem os canais e a que retém a conexão TCP entrega o frame.
+// instâncias subscrevem os canais via PSUBSCRIBE e a que retém a conexão TCP
+// entrega o frame. Não há double delivery — toda entrega passa pelo Redis.
 
 // Mapa de conexões ativas LOCAIS: tenantId:userId -> Set<WebSocket>
 const localConnections = new Map<string, Set<WebSocket>>();
@@ -26,12 +27,12 @@ let redisSubscribed = false;
 export function setupWebSocket(server: Server): void {
   const wss = new WebSocketServer({ server, path: "/ws" });
 
-  // Subscreve canais Redis uma única vez por instância
+  // Subscreve canais Redis uma única vez por instância via PSUBSCRIBE (pattern matching)
   if (!redisSubscribed) {
-    subscribe(CHANNEL_TENANT_PREFIX + "*", handleRedisMessage);
-    subscribe(CHANNEL_USER_PREFIX + "*", handleRedisMessage);
+    psubscribe(CHANNEL_TENANT_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
+    psubscribe(CHANNEL_USER_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
     redisSubscribed = true;
-    console.warn("[ws] Redis Pub/Sub subscreveu canais de notificação");
+    console.warn("[ws] Redis Pub/Sub subscreveu canais de notificação (PSUBSCRIBE)");
   }
 
   wss.on("connection", (ws: WebSocket, req) => {
@@ -125,6 +126,7 @@ function handleRedisMessage(message: string): void {
 }
 
 // Envia notificação push para um usuário específico via Redis Pub/Sub
+// A instancia que retém a conexão TCP entrega o frame via PSUBSCRIBE handler
 export async function pushNotificationToUser(tenantId: string, userId: string, notification: Record<string, unknown>): Promise<void> {
   const targetKey = `${tenantId}:${userId}`;
   const payload = JSON.stringify({ type: "notification", ...notification });
@@ -134,19 +136,10 @@ export async function pushNotificationToUser(tenantId: string, userId: string, n
     payload,
   });
   await publish(CHANNEL_USER_PREFIX + targetKey, envelope);
-
-  // Entrega local imediata se a conexão estiver nesta instância
-  const conns = localConnections.get(targetKey);
-  if (conns) {
-    for (const ws of conns) {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(payload);
-      }
-    }
-  }
 }
 
 // Envia notificação broadcast para todos os usuários de um tenant via Redis Pub/Sub
+// A instancia que retém as conexões TCP entrega os frames via PSUBSCRIBE handler
 export async function pushNotificationToTenant(tenantId: string, notification: Record<string, unknown>): Promise<void> {
   const payload = JSON.stringify({ type: "notification", ...notification });
   const envelope = JSON.stringify({
@@ -155,17 +148,6 @@ export async function pushNotificationToTenant(tenantId: string, notification: R
     payload,
   });
   await publish(CHANNEL_TENANT_PREFIX + tenantId, envelope);
-
-  // Entrega local imediata para conexões nesta instância
-  for (const [key, conns] of localConnections) {
-    if (key.startsWith(`${tenantId}:`)) {
-      for (const ws of conns) {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(payload);
-        }
-      }
-    }
-  }
 }
 
 // Route Hono para health check do WebSocket

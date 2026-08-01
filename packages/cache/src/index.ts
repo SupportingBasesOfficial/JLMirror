@@ -192,3 +192,21 @@ export async function subscribe(
     // Silencioso
   }
 }
+
+// Pattern subscription com PSUBSCRIBE para canais com wildcard
+export async function psubscribe(
+  pattern: string,
+  handler: (channel: string, message: string) => void,
+): Promise<void> {
+  try {
+    const client = createCacheClient();
+    await client.psubscribe(pattern);
+    client.on("pmessage", (_pattern, channel, message) => {
+      if (_pattern === pattern) {
+        handler(channel, message);
+      }
+    });
+  } catch {
+    // Silencioso
+  }
+}
