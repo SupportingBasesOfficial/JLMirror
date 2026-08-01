@@ -57,6 +57,12 @@ export const queueJobsActive = new Gauge({
   registers: [registry],
 });
 
+export const zabbixCircuitState = new Gauge({
+  name: "jlmirror_zabbix_circuit_state",
+  help: "Estado do circuit breaker Zabbix (0=closed, 1=half_open, 2=open)",
+  registers: [registry],
+});
+
 // Middleware Hono para coletar metricas HTTP
 export function metricsMiddleware(c: any, next: any) {
   const start = Date.now();

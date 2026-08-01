@@ -5,7 +5,7 @@
 
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { registry, dbPoolSize, queueJobsActive, wsConnections } from "../lib/metrics.js";
+import { registry, dbPoolSize, queueJobsActive, wsConnections, zabbixCircuitState } from "../lib/metrics.js";
 
 export const metricsRoute = new Hono();
 
@@ -64,6 +64,16 @@ async function updateRuntimeGauges(): Promise<void> {
     }
   } catch {
     // Redis pode nao estar disponivel
+  }
+
+  // Estado do circuit breaker Zabbix
+  try {
+    const { circuitGetState } = await import("@repo/cache");
+    const state = circuitGetState("zabbix:default");
+    const stateValue = state === "closed" ? 0 : state === "half_open" ? 1 : 2;
+    zabbixCircuitState.set(stateValue);
+  } catch {
+    // Silencioso
   }
 }
 

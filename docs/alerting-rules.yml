@@ -1,0 +1,126 @@
+# Alerting Rules Prometheus para JLMIRROR
+# Importar no Prometheus via rule_files ou no Grafana como alert rules
+
+groups:
+  - name: jlmirror-infrastructure
+    interval: 30s
+    rules:
+      # Pool PG exhaustion — se waiting > 10, pool esta saturado
+      - alert: JlmirrorDbPoolWaitingHigh
+        expr: jlmirror_db_pool_size{state="waiting"} > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pool PG com {{ $value }} conexoes em espera"
+          description: "Pool de conexoes PostgreSQL esta saturado. Considere aumentar DB_POOL_MAX ou DEFAULT_POOL_SIZE do PgBouncer."
+
+      # Pool PG totalmente esgotado — waiting > 0 por 5m = critico
+      - alert: JlmirrorDbPoolExhausted
+        expr: jlmirror_db_pool_size{state="waiting"} > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pool PG esgotado — {{ $value }} conexoes aguardando por 5+ minutos"
+          description: "Todas as conexoes do pool estao em uso e novas requisicoes estao esperando. Acao imediata necessaria."
+
+      # Queue backlog — jobs ativos acumulando
+      - alert: JlmirrorQueueBacklogHigh
+        expr: jlmirror_queue_jobs_active > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Fila {{ $labels.queue }} com {{ $value }} jobs ativos"
+          description: "Backlog alto em fila BullMQ. Workers podem estar lentos ou insuficientes."
+
+      # Queue backlog critico
+      - alert: JlmirrorQueueBacklogCritical
+        expr: jlmirror_queue_jobs_active > 100
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Fila {{ $labels.queue }} com {{ $value }} jobs ativos por 10+ minutos"
+          description: "Backlog critico. Considere escalar workers ou investigar deadlock."
+
+      # Zabbix API error rate alto
+      - alert: JlmirrorZabbixErrorRateHigh
+        expr: rate(jlmirror_zabbix_api_errors_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API Zabbix com alta taxa de erro — {{ $value | humanizePercentage }}"
+          description: "Mais de 0.5 erros/seg na API Zabbix nos ultimos 5 minutos. Circuit breaker pode abrir."
+
+      # Zabbix circuit breaker aberto
+      - alert: JlmirrorZabbixCircuitOpen
+        expr: jlmirror_zabbix_circuit_state == 2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker da API Zabbix esta ABERTO"
+          description: "API Zabbix indisponivel. Todas as chamadas estao sendo rejeitadas. Verificar conectividade com Zabbix."
+
+      # Zabbix circuit breaker em half-open (testando recuperacao)
+      - alert: JlmirrorZabbixCircuitHalfOpen
+        expr: jlmirror_zabbix_circuit_state == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker da API Zabbix em HALF_OPEN"
+          description: "Circuit breaker testando recuperacao. Se as chamadas de teste falharem, volta para OPEN."
+
+      # WebSocket connections drop repentino
+      - alert: JlmirrorWsConnectionsDrop
+        expr: deriv(jlmirror_ws_connections[5m]) < -10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Queda de {{ $value }} conexoes WebSocket em 5 minutos"
+          description: "Numero de conexoes WebSocket caiu repentinamente. Possivel problema de rede ou restart de replica."
+
+      # HTTP error rate alto (5xx)
+      - alert: JlmirrorHttpErrorRateHigh
+        expr: rate(jlmirror_http_requests_total{status=~"5.."}[5m]) / rate(jlmirror_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taxa de erro HTTP 5xx acima de 5% — {{ $value | humanizePercentage }}"
+          description: "Mais de 5% das requisicoes HTTP estao retornando erro 5xx. Investigar logs da API."
+
+      # HTTP latency alta (p99 > 5s)
+      - alert: JlmirrorHttpLatencyHigh
+        expr: histogram_quantile(0.99, rate(jlmirror_http_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latencia HTTP p99 acima de 5s — {{ $value }}s"
+          description: "99% das requisicoes deveriam responder em menos de 5s. Possivel gargalo de DB ou API Zabbix."
+
+      # Processo usando muita memoria
+      - alert: JlmirrorMemoryHigh
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 1.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Processo usando {{ $value | humanize1024 }} de memoria RSS"
+          description: "Uso de memoria acima de 1.5GB. Possivel memory leak. Considerar restart ou investigar heap."
+
+      # API down — sem metricas por 2 minutos
+      - alert: JlmirrorApiDown
+        expr: up{job="jlmirror-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API JLMIRROR indisponivel"
+          description: "Prometheus nao consegue fazer scrape do /metrics ha 2 minutos. API pode estar fora do ar."
