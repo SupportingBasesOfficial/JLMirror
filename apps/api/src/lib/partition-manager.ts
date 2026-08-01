@@ -3,18 +3,19 @@
 import { query } from "@repo/db";
 import { registerRepeatableJob, startWorker } from "./queue.js";
 
-// Partition Manager — cria partições mensais futuras para tabelas particionadas
-// Roda diariamente via BullMQ e garante que os próximos 3 meses de partições existam
+// Partition Manager — cria partições mensais futuras e droppa partições antigas
+// Roda diariamente via BullMQ
 
 interface PartitionedTable {
   name: string;
   column: string;
+  retentionMonths: number;
 }
 
 const PARTITIONED_TABLES: PartitionedTable[] = [
-  { name: "system_logs", column: "created_at" },
-  { name: "trace_spans", column: "created_at" },
-  { name: "capacity_metrics", column: "created_at" },
+  { name: "system_logs", column: "created_at", retentionMonths: 6 },
+  { name: "trace_spans", column: "created_at", retentionMonths: 1 },
+  { name: "capacity_metrics", column: "created_at", retentionMonths: 12 },
 ];
 
 const QUEUE_NAME = "partition-manager";
@@ -23,15 +24,16 @@ const PARTITION_LOOKAHEAD_MONTHS = 3;
 export async function startPartitionManager(): Promise<void> {
   await registerRepeatableJob(
     QUEUE_NAME,
-    "create-future-partitions",
+    "manage-partitions",
     { pattern: "0 2 * * *" },
   );
 
   startWorker(QUEUE_NAME, async () => {
     try {
       await createFuturePartitions();
+      await dropOldPartitions();
     } catch (err) {
-      console.error("[partition] Erro ao criar partições:", err instanceof Error ? err.message : String(err));
+      console.error("[partition] Erro:", err instanceof Error ? err.message : String(err));
     }
   });
 }
@@ -76,6 +78,47 @@ async function createFuturePartitions(): Promise<void> {
         console.error(`[partition] Erro ao criar ${partitionName}: ${createResult.error.message}`);
       } else {
         console.warn(`[partition] Partição criada: ${partitionName} (${monthStart.toISOString().substring(0, 10)} a ${monthEnd.toISOString().substring(0, 10)})`);
+      }
+    }
+  }
+}
+
+// Droppa partições mais antigas que o retention period de cada tabela
+async function dropOldPartitions(): Promise<void> {
+  for (const table of PARTITIONED_TABLES) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(1);
+    cutoffDate.setMonth(cutoffDate.getMonth() - table.retentionMonths);
+    cutoffDate.setHours(0, 0, 0, 0);
+
+    const prefix = `${table.name}_`;
+    const cutoffYYYYMM = `${cutoffDate.getFullYear()}${String(cutoffDate.getMonth() + 1).padStart(2, "0")}`;
+
+    // Busca todas as partições da tabela
+    const result = await query<{ tablename: string }>(
+      `SELECT tablename FROM pg_tables
+       WHERE schemaname = 'public' AND tablename LIKE $1
+       ORDER BY tablename ASC`,
+      [`${prefix}%`],
+    );
+
+    if (result.error || !result.data?.rows.length) continue;
+
+    for (const row of result.data.rows) {
+      // Extrai YYYYMM do nome da partição
+      const partitionYYYYMM = row.tablename.replace(prefix, "");
+      if (partitionYYYYMM.length !== 6) continue;
+
+      // Se a partição é mais antiga que o cutoff, droppa
+      if (partitionYYYYMM < cutoffYYYYMM) {
+        const dropResult = await query(
+          `DROP TABLE IF EXISTS public.${row.tablename} CASCADE`,
+        );
+        if (dropResult.error) {
+          console.error(`[partition] Erro ao droppar ${row.tablename}: ${dropResult.error.message}`);
+        } else {
+          console.warn(`[partition] Partição droppada: ${row.tablename} (mais antiga que ${table.retentionMonths} meses)`);
+        }
       }
     }
   }
