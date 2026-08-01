@@ -236,13 +236,15 @@ mfaRoute.post("/verify", async (c) => {
   const userRow = userResult.data.rows[0];
 
   // Busca tenants e roles
-  const tenantsResult = await query<{ tenant_id: string; role: string }>(
+  const tenantsResult = await query<{ tenant_id: string; role: string; scope: string }>(
     "SELECT * FROM public.get_tenant_user_auth($1)",
     [userRow.id],
   );
 
   const roles = tenantsResult.data?.rows.map((r) => r.role) ?? [];
   const primaryTenantId = tenantsResult.data?.rows[0]?.tenant_id ?? "";
+  const userScope = (tenantsResult.data?.rows[0]?.scope as "global" | "tenant") ?? "tenant";
+  const tenantIds = tenantsResult.data?.rows.map((r) => r.tenant_id) ?? [];
 
   // Gera tokens JWT
   const { signAccessToken, signRefreshToken, verifyToken, storeRefreshJti } = await import("@repo/auth");
@@ -251,12 +253,16 @@ mfaRoute.post("/verify", async (c) => {
     sub: userRow.id,
     tenant_id: primaryTenantId,
     roles,
+    scope: userScope,
+    tenant_ids: tenantIds,
   });
 
   const refreshToken = signRefreshToken({
     sub: userRow.id,
     tenant_id: primaryTenantId,
     roles,
+    scope: userScope,
+    tenant_ids: tenantIds,
   });
 
   const refreshPayload = verifyToken(refreshToken);
@@ -277,9 +283,11 @@ mfaRoute.post("/verify", async (c) => {
       full_name: userRow.full_name,
       is_active: userRow.is_active,
     },
+    scope: userScope,
     tenants: tenantsResult.data?.rows.map((r) => ({
       tenant_id: r.tenant_id,
       role: r.role,
+      scope: r.scope,
     })) ?? [],
   });
 });

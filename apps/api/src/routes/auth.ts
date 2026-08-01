@@ -81,7 +81,7 @@ authRoute.post("/login", async (c) => {
   }
 
   // Busca tenants e roles do usuário via RPC
-  const tenantsResult = await query<{ tenant_id: string; role: string }>(
+  const tenantsResult = await query<{ tenant_id: string; role: string; scope: string }>(
     "SELECT * FROM public.get_tenant_user_auth($1)",
     [user.id],
   );
@@ -95,6 +95,8 @@ authRoute.post("/login", async (c) => {
 
   const roles = tenantsResult.data.rows.map((r) => r.role);
   const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
+  const userScope = (tenantsResult.data.rows[0].scope as "global" | "tenant") ?? "tenant";
+  const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
   // Verifica se usuário tem MFA TOTP habilitado
   const mfaResult = await query<{ is_enabled: boolean }>(
@@ -131,12 +133,16 @@ authRoute.post("/login", async (c) => {
     sub: user.id,
     tenant_id: primaryTenantId,
     roles,
+    scope: userScope,
+    tenant_ids: tenantIds,
   });
 
   const refreshToken = signRefreshToken({
     sub: user.id,
     tenant_id: primaryTenantId,
     roles,
+    scope: userScope,
+    tenant_ids: tenantIds,
   });
 
   // Extrai jti do refresh token para armazenar no Redis
@@ -188,9 +194,11 @@ authRoute.post("/login", async (c) => {
       is_active: user.is_active,
       must_change_password: user.must_change_password,
     },
+    scope: userScope,
     tenants: tenantsResult.data.rows.map((r) => ({
       tenant_id: r.tenant_id,
       role: r.role,
+      scope: r.scope,
     })),
   });
 });
@@ -233,12 +241,16 @@ authRoute.post("/refresh", async (c) => {
       sub: payload.sub,
       tenant_id: payload.tenant_id,
       roles: payload.roles,
+      scope: payload.scope ?? "tenant",
+      tenant_ids: payload.tenant_ids,
     });
 
     const newRefreshToken = signRefreshToken({
       sub: payload.sub,
       tenant_id: payload.tenant_id,
       roles: payload.roles,
+      scope: payload.scope ?? "tenant",
+      tenant_ids: payload.tenant_ids,
     });
 
     const newPayload = verifyToken(newRefreshToken);
@@ -332,13 +344,14 @@ authRoute.get("/me", jwtAuth, async (c) => {
     );
   }
 
-  const tenantsResult = await query<{ tenant_id: string; role: string }>(
+  const tenantsResult = await query<{ tenant_id: string; role: string; scope: string }>(
     "SELECT * FROM public.get_tenant_user_auth($1)",
     [user.sub],
   );
 
   return c.json({
     user: userResult.data.rows[0],
+    scope: user.scope,
     tenants: tenantsResult.data?.rows ?? [],
   });
 });
@@ -579,7 +592,7 @@ authRoute.post("/oauth/callback", async (c) => {
     }
 
     // Busca tenants
-    const tenantsResult = await query<{ tenant_id: string; role: string }>(
+    const tenantsResult = await query<{ tenant_id: string; role: string; scope: string }>(
       "SELECT * FROM public.get_tenant_user_auth($1)",
       [userId],
     );
@@ -590,9 +603,11 @@ authRoute.post("/oauth/callback", async (c) => {
 
     const roles = tenantsResult.data.rows.map((r) => r.role);
     const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
+    const userScope = (tenantsResult.data.rows[0].scope as "global" | "tenant") ?? "tenant";
+    const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
-    const accessToken = signAccessToken({ sub: userId, tenant_id: primaryTenantId, roles });
-    const refreshToken = signRefreshToken({ sub: userId, tenant_id: primaryTenantId, roles });
+    const accessToken = signAccessToken({ sub: userId, tenant_id: primaryTenantId, roles, scope: userScope, tenant_ids: tenantIds });
+    const refreshToken = signRefreshToken({ sub: userId, tenant_id: primaryTenantId, roles, scope: userScope, tenant_ids: tenantIds });
     const refreshPayload = verifyToken(refreshToken);
     await storeRefreshJti(refreshPayload.jti);
 
@@ -655,7 +670,7 @@ authRoute.post("/ldap/bind", async (c) => {
       userId = newUser.data?.rows[0]?.id as string;
     }
 
-    const tenantsResult = await query<{ tenant_id: string; role: string }>(
+    const tenantsResult = await query<{ tenant_id: string; role: string; scope: string }>(
       "SELECT * FROM public.get_tenant_user_auth($1)",
       [userId],
     );
@@ -666,9 +681,11 @@ authRoute.post("/ldap/bind", async (c) => {
 
     const roles = tenantsResult.data.rows.map((r) => r.role);
     const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
+    const userScope = (tenantsResult.data.rows[0].scope as "global" | "tenant") ?? "tenant";
+    const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
-    const accessToken = signAccessToken({ sub: userId, tenant_id: primaryTenantId, roles });
-    const refreshToken = signRefreshToken({ sub: userId, tenant_id: primaryTenantId, roles });
+    const accessToken = signAccessToken({ sub: userId, tenant_id: primaryTenantId, roles, scope: userScope, tenant_ids: tenantIds });
+    const refreshToken = signRefreshToken({ sub: userId, tenant_id: primaryTenantId, roles, scope: userScope, tenant_ids: tenantIds });
     const refreshPayload = verifyToken(refreshToken);
     await storeRefreshJti(refreshPayload.jti);
 

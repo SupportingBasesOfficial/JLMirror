@@ -28,6 +28,8 @@ export const jwtAuth = createMiddleware(async (c, next) => {
       sub: payload.sub,
       tenant_id: payload.tenant_id,
       roles: payload.roles,
+      scope: payload.scope ?? "tenant",
+      tenantIds: payload.tenant_ids,
     });
 
     await next();

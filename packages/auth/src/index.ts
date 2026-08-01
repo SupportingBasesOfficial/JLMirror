@@ -8,6 +8,8 @@ export interface JwtPayload {
   sub: string;
   tenant_id: string;
   roles: string[];
+  scope: "global" | "tenant";
+  tenant_ids?: string[];
   type: "access" | "refresh";
   jti: string;
   iat?: number;
@@ -20,6 +22,8 @@ interface SignOptions {
   sub: string;
   tenant_id: string;
   roles: string[];
+  scope: "global" | "tenant";
+  tenant_ids?: string[];
 }
 
 const ACCESS_TOKEN_TTL = "15m";
@@ -49,7 +53,7 @@ function getAudience(): string {
 export function signAccessToken(opts: SignOptions): string {
   const jti = crypto.randomUUID();
   return jwt.sign(
-    { type: "access", jti, tenant_id: opts.tenant_id, roles: opts.roles },
+    { type: "access", jti, tenant_id: opts.tenant_id, roles: opts.roles, scope: opts.scope, ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}) },
     getPrivateKey(),
     {
       algorithm: "RS256",
@@ -65,7 +69,7 @@ export function signAccessToken(opts: SignOptions): string {
 export function signRefreshToken(opts: SignOptions): string {
   const jti = crypto.randomUUID();
   return jwt.sign(
-    { type: "refresh", jti, tenant_id: opts.tenant_id, roles: opts.roles },
+    { type: "refresh", jti, tenant_id: opts.tenant_id, roles: opts.roles, scope: opts.scope, ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}) },
     getPrivateKey(),
     {
       algorithm: "RS256",
@@ -85,16 +89,19 @@ export function verifyToken(token: string): JwtPayload {
     audience: getAudience(),
   }) as jwt.JwtPayload;
 
+  const record = decoded as Record<string, unknown>;
   return {
     sub: decoded.sub as string,
-    tenant_id: (decoded as Record<string, unknown>).tenant_id as string,
-    roles: (decoded as Record<string, unknown>).roles as string[],
-    type: (decoded as Record<string, unknown>).type as "access" | "refresh",
+    tenant_id: record.tenant_id as string,
+    roles: record.roles as string[],
+    scope: (record.scope as "global" | "tenant") ?? "tenant",
+    ...(record.tenant_ids ? { tenant_ids: record.tenant_ids as string[] } : {}),
+    type: record.type as "access" | "refresh",
     jti: decoded.jti as string,
     iat: decoded.iat,
     exp: decoded.exp,
     iss: decoded.iss,
-    aud: decoded.aud,
+    aud: decoded.aud as string | undefined,
   };
 }
 
@@ -160,8 +167,8 @@ export async function getPermissionChecker(
   roles: string[],
   fetcher: (userId: string) => Promise<string[]>,
 ): Promise<(permission: string) => boolean> {
-  // Admin tem todas as permissoes (global:admin, admin, super_admin)
-  const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r.endsWith(":admin") || r.startsWith("admin:"));
+  // Admin tem todas as permissoes (global:admin, jl:superadmin, admin, super_admin)
+  const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r === "jl:superadmin" || r.endsWith(":admin") || r.startsWith("admin:"));
   if (isAdmin) {
     return () => true;
   }
