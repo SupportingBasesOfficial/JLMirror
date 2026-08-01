@@ -41,9 +41,14 @@ Força o desenvolvedor a tratar o erro no momento da chamada, evitando telas bra
 
 Componentes UI não fazem queries. Server Components usam `api-client.ts` que retorna `Result<T>`.
 
-### 3.3 Pool Persistente
+### 3.3 Pool Persistente + PgBouncer
 
-A API Service usa `pg.Pool` com `max: 20` e `prepare: true`. Sem restrições serverless. O pool vive pelo tempo de vida do container.
+A API Service usa `pg.Pool` com `max: 50` (configurável via `DB_POOL_MAX`) e `statement_timeout: 30s`. Sem restrições serverless. O pool vive pelo tempo de vida do container.
+
+Em produção, **PgBouncer** (transaction pooling) fica entre a API e o PostgreSQL:
+- API -> PgBouncer (porta 6432) com `DB_POOL_MAX=10`
+- PgBouncer -> PostgreSQL com `DEFAULT_POOL_SIZE=20`, `MAX_CLIENT_CONN=200`
+- Reduz conexões reais ao PG de 200 para 20, suportando 200 clientes simultâneos
 
 ---
 
@@ -152,6 +157,19 @@ Validadas em build-time via `@t3-oss/env-nextjs` + Zod. Se faltar, o app não so
 
 `pino` com logs JSON. Redação automática de PII (email, senha, token).
 
+### 8.4 Prometheus Metrics
+
+Endpoint `/api/v1/metrics` expõe métricas no formato Prometheus via `prom-client`:
+
+- **Processo**: GC, CPU, memória, event loop (coletadas automaticamente)
+- **HTTP**: `jlmirror_http_request_duration_seconds` (histogram por method/route/status)
+- **Zabbix**: `jlmirror_zabbix_api_duration_seconds`, `jlmirror_zabbix_api_errors_total`
+- **Pool PG**: `jlmirror_db_pool_size` (total/idle/waiting)
+- **WebSocket**: `jlmirror_ws_connections`
+- **Filas BullMQ**: `jlmirror_queue_jobs_active` por queue
+
+Worker `metrics-collector` coleta métricas internas a cada 60s e escreve em `system_metrics` (TimescaleDB hypertable com compression 7d e retention 90d).
+
 ---
 
 ## 9. Validation: Zod como Fonte de Verdade
@@ -237,3 +255,123 @@ Para ativar: implementar a interface, usar `ldapjs` library.
 **Decisão:** `jsonwebtoken` — API é Node.js container, não edge.
 
 **Consequência:** Não funciona em edge runtime, mas a API não roda em edge.
+
+---
+
+## 12. Escala e Robustez
+
+### 12.1 Cache de Responses Zabbix (Redis)
+
+Middleware de cache para todos os GETs da API Zabbix:
+- **Listagens** (hosts, graphs, items): TTL 10s
+- **History/data**: TTL 5s
+- **Ping**: sem cache
+- Invalidação automática em mutações (POST/PUT/DELETE) via `cacheDelByPrefix`
+- Elimina thundering herd quando múltiplos usuários do mesmo tenant acessam simultaneamente
+
+### 12.2 Downsampling de History
+
+`downsamplePoints()` reduz N pontos para máximo 500 por série usando bucketing com avg/min/max:
+- Algoritmo LTTB simplificado — mantém fidelidade visual
+- Aplicado em `/graphs/:graphid/data`, `/history`, `/history-batch`
+- Reduz payload de 14k+ pontos para 500 sem perda visual significativa
+
+### 12.3 Particionamento e Retention
+
+Tabelas de alta escrita particionadas por RANGE(created_at):
+- `system_logs`: retenção 6 meses
+- `trace_spans`: retenção 1 mês
+- `capacity_metrics`: retenção 12 meses
+
+Worker `partition-manager` roda diariamente:
+- Cria partições futuras (3 meses lookahead)
+- Droppa partições antigas automaticamente (DROP TABLE CASCADE)
+
+### 12.4 TimescaleDB
+
+`system_metrics` como hypertable com:
+- Chunk interval: 1 dia
+- Compression policy: dados > 7 dias (90% redução de espaço)
+- Retention policy: dados > 90 dias
+- Fallback graceful se extensão não estiver disponível
+
+### 12.5 Sync Paralelo de Tenants
+
+`syncAllTenants` processa tenants em paralelo com `Promise.allSettled` em chunks de 10:
+- 100 tenants: ~20s em vez de ~200s (serial)
+- Falhas isoladas por tenant (não aborta o batch)
+- Log de resumo com total processado e falhas
+
+### 12.6 Lock de Migrations (Multi-réplica)
+
+`pg_try_advisory_lock(42001)` antes de executar migrations:
+- Se outra réplica já tem o lock, pula migrations silenciosamente
+- Lock liberado no `finally` após migrar ou em erro
+- Previne race condition quando múltiplas réplicas iniciam simultaneamente
+
+### 12.7 Rate Limit por Tenant
+
+`rateLimitTenant` (100 req/min por tenant, distribuído via Redis):
+- Limita total de requests por tenant independente de quantos usuários/IPs
+- Protege API Zabbix de sobrecarga por tenant
+- Aplicado em todas as rotas `/api/v1/zabbix/*`
+
+### 12.8 WebSocket Multi-réplica
+
+Notificações via Redis Pub/Sub com `PSUBSCRIBE` (pattern matching):
+- Cada instância mantém apenas conexões TCP locais
+- `pushNotificationToUser` e `pushNotificationToTenant` publicam no Redis
+- A instância que retém a conexão TCP entrega o frame
+- Sem double delivery — toda entrega passa pelo Redis
+
+### 12.9 Circuit Breaker Zabbix
+
+Circuit breaker distribuído via Redis no `BlindedZabbixClient`:
+- **CLOSED**: funcionamento normal
+- **OPEN** (5 falhas consecutivas): rejeita chamadas imediatamente, evita timeout de 30s por request
+- **HALF_OPEN** (após 30s): permite 3 chamadas de teste
+- **CLOSED** (sucesso em half_open): retoma funcionamento normal
+- Erros de negócio (json.error) não contam como falha de circuito
+- Estado compartilhado entre réplicas via Redis
+
+### 12.10 Health Checks
+
+- `/health/live` — processo vivo (sem dependências)
+- `/health/ready` — DB conectado (para Kubernetes readiness probe)
+- `/health` — status completo (DB, Redis, queues, pubsub, Zabbix config)
+
+---
+
+## 13. Decisões Arquiteturais Adicionais (ADRs)
+
+### ADR-008: PgBouncer Transaction Pooling
+
+**Contexto:** Pool de 50 conexões da API pode saturar PostgreSQL sob alta carga com múltiplas réplicas.
+
+**Decisão:** PgBouncer em transaction pooling entre API e PostgreSQL.
+
+**Consequência:** 200 client connections servidas com apenas 20 server connections. Statement timeout 30s evita queries lentas.
+
+### ADR-009: prom-client para Métricas
+
+**Contexto:** Métricas manuais não incluem GC, event loop, CPU. Histogramas precisam de buckets configurados.
+
+**Decisão:** `prom-client` com registry customizado + `collectDefaultMetrics`.
+
+**Consequência:** Métricas de processo automáticas + histogramas com buckets adequados para latência HTTP e Zabbix.
+
+### ADR-010: TimescaleDB para Métricas Internas
+
+**Contexto:** Métricas internas do sistema (pool, memória, filas) precisam de alta frequência de escrita com query eficiente.
+
+**Decisão:** TimescaleDB hypertable com compression e retention automáticas.
+
+**Consequência:** Ingestão de alta frequência sem particionamento manual. Compression reduz 90% do espaço. Fallback graceful se extensão não disponível.
+
+### ADR-011: Circuit Breaker via Redis
+
+**Contexto:** Se Zabbix cair, toda API trava 30s por request (timeout). Cascata de falhas.
+
+**Decisão:** Circuit breaker distribuído via Redis no BlindedZabbixClient.
+
+**Consequência:** Após 5 falhas, circuito abre e rejeita instantaneamente. Após 30s, half-open testa recuperação. Estado compartilhado entre réplicas.
