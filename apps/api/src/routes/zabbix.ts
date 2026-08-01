@@ -713,6 +713,71 @@ zabbixRoute.get("/graphs", async (c) => {
   }
 });
 
+// GET /api/v1/zabbix/graphs/:graphid/data?from=UNIX&to=UNIX
+// Busca dados de history para todos os items do grafo
+zabbixRoute.get("/graphs/:graphid/data", async (c) => {
+  const user = c.get("user");
+  const tenantId = user.tenant_id;
+  const graphId = c.req.param("graphid");
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+
+  const client = await createZabbixClient(tenantId);
+  if (!client) {
+    return c.json({ error: { code: "ZABBIX_CONFIG_NOT_FOUND", message: "Configuração Zabbix não encontrada" } }, 503);
+  }
+
+  try {
+    // Busca o grafo para obter os items
+    const graphs = await client.getGraphs();
+    const graph = graphs.find((g) => g.graphid === graphId);
+    if (!graph) {
+      return c.json({ error: { code: "GRAPH_NOT_FOUND", message: "Grafo não encontrado" } }, 404);
+    }
+
+    const itemIds = (graph.gitems ?? graph.items ?? []).map((gi) => gi.itemid);
+    if (itemIds.length === 0) {
+      return c.json({ data: { graph, series: [] } });
+    }
+
+    // Janela default: ultimas 1h
+    const now = Math.floor(Date.now() / 1000);
+    const timeFrom = from ? parseInt(from, 10) : now - 3600;
+    const timeTo = to ? parseInt(to, 10) : now;
+
+    // Busca nomes dos items para legenda
+    const itemsData = await client.rpc<ZabbixItem[]>("item.get", {
+      itemids: itemIds,
+      output: ["itemid", "name", "key_", "units", "value_type"],
+    });
+
+    // Busca history em batch
+    const history = await client.getHistoryBatch(itemIds, timeFrom, timeTo);
+
+    // Agrupa por itemid
+    const series = itemIds.map((itemId) => {
+      const item = itemsData.find((i) => i.itemid === itemId);
+      const gitem = (graph.gitems ?? graph.items ?? []).find((gi) => gi.itemid === itemId);
+      const points = history
+        .filter((h) => h.itemid === itemId)
+        .map((h) => ({ clock: h.clock, value: h.value }));
+      return {
+        itemid: itemId,
+        name: item?.name ?? `Item ${itemId}`,
+        key: item?.key_ ?? "",
+        units: item?.units ?? "",
+        color: gitem?.color ?? "#666666",
+        drawtype: gitem?.drawtype ?? 0,
+        points,
+      };
+    });
+
+    return c.json({ data: { graph, series } });
+  } catch (error) {
+    return c.json(zabbixErrorResponse(error), 502);
+  }
+});
+
 // ==================== USERS ====================
 
 // GET /api/v1/zabbix/users

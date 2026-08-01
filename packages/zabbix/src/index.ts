@@ -131,6 +131,7 @@ export interface ZabbixGraph {
   graphtype?: number;
   items?: ZabbixGraphItem[];
   gitems?: ZabbixGraphItem[];
+  hosts?: ZabbixHost[];
 }
 
 export interface ZabbixGraphItem {
@@ -570,8 +571,9 @@ export class BlindedZabbixClient {
   // Graphs — hostId opcional (quando undefined, retorna todos os grafos)
   async getGraphs(hostId?: string): Promise<ZabbixGraph[]> {
     const params: Record<string, unknown> = {
-      output: ["graphid", "name", "width", "height"],
-      selectGraphItems: ["itemid", "color", "drawtype"],
+      output: ["graphid", "name", "width", "height", "graphtype", "yaxismin", "yaxismax"],
+      selectGraphItems: ["itemid", "color", "drawtype", "sortorder", "yaxisside", "calc_fnc", "type"],
+      selectHosts: ["hostid", "host", "name"],
       sortfield: "name",
     };
     if (hostId) params.hostids = hostId;
