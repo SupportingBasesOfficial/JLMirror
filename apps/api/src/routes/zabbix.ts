@@ -32,12 +32,14 @@ import { syncTenantDevices } from "../lib/device-sync.js";
 import { downsamplePoints } from "../lib/downsample.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
+import { rateLimitTenant } from "../middleware/rate-limit.js";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
 
 export const zabbixRoute = new Hono();
 
 zabbixRoute.use("/*", jwtAuth);
 zabbixRoute.use("/*", tenantContext);
+zabbixRoute.use("/*", rateLimitTenant);
 
 // Invalida cache de responses Zabbix do tenant apos mutacoes
 async function invalidateZabbixResponseCache(tenantId: string): Promise<void> {

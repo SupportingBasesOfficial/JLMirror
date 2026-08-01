@@ -11,13 +11,17 @@ interface RateLimitOptions {
   windowMs: number;
   maxRequests: number;
   keyPrefix?: string;
+  tenantOnly?: boolean;
 }
 
-function getClientIdentifier(c: { req: { header: (name: string) => string | undefined }; get: (key: string) => unknown }): string {
-  const forwarded = c.req.header("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
+function getClientIdentifier(c: { req: { header: (name: string) => string | undefined }; get: (key: string) => unknown }, tenantOnly: boolean): string {
   const user = c.get("user") as { tenant_id?: string; sub?: string } | undefined;
   const tenant = user?.tenant_id ?? "anonymous";
+  if (tenantOnly) {
+    return tenant;
+  }
+  const forwarded = c.req.header("x-forwarded-for");
+  const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
   return `${tenant}:${ip}`;
 }
 
@@ -32,7 +36,7 @@ setInterval(() => {
 }, 60_000);
 
 export function rateLimit(options: RateLimitOptions) {
-  const { windowMs, maxRequests, keyPrefix = "default" } = options;
+  const { windowMs, maxRequests, keyPrefix = "default", tenantOnly = false } = options;
   const windowSeconds = Math.ceil(windowMs / 1000);
 
   return createMiddleware(async (c, next) => {
@@ -41,7 +45,7 @@ export function rateLimit(options: RateLimitOptions) {
       return;
     }
 
-    const identifier = getClientIdentifier(c);
+    const identifier = getClientIdentifier(c, tenantOnly);
     const redisKey = `ratelimit:${keyPrefix}:${identifier}`;
     const now = Date.now();
 
@@ -113,3 +117,7 @@ export function rateLimit(options: RateLimitOptions) {
 export const rateLimitAuth = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: "auth" });
 export const rateLimitApi = rateLimit({ windowMs: 60 * 1000, maxRequests: 300, keyPrefix: "api" });
 export const rateLimitWrite = rateLimit({ windowMs: 60 * 1000, maxRequests: 30, keyPrefix: "write" });
+
+// Rate limit por tenant (sem IP) — protege API Zabbix de sobrecarga
+// Limita total de requests por tenant independente de quantos usuarios/IPs
+export const rateLimitTenant = rateLimit({ windowMs: 60 * 1000, maxRequests: 100, keyPrefix: "tenant", tenantOnly: true });
