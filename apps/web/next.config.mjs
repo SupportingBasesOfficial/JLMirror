@@ -49,18 +49,6 @@ const nextConfig = {
       },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: "/api/zabbix/:path*",
-        destination: "/api/v1/zabbix/:path*",
-      },
-      {
-        source: "/api/admin/:path*",
-        destination: "/api/v1/admin/:path*",
-      },
-    ];
-  },
 };
 
 export default withBundleAnalyzer(nextConfig);

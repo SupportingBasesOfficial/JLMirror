@@ -33,9 +33,7 @@ export async function DELETE(
 }
 
 // Tenta renovar o access token usando o refresh token do cookie
-async function tryRefreshToken(
-  request: NextRequest,
-): Promise<string | null> {
+async function tryRefreshToken(request: NextRequest): Promise<string | null> {
   const refreshToken = request.cookies.get("refresh_token")?.value;
   if (!refreshToken) {
     return null;
@@ -67,7 +65,10 @@ async function proxyRequest(
   try {
     const params = await paramsPromise;
     const path = params.path.join("/");
-    const url = new URL(`/api/${path}`, API_BASE_URL);
+    // Se o path ja comeca com v1, nao duplica. Caso contrario, insere v1.
+    const apiPath =
+      path.startsWith("v1/") || path === "v1" ? path : `v1/${path}`;
+    const url = new URL(`/api/${apiPath}`, API_BASE_URL);
     url.search = request.nextUrl.search;
 
     const headers = new Headers(request.headers);
@@ -75,7 +76,10 @@ async function proxyRequest(
     headers.delete("accept-encoding");
 
     // Repassa IP real do cliente para rate limiting da API
-    const clientIp = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "unknown";
+    const clientIp =
+      request.headers.get("x-forwarded-for") ??
+      request.headers.get("x-real-ip") ??
+      "unknown";
     headers.set("x-forwarded-for", clientIp);
 
     // Repassa cookies de auth para a API
@@ -95,7 +99,10 @@ async function proxyRequest(
     let response = await fetch(url.toString(), {
       method: request.method,
       headers,
-      body: request.method !== "GET" && request.method !== "DELETE" ? request.body : null,
+      body:
+        request.method !== "GET" && request.method !== "DELETE"
+          ? request.body
+          : null,
       // @ts-expect-error — duplex é necessário para streaming no Node mas não está nos tipos DOM
       duplex: "half",
     });
