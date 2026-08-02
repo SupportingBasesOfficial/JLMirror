@@ -3,6 +3,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useModuleFlags } from "@/lib/use-module-flags";
 
 type ConnStatus = "checking" | "online" | "offline";
 
@@ -13,8 +14,16 @@ export function ZabbixPingIndicator({ collapsed }: { collapsed: boolean }) {
   const [status, setStatus] = useState<ConnStatus>("checking");
   const failuresRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { isModuleEnabled, isLoading: flagsLoading } = useModuleFlags();
+
+  const zabbixEnabled = isModuleEnabled("module_zabbix");
 
   useEffect(() => {
+    // Se o modulo Zabbix nao esta ativo, nao inicia polling
+    if (!flagsLoading && !zabbixEnabled) return;
+    // Aguarda flags carregarem antes de iniciar
+    if (flagsLoading) return;
+
     let cancelled = false;
 
     async function check() {
@@ -80,15 +89,38 @@ export function ZabbixPingIndicator({ collapsed }: { collapsed: boolean }) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, [zabbixEnabled, flagsLoading]);
 
-  const statusConfig: Record<ConnStatus, { color: string; bg: string; border: string; label: string }> = {
-    checking: { color: "var(--status-warning-text)", bg: "var(--status-warning-bg)", border: "var(--status-warning-border)", label: "Verificando..." },
-    online: { color: "var(--status-ok-text)", bg: "var(--status-ok-bg)", border: "var(--status-ok-border)", label: "Zabbix Online" },
-    offline: { color: "var(--status-error-text)", bg: "var(--status-error-bg)", border: "var(--status-error-border)", label: "Zabbix Offline" },
+  const statusConfig: Record<
+    ConnStatus,
+    { color: string; bg: string; border: string; label: string }
+  > = {
+    checking: {
+      color: "var(--status-warning-text)",
+      bg: "var(--status-warning-bg)",
+      border: "var(--status-warning-border)",
+      label: "Verificando...",
+    },
+    online: {
+      color: "var(--status-ok-text)",
+      bg: "var(--status-ok-bg)",
+      border: "var(--status-ok-border)",
+      label: "Zabbix Online",
+    },
+    offline: {
+      color: "var(--status-error-text)",
+      bg: "var(--status-error-bg)",
+      border: "var(--status-error-border)",
+      label: "Zabbix Offline",
+    },
   };
 
   const cfg = statusConfig[status];
+
+  // Se o modulo Zabbix nao esta ativo, nao renderiza o indicador
+  if (!flagsLoading && !zabbixEnabled) {
+    return null;
+  }
 
   return (
     <div
@@ -105,7 +137,8 @@ export function ZabbixPingIndicator({ collapsed }: { collapsed: boolean }) {
         className="inline-block w-2 h-2 rounded-full shrink-0"
         style={{
           background: cfg.color,
-          animation: status === "checking" ? "pulse 1.5s ease-in-out infinite" : "none",
+          animation:
+            status === "checking" ? "pulse 1.5s ease-in-out infinite" : "none",
         }}
       />
       {!collapsed && <span>{cfg.label}</span>}

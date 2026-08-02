@@ -62,6 +62,29 @@ function getBreadcrumbs(pathname: string | null): BreadcrumbPart[] {
     audit: "Auditoria",
     mfa: "MFA",
     scripts: "Scripts",
+    "push-settings": "Push",
+    "sla-dashboard": "SLA Dashboard",
+    "health-score": "Health Score",
+    "service-tree": "Service Tree",
+    correlation: "Correlação",
+    "anomaly-detection": "AI Anomaly",
+    "predictive-failure": "Predictive Failure",
+    chatops: "ChatOps",
+    "config-drift": "Config Drift",
+    itsm: "ITSM Connectors",
+    workflows: "Workflows",
+    "client-portal": "Client Portal",
+    "white-label": "White-label",
+    "status-page-admin": "Status Page",
+    "auto-discovery": "Auto-Discovery",
+    marketplace: "Marketplace",
+    finops: "FinOps",
+    patches: "Patch Management",
+    lgpd: "LGPD",
+    "security-audit": "Security Audit",
+    apm: "APM",
+    onboarding: "Onboarding",
+    modules: "Módulos",
   };
 
   const crumbs: BreadcrumbPart[] = [];
@@ -87,7 +110,11 @@ export function TopBar() {
 
   const breadcrumbs = getBreadcrumbs(pathname);
   const timeStr = now.toLocaleTimeString("pt-BR", { hour12: false });
-  const dateStr = now.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  const dateStr = now.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
   return (
     <div
@@ -102,12 +129,19 @@ export function TopBar() {
         {breadcrumbs.map((crumb, idx) => (
           <div key={idx} className="flex items-center gap-1.5 min-w-0">
             {idx > 0 && (
-              <ChevronRight size={14} className="shrink-0" style={{ color: "var(--text-muted)" }} />
+              <ChevronRight
+                size={14}
+                className="shrink-0"
+                style={{ color: "var(--text-muted)" }}
+              />
             )}
             <span
               className={`text-sm font-medium truncate ${idx === breadcrumbs.length - 1 ? "font-semibold" : ""}`}
               style={{
-                color: idx === breadcrumbs.length - 1 ? "var(--text-primary)" : "var(--text-muted)",
+                color:
+                  idx === breadcrumbs.length - 1
+                    ? "var(--text-primary)"
+                    : "var(--text-muted)",
               }}
             >
               {crumb.label}
@@ -129,17 +163,35 @@ export function TopBar() {
               animation: "pulse 2s infinite",
             }}
           />
-          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--status-ok-text)" }}>
+          <span
+            className="text-xs font-semibold uppercase tracking-wide"
+            style={{ color: "var(--status-ok-text)" }}
+          >
             Online
           </span>
         </div>
-        <div className="hidden sm:flex items-center gap-2 pl-3" style={{ borderLeft: "1px solid var(--border-default)" }}>
-          <Activity size={14} className="shrink-0" style={{ color: "var(--text-muted)" }} />
+        <div
+          className="hidden sm:flex items-center gap-2 pl-3"
+          style={{ borderLeft: "1px solid var(--border-default)" }}
+        >
+          <Activity
+            size={14}
+            className="shrink-0"
+            style={{ color: "var(--text-muted)" }}
+          />
           <div className="text-right" suppressHydrationWarning>
-            <div className="text-sm font-semibold tabular-nums" style={{ color: "var(--text-primary)" }} suppressHydrationWarning>
+            <div
+              className="text-sm font-semibold tabular-nums"
+              style={{ color: "var(--text-primary)" }}
+              suppressHydrationWarning
+            >
               {timeStr}
             </div>
-            <div className="text-xs capitalize" style={{ color: "var(--text-muted)" }} suppressHydrationWarning>
+            <div
+              className="text-xs capitalize"
+              style={{ color: "var(--text-muted)" }}
+              suppressHydrationWarning
+            >
               {dateStr}
             </div>
           </div>

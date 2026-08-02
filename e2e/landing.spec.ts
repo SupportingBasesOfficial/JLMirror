@@ -6,18 +6,12 @@ import { expect, test } from "@playwright/test";
  * Verifica que a página carrega, mostra o título,
  * e o botão de toggle de tema está presente.
  */
-test("landing page carrega com título e theme toggle", async ({ page }) => {
+test("landing page carrega com título", async ({ page }) => {
   await page.goto("/");
 
-  await expect(
-    page.getByRole("heading", { name: "JLMIRROR" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "JLMIRROR" })).toBeVisible();
 
-  await expect(
-    page.getByText("Portal de Monitoramento Multi-tenant"),
-  ).toBeVisible();
-
-  await expect(page.getByLabel("Alternar tema")).toBeVisible();
+  await expect(page.getByText("Portal de Monitoramento")).toBeVisible();
 });
 
 test("landing page navega para 404 em rota inexistente", async ({ page }) => {

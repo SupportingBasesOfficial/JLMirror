@@ -2,54 +2,43 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { MegaLoader } from "@/components/mega-loader";
+import { useUserScope } from "@/components/user-scope-provider";
 
 interface AdminGuardProps {
   children: React.ReactNode;
 }
 
+// Rotas que exigem scope global (JL staff). Demais rotas sao compartilhadas.
+const ADMIN_ONLY_PREFIXES = [
+  "/admin",
+  "/settings/modules",
+  "/white-label",
+  "/status-page-admin",
+];
+
 // Guard client-side que verifica se o usuário tem scope global (JL staff)
-// antes de renderizar qualquer página sob /(admin)
+// apenas em rotas admin-specific. Usa UserScopeProvider (context) — sem fetch proprio.
 export function AdminGuard({ children }: AdminGuardProps) {
-  const [status, setStatus] = useState<
-    "loading" | "authorized" | "unauthorized"
-  >("loading");
+  const pathname = usePathname();
+  const { scope, isLoading } = useUserScope();
 
-  useEffect(() => {
-    let mounted = true;
+  const isAdminRoute = ADMIN_ONLY_PREFIXES.some((prefix) =>
+    pathname?.startsWith(prefix),
+  );
 
-    async function checkScope() {
-      try {
-        const res = await fetch("/api/v1/auth/me", { credentials: "include" });
-        if (!res.ok) {
-          if (mounted) setStatus("unauthorized");
-          return;
-        }
-        const data = await res.json();
-        if (mounted) {
-          if (data.scope === "global") {
-            setStatus("authorized");
-          } else {
-            setStatus("unauthorized");
-          }
-        }
-      } catch {
-        if (mounted) setStatus("unauthorized");
-      }
-    }
+  // Se nao e rota admin-specific, renderiza sem validar
+  if (!isAdminRoute) {
+    return <>{children}</>;
+  }
 
-    checkScope();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  if (status === "loading") {
+  // Aguarda o scope ser carregado pelo UserScopeProvider
+  if (isLoading) {
     return <MegaLoader fullscreen label="Verificando acesso" />;
   }
 
-  if (status === "unauthorized") {
+  if (scope !== "global") {
     window.location.href = "/dashboard";
     return <MegaLoader fullscreen label="Redirecionando" />;
   }

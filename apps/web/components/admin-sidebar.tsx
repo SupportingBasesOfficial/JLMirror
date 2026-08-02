@@ -5,10 +5,21 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, X, Menu } from "lucide-react";
+import {
+  ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Search,
+  X,
+  Menu,
+} from "lucide-react";
 import { LogoutButton } from "@/components/logout-button";
 import { ZabbixPingIndicator } from "@/components/zabbix-ping-indicator";
-import { NAV_SECTIONS, type NavItem, type NavSection } from "@/components/sidebar-nav-items";
+import {
+  NAV_SECTIONS,
+  type NavItem,
+  type NavSection,
+} from "@/components/sidebar-nav-items";
 import { useModuleFlags } from "@/lib/use-module-flags";
 
 function isActive(pathname: string | null, item: NavItem): boolean {
@@ -17,15 +28,38 @@ function isActive(pathname: string | null, item: NavItem): boolean {
   return pathname === item.href;
 }
 
-function sectionHasActive(section: NavSection, pathname: string | null): boolean {
+function sectionHasActive(
+  section: NavSection,
+  pathname: string | null,
+): boolean {
   return section.items.some((item) => isActive(pathname, item));
 }
 
 function LogoMark({ size }: { size: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="shrink-0">
-      <path d="M8 22V10M8 10L14 16M8 10L2 16" stroke="var(--brand-primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(4 0)" />
-      <path d="M20 10V22M20 22L26 16M20 22L14 16" stroke="var(--brand-secondary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" transform="translate(-2 0)" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      className="shrink-0"
+    >
+      <path
+        d="M8 22V10M8 10L14 16M8 10L2 16"
+        stroke="var(--brand-primary)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        transform="translate(4 0)"
+      />
+      <path
+        d="M20 10V22M20 22L26 16M20 22L14 16"
+        stroke="var(--brand-secondary)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        transform="translate(-2 0)"
+      />
       <circle cx="16" cy="16" r="2" fill="var(--brand-primary)" />
     </svg>
   );
@@ -35,10 +69,12 @@ export function AdminSidebar() {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    new Set(),
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const pathname = usePathname();
-  const { isModuleEnabled } = useModuleFlags();
+  const { isModuleEnabled, isLoading: flagsLoading } = useModuleFlags();
 
   const sidebarWidth = collapsed ? "w-16" : "w-64";
 
@@ -46,18 +82,22 @@ export function AdminSidebar() {
     // Primeiro filtra por feature flags do modulo
     const flagFiltered = NAV_SECTIONS.map((section) => ({
       ...section,
-      items: section.items.filter((item) =>
-        !item.flagKey || isModuleEnabled(item.flagKey),
+      items: section.items.filter(
+        (item) => !item.flagKey || isModuleEnabled(item.flagKey),
       ),
     })).filter((section) => section.items.length > 0);
 
     // Depois filtra por busca textual
     if (!query.trim()) return flagFiltered;
     const q = query.toLowerCase();
-    return flagFiltered.map((section) => ({
-      ...section,
-      items: section.items.filter((item) => item.label.toLowerCase().includes(q)),
-    })).filter((section) => section.items.length > 0);
+    return flagFiltered
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          item.label.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((section) => section.items.length > 0);
   }, [query, isModuleEnabled]);
 
   const isSearching = query.trim().length > 0;
@@ -100,7 +140,9 @@ export function AdminSidebar() {
           tabIndex={0}
           aria-label="Fechar menu"
           onClick={() => setOpen(false)}
-          onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setOpen(false);
+          }}
         />
       )}
 
@@ -111,13 +153,18 @@ export function AdminSidebar() {
           background: "var(--surface-1)",
         }}
       >
-        <div className={`flex items-center justify-between ${collapsed ? "px-2" : "px-4"} pt-5 pb-3`}>
-          <div className={`flex items-center gap-2.5 ${collapsed ? "md:hidden" : ""}`}>
+        <div
+          className={`flex items-center justify-between ${collapsed ? "px-2" : "px-4"} pt-5 pb-3`}
+        >
+          <div
+            className={`flex items-center gap-2.5 ${collapsed ? "md:hidden" : ""}`}
+          >
             <div className="relative">
               <div
                 className="absolute inset-0 rounded-lg"
                 style={{
-                  background: "radial-gradient(circle, var(--brand-glow) 0%, transparent 70%)",
+                  background:
+                    "radial-gradient(circle, var(--brand-glow) 0%, transparent 70%)",
                   filter: "blur(4px)",
                 }}
               />
@@ -126,12 +173,24 @@ export function AdminSidebar() {
               </div>
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold tracking-tight" style={{ color: "var(--brand-primary)" }}>JLMIRROR</h2>
-              <p className="text-[10px] truncate tracking-wide" style={{ color: "var(--text-muted)" }}>Portal de Monitoramento</p>
+              <h2
+                className="text-sm font-bold tracking-tight"
+                style={{ color: "var(--brand-primary)" }}
+              >
+                JLMIRROR
+              </h2>
+              <p
+                className="text-[10px] truncate tracking-wide"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Portal de Monitoramento
+              </p>
             </div>
           </div>
 
-          <div className={`hidden md:flex items-center justify-center ${collapsed ? "" : "md:hidden"}`}>
+          <div
+            className={`hidden md:flex items-center justify-center ${collapsed ? "" : "md:hidden"}`}
+          >
             <LogoMark size={26} />
           </div>
 
@@ -147,7 +206,11 @@ export function AdminSidebar() {
             aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"}
             title={collapsed ? "Expandir" : "Recolher"}
           >
-            {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+            {collapsed ? (
+              <PanelLeftOpen size={14} />
+            ) : (
+              <PanelLeftClose size={14} />
+            )}
           </button>
         </div>
 
@@ -189,72 +252,111 @@ export function AdminSidebar() {
         )}
 
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 sidebar-nav-scroll">
-          {filteredSections.length === 0 && (
-            <div className="px-3 py-8 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+          {flagsLoading && (
+            <div
+              className="px-3 py-8 text-center text-xs"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Carregando módulos...
+            </div>
+          )}
+          {!flagsLoading && filteredSections.length === 0 && (
+            <div
+              className="px-3 py-8 text-center text-xs"
+              style={{ color: "var(--text-muted)" }}
+            >
               Nenhum resultado para "{query}"
             </div>
           )}
-          {filteredSections.map((section) => {
-            const expanded = isSectionExpanded(section);
-            const hasActive = sectionHasActive(section, pathname);
-            return (
-              <div key={section.title} className="mb-1">
-                {!collapsed && (
-                  <button
-                    onClick={() => toggleSection(section.title)}
-                    className="flex items-center justify-between w-full px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors group"
-                    style={{ color: hasActive ? "var(--brand-secondary)" : "var(--text-muted)" }}
-                  >
-                    <span>{section.title}</span>
-                    <ChevronDown
-                      size={12}
-                      className="shrink-0 transition-transform duration-200"
-                      style={{ transform: expanded ? "rotate(0deg)" : "rotate(-90deg)" }}
-                    />
-                  </button>
-                )}
-
-                {collapsed && (
-                  <div className="pt-3 pb-1 flex justify-center">
-                    <div
-                      className="h-px w-6"
-                      style={{ background: "var(--border-default)" }}
-                    />
-                  </div>
-                )}
-
-                <div
-                  className="space-y-0.5 overflow-hidden transition-all duration-200"
-                  style={{
-                    maxHeight: expanded ? "1000px" : "0px",
-                    opacity: expanded ? 1 : 0,
-                  }}
-                >
-                  {section.items.map((item) => {
-                    const active = isActive(pathname, item);
-                    return (
-                      <NavLinkItem
-                        key={item.label}
-                        item={item}
-                        active={active}
-                        collapsed={collapsed}
-                        onNavigate={() => setOpen(false)}
+          {!flagsLoading &&
+            filteredSections.map((section) => {
+              const expanded = isSectionExpanded(section);
+              const hasActive = sectionHasActive(section, pathname);
+              return (
+                <div key={section.title} className="mb-1">
+                  {!collapsed && (
+                    <button
+                      onClick={() => toggleSection(section.title)}
+                      className="flex items-center justify-between w-full px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors group"
+                      style={{
+                        color: hasActive
+                          ? "var(--brand-secondary)"
+                          : "var(--text-muted)",
+                      }}
+                    >
+                      <span>{section.title}</span>
+                      <ChevronDown
+                        size={12}
+                        className="shrink-0 transition-transform duration-200"
+                        style={{
+                          transform: expanded
+                            ? "rotate(0deg)"
+                            : "rotate(-90deg)",
+                        }}
                       />
-                    );
-                  })}
+                    </button>
+                  )}
+
+                  {collapsed && (
+                    <div className="pt-3 pb-1 flex justify-center">
+                      <div
+                        className="h-px w-6"
+                        style={{ background: "var(--border-default)" }}
+                      />
+                    </div>
+                  )}
+
+                  <div
+                    className="space-y-0.5 overflow-hidden transition-all duration-200"
+                    style={{
+                      maxHeight: expanded ? "1000px" : "0px",
+                      opacity: expanded ? 1 : 0,
+                    }}
+                  >
+                    {section.items.map((item) => {
+                      const active = isActive(pathname, item);
+                      return (
+                        <NavLinkItem
+                          key={item.label}
+                          item={item}
+                          active={active}
+                          collapsed={collapsed}
+                          onNavigate={() => setOpen(false)}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
         </nav>
 
-        <div className="px-3 pt-3 pb-3 space-y-2" style={{ borderTop: "1px solid var(--border-subtle)" }}>
-          <div className={`flex items-center gap-2.5 ${collapsed ? "md:hidden" : ""}`}>
+        <div
+          className="px-3 pt-3 pb-3 space-y-2"
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
+        >
+          <div
+            className={`flex items-center gap-2.5 ${collapsed ? "md:hidden" : ""}`}
+          >
             <div
               className="relative flex items-center justify-center rounded-full shrink-0"
-              style={{ width: 34, height: 34, background: "var(--brand-glow)", border: "1px solid var(--brand-primary)" }}
+              style={{
+                width: 34,
+                height: 34,
+                background: "var(--brand-glow)",
+                border: "1px solid var(--brand-primary)",
+              }}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--brand-primary)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
@@ -267,10 +369,16 @@ export function AdminSidebar() {
               />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+              <div
+                className="text-sm font-semibold truncate"
+                style={{ color: "var(--text-primary)" }}
+              >
                 Administrador
               </div>
-              <div className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>
+              <div
+                className="text-[10px] truncate"
+                style={{ color: "var(--text-muted)" }}
+              >
                 JL Informática
               </div>
             </div>
@@ -278,10 +386,26 @@ export function AdminSidebar() {
 
           <div
             className={`hidden md:flex items-center justify-center shrink-0 ${collapsed ? "" : "md:hidden"}`}
-            style={{ width: 34, height: 34, background: "var(--brand-glow)", border: "1px solid var(--brand-primary)", borderRadius: "50%", margin: "0 auto" }}
+            style={{
+              width: 34,
+              height: 34,
+              background: "var(--brand-glow)",
+              border: "1px solid var(--brand-primary)",
+              borderRadius: "50%",
+              margin: "0 auto",
+            }}
             title="Administrador — JL Informática"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--brand-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--brand-primary)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
               <circle cx="12" cy="7" r="4" />
             </svg>
@@ -307,7 +431,11 @@ function NavLinkItem({
   onNavigate: () => void;
 }) {
   const linkStyle: React.CSSProperties = {
-    color: active ? "var(--brand-primary)" : item.external ? "var(--text-muted)" : "var(--text-secondary)",
+    color: active
+      ? "var(--brand-primary)"
+      : item.external
+        ? "var(--text-muted)"
+        : "var(--text-secondary)",
     background: active ? "var(--brand-glow)" : "transparent",
     textDecoration: "none",
     justifyContent: collapsed ? "center" : "flex-start",
@@ -322,7 +450,8 @@ function NavLinkItem({
         <span
           className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r-full"
           style={{
-            background: "linear-gradient(180deg, var(--brand-secondary), var(--brand-primary))",
+            background:
+              "linear-gradient(180deg, var(--brand-secondary), var(--brand-primary))",
             boxShadow: "0 0 8px var(--brand-glow)",
           }}
         />
@@ -331,14 +460,17 @@ function NavLinkItem({
         <span
           className="absolute left-0 top-0 bottom-0 w-0.5"
           style={{
-            background: "linear-gradient(180deg, var(--brand-secondary), var(--brand-primary))",
+            background:
+              "linear-gradient(180deg, var(--brand-secondary), var(--brand-primary))",
             boxShadow: "0 0 8px var(--brand-glow)",
           }}
         />
       )}
       <span
         className="shrink-0 transition-transform duration-150 group-hover/item:scale-110"
-        style={{ filter: active ? "drop-shadow(0 0 4px var(--brand-glow))" : "none" }}
+        style={{
+          filter: active ? "drop-shadow(0 0 4px var(--brand-glow))" : "none",
+        }}
       >
         {item.icon}
       </span>
@@ -371,7 +503,9 @@ function NavLinkItem({
     onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
       if (!active) {
         e.currentTarget.style.background = "transparent";
-        e.currentTarget.style.color = item.external ? "var(--text-muted)" : "var(--text-secondary)";
+        e.currentTarget.style.color = item.external
+          ? "var(--text-muted)"
+          : "var(--text-secondary)";
       }
     },
   };

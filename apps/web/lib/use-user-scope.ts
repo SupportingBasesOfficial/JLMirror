@@ -2,51 +2,6 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { useState, useEffect } from "react";
-
-interface UserScopeData {
-  scope: "global" | "tenant";
-  isLoading: boolean;
-}
-
-// Hook que detecta se o usuário é JL staff (scope=global) ou cliente (scope=tenant)
-// Busca do /api/v1/auth/me que retorna o scope do JWT
-export function useUserScope(): UserScopeData {
-  const [scope, setScope] = useState<"global" | "tenant">("tenant");
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function fetchScope() {
-      try {
-        const res = await fetch("/api/v1/auth/me", {
-          credentials: "include",
-        });
-        if (res.status === 401) {
-          // Token ausente ou expirado — redireciona para login
-          window.location.href = "/auth/login";
-          return;
-        }
-        if (res.ok) {
-          const data = await res.json();
-          if (mounted) {
-            setScope(data.scope ?? "tenant");
-          }
-        }
-        // Outros erros (500, 502) — mantem scope default "tenant" (mais restritivo)
-      } catch {
-        // Erro de rede — mantem scope default "tenant" (mais restritivo)
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    }
-
-    fetchScope();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  return { scope, isLoading };
-}
+// Re-exporta do UserScopeProvider context para manter compatibilidade
+// com componentes que importam de @/lib/use-user-scope
+export { useUserScope } from "@/components/user-scope-provider";

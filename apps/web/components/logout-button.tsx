@@ -25,6 +25,7 @@ export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
     <button
       onClick={handleLogout}
       disabled={loading}
+      data-testid="logout"
       className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all text-left"
       style={{
         color: loading ? "var(--text-muted)" : "var(--status-error-text)",
@@ -47,7 +48,9 @@ export function LogoutButton({ collapsed = false }: { collapsed?: boolean }) {
       }}
     >
       <LogOut size={14} className="shrink-0" />
-      <span className={collapsed ? "md:hidden" : ""}>{loading ? "Saindo..." : "Sair"}</span>
+      <span className={collapsed ? "md:hidden" : ""}>
+        {loading ? "Saindo..." : "Sair"}
+      </span>
     </button>
   );
 }

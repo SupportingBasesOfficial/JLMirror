@@ -4,6 +4,33 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const publicRoutes = ["/", "/auth/login"];
 
+// Rotas que exigem scope global (JL staff). Bloqueio server-side precoce.
+// A verificacao criptografica do JWT continua no backend via jwtAuth.
+const ADMIN_ONLY_PREFIXES = [
+  "/admin",
+  "/settings/modules",
+  "/white-label",
+  "/status-page-admin",
+];
+
+// Decodifica o payload de um JWT sem verificar assinatura.
+// Usado apenas para bloqueio precoce no middleware (edge).
+// O backend valida criptograficamente via jwtAuth + RS256.
+function decodeJwtPayload(
+  token: string,
+): { scope?: string; type?: string } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    // Base64url -> Base64
+    const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payloadJson = atob(payloadB64);
+    return JSON.parse(payloadJson);
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, origin } = request.nextUrl;
   const isPublicRoute = publicRoutes.some(
@@ -17,7 +44,12 @@ export async function middleware(request: NextRequest) {
     const originHeader = request.headers.get("origin");
     if (!originHeader || originHeader !== origin) {
       return NextResponse.json(
-        { error: { code: "CSRF_INVALID", message: "Origem da requisição inválida" } },
+        {
+          error: {
+            code: "CSRF_INVALID",
+            message: "Origem da requisição inválida",
+          },
+        },
         { status: 403 },
       );
     }
@@ -32,6 +64,20 @@ export async function middleware(request: NextRequest) {
 
   if (!accessToken) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
+  // Bloqueio precoce de rotas admin-only para usuarios nao-global
+  // Decodifica o payload do JWT (sem verificar assinatura — leitura apenas)
+  // A verificacao criptografica completa continua no backend via jwtAuth
+  const isAdminOnlyRoute = ADMIN_ONLY_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
+  if (isAdminOnlyRoute) {
+    const payload = decodeJwtPayload(accessToken.value);
+    if (!payload || payload.scope !== "global") {
+      // Usuario sem scope global tentando acessar rota admin — redireciona para dashboard
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    }
   }
 
   return NextResponse.next();

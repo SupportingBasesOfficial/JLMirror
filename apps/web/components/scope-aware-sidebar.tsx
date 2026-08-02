@@ -4,10 +4,11 @@
 
 import { AdminSidebar } from "@/components/admin-sidebar";
 import { ClientSidebar } from "@/components/client-sidebar";
-import { useUserScope } from "@/lib/use-user-scope";
+import { useUserScope } from "@/components/user-scope-provider";
 
 // Componente wrapper que renderiza AdminSidebar ou ClientSidebar
 // baseado no scope do usuário (global = JL staff, tenant = cliente)
+// Usa UserScopeProvider (context) — sem fetch proprio
 export function ScopeAwareSidebar() {
   const { scope, isLoading } = useUserScope();
 

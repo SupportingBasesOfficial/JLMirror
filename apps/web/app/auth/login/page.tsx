@@ -10,7 +10,10 @@ import {
   MagneticButton,
   SpotlightCard,
 } from "@/components/cursor-effects";
-import { generateDeviceFingerprint, getDeviceLabel } from "@/lib/device-fingerprint";
+import {
+  generateDeviceFingerprint,
+  getDeviceLabel,
+} from "@/lib/device-fingerprint";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -62,7 +65,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      // Redirect por scope: global (JL staff) -> /admin, tenant (cliente) -> /dashboard
+      const userScope = data.scope ?? "tenant";
+      const targetRoute = userScope === "global" ? "/admin" : "/dashboard";
+      router.push(targetRoute);
       router.refresh();
     } catch {
       setError("Erro de conexão com o servidor");
@@ -81,7 +87,10 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/mfa-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge_token: challengeToken, code: mfaCode }),
+        body: JSON.stringify({
+          challenge_token: challengeToken,
+          code: mfaCode,
+        }),
       });
 
       const data = await res.json();
@@ -97,7 +106,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
+      // Redirect por scope: global (JL staff) -> /admin, tenant (cliente) -> /dashboard
+      const userScope = data.scope ?? "tenant";
+      const targetRoute = userScope === "global" ? "/admin" : "/dashboard";
+      router.push(targetRoute);
       router.refresh();
     } catch {
       setError("Erro de conexão com o servidor");
@@ -121,7 +133,8 @@ export default function LoginPage() {
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    background: "radial-gradient(circle, rgba(27,168,152,0.08) 0%, transparent 70%)",
+    background:
+      "radial-gradient(circle, rgba(27,168,152,0.08) 0%, transparent 70%)",
     pointerEvents: "none",
   };
 
@@ -129,7 +142,8 @@ export default function LoginPage() {
     background: "rgba(13, 18, 24, 0.85)",
     backdropFilter: "blur(12px)",
     border: "1px solid #1E2530",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(27, 168, 152, 0.05)",
+    boxShadow:
+      "0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(27, 168, 152, 0.05)",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -176,7 +190,8 @@ export default function LoginPage() {
           <div
             className="absolute top-0 left-0 right-0 h-px"
             style={{
-              background: "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
+              background:
+                "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
             }}
           />
 
@@ -233,7 +248,9 @@ export default function LoginPage() {
                   pattern="\d{6}"
                   maxLength={6}
                   value={mfaCode}
-                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) =>
+                    setMfaCode(e.target.value.replace(/\D/g, ""))
+                  }
                   onFocus={handleInputFocus}
                   onBlur={handleInputBlur}
                   required
@@ -259,7 +276,8 @@ export default function LoginPage() {
                 strength={0.2}
                 className="w-full rounded-md py-2.5 text-sm font-bold transition-opacity disabled:opacity-50"
                 style={{
-                  background: "linear-gradient(135deg, #1BA898 0%, #35D0C4 100%)",
+                  background:
+                    "linear-gradient(135deg, #1BA898 0%, #35D0C4 100%)",
                   color: "#0B1015",
                   cursor: loading ? "not-allowed" : "pointer",
                   boxShadow: "0 0 20px rgba(27,168,152,0.25)",
@@ -306,12 +324,16 @@ export default function LoginPage() {
         <div
           className="absolute top-0 left-0 right-0 h-px"
           style={{
-            background: "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
+            background:
+              "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
           }}
         />
 
         {/* Indicadores de status no canto */}
-        <div className="absolute top-6 left-6 flex items-center gap-2" style={{ zIndex: 10 }}>
+        <div
+          className="absolute top-6 left-6 flex items-center gap-2"
+          style={{ zIndex: 10 }}
+        >
           <span
             className="rounded-full"
             style={{
@@ -322,7 +344,10 @@ export default function LoginPage() {
               animation: "pulse 2s infinite",
             }}
           />
-          <span className="text-[9px] uppercase tracking-widest" style={{ color: "#6E7F88" }}>
+          <span
+            className="text-[9px] uppercase tracking-widest"
+            style={{ color: "#6E7F88" }}
+          >
             Sistema Online
           </span>
         </div>
@@ -457,7 +482,10 @@ export default function LoginPage() {
           </form>
 
           {/* Footer do card */}
-          <div className="mt-6 pt-5 border-t flex items-center justify-center gap-2" style={{ borderColor: "#1E2530" }}>
+          <div
+            className="mt-6 pt-5 border-t flex items-center justify-center gap-2"
+            style={{ borderColor: "#1E2530" }}
+          >
             <span
               className="rounded-full"
               style={{
@@ -467,7 +495,10 @@ export default function LoginPage() {
                 animation: "pulse 2s infinite",
               }}
             />
-            <span className="text-[9px] uppercase tracking-widest" style={{ color: "#6E7F88" }}>
+            <span
+              className="text-[9px] uppercase tracking-widest"
+              style={{ color: "#6E7F88" }}
+            >
               Conexão Segura • RLS Ativo
             </span>
           </div>
