@@ -43,8 +43,13 @@ export async function apiFetch<T>(
     const res = await doFetch(url, options, controller);
 
     if (!res.ok) {
+      if (res.status === 401) {
+        window.location.href = "/auth/login";
+        throw new Error("Sessão expirada");
+      }
       const raw = await res.text();
-      let errJson: { error?: { code?: string; message?: string } } | null = null;
+      let errJson: { error?: { code?: string; message?: string } } | null =
+        null;
       try {
         errJson = JSON.parse(raw);
       } catch {
@@ -84,8 +89,13 @@ export async function apiFetchWithProgress<T>(
     const res = await doFetch(url, options, controller);
 
     if (!res.ok) {
+      if (res.status === 401) {
+        window.location.href = "/auth/login";
+        throw new Error("Sessão expirada");
+      }
       const raw = await res.text();
-      let errJson: { error?: { code?: string; message?: string } } | null = null;
+      let errJson: { error?: { code?: string; message?: string } } | null =
+        null;
       try {
         errJson = JSON.parse(raw);
       } catch {

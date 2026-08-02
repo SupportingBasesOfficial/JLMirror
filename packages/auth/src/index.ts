@@ -55,7 +55,14 @@ function getAudience(): string {
 export function signAccessToken(opts: SignOptions): string {
   const jti = crypto.randomUUID();
   return jwt.sign(
-    { type: "access", jti, tenant_id: opts.tenant_id, roles: opts.roles, scope: opts.scope, ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}) },
+    {
+      type: "access",
+      jti,
+      tenant_id: opts.tenant_id,
+      roles: opts.roles,
+      scope: opts.scope,
+      ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}),
+    },
     getPrivateKey(),
     {
       algorithm: "RS256",
@@ -71,7 +78,14 @@ export function signAccessToken(opts: SignOptions): string {
 export function signRefreshToken(opts: SignOptions): string {
   const jti = crypto.randomUUID();
   return jwt.sign(
-    { type: "refresh", jti, tenant_id: opts.tenant_id, roles: opts.roles, scope: opts.scope, ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}) },
+    {
+      type: "refresh",
+      jti,
+      tenant_id: opts.tenant_id,
+      roles: opts.roles,
+      scope: opts.scope,
+      ...(opts.tenant_ids ? { tenant_ids: opts.tenant_ids } : {}),
+    },
     getPrivateKey(),
     {
       algorithm: "RS256",
@@ -119,7 +133,10 @@ export async function isTokenRevoked(jti: string): Promise<boolean> {
 }
 
 // Revoga um token removendo seu jti do Redis
-export async function revokeToken(jti: string, ttlSeconds: number): Promise<void> {
+export async function revokeToken(
+  jti: string,
+  ttlSeconds: number,
+): Promise<void> {
   await cacheSet(`revoked:jti:${jti}`, "1", ttlSeconds);
   await cacheDel(`refresh:jti:${jti}`);
 }
@@ -131,7 +148,10 @@ export async function isRefreshJtiValid(jti: string): Promise<boolean> {
 }
 
 // TOTP — setup e verificacao
-export function generateTotpSetup(email: string): { secret: string; otpauthUrl: string } {
+export function generateTotpSetup(email: string): {
+  secret: string;
+  otpauthUrl: string;
+} {
   const secret = authenticator.generateSecret();
   const otpauthUrl = authenticator.keyuri(email, "JLMIRROR", secret);
   return { secret, otpauthUrl };
@@ -169,9 +189,12 @@ export async function getPermissionChecker(
   roles: string[],
   fetcher: (userId: string) => Promise<string[]>,
 ): Promise<(permission: string) => boolean> {
-  // Admin tem todas as permissoes (global:admin, jl:superadmin, admin, super_admin)
-  const isAdmin = roles.some(r => r === "admin" || r === "super_admin" || r === "jl:superadmin" || r.endsWith(":admin") || r.startsWith("admin:"));
-  if (isAdmin) {
+  // Apenas roles globais (JL staff) tem bypass total de permissões
+  // tenant:admin NÃO deve ter acesso a rotas admin globais
+  const isGlobalAdmin = roles.some(
+    (r) => r === "global:admin" || r === "jl:superadmin",
+  );
+  if (isGlobalAdmin) {
     return () => true;
   }
 
@@ -219,7 +242,9 @@ export class GoogleOAuthProvider {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async exchangeCode(code: string): Promise<{ access_token: string; id_token: string }> {
+  async exchangeCode(
+    code: string,
+  ): Promise<{ access_token: string; id_token: string }> {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -235,7 +260,9 @@ export class GoogleOAuthProvider {
     return res.json() as Promise<{ access_token: string; id_token: string }>;
   }
 
-  async getUserInfo(accessToken: string): Promise<{ email: string; name: string }> {
+  async getUserInfo(
+    accessToken: string,
+  ): Promise<{ email: string; name: string }> {
     const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -258,12 +285,14 @@ export class LdapAuthProvider {
     return !!(this.ldapUrl && this.baseDn);
   }
 
-  async authenticate(username: string, password: string): Promise<{ dn: string; email: string } | null> {
+  async authenticate(
+    _username: string,
+    _password: string,
+  ): Promise<{ dn: string; email: string } | null> {
     // Implementacao LDAP simplificada — usa bind simples
     // Em producao, usar ldapjs com TLS
     if (!this.isConfigured()) return null;
 
-    const userDn = `uid=${username},${this.baseDn}`;
     // Placeholder — integracao real depende do schema LDAP do cliente
     throw new Error("LDAP auth requer configuracao especifica do cliente");
   }

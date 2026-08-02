@@ -23,21 +23,29 @@ export function useUserScope(): UserScopeData {
         const res = await fetch("/api/v1/auth/me", {
           credentials: "include",
         });
+        if (res.status === 401) {
+          // Token ausente ou expirado — redireciona para login
+          window.location.href = "/auth/login";
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           if (mounted) {
             setScope(data.scope ?? "tenant");
           }
         }
+        // Outros erros (500, 502) — mantem scope default "tenant" (mais restritivo)
       } catch {
-        // Em caso de erro, assume tenant (mais restritivo)
+        // Erro de rede — mantem scope default "tenant" (mais restritivo)
       } finally {
         if (mounted) setIsLoading(false);
       }
     }
 
     fetchScope();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return { scope, isLoading };

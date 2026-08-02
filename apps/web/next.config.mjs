@@ -55,6 +55,10 @@ const nextConfig = {
         source: "/api/zabbix/:path*",
         destination: "/api/v1/zabbix/:path*",
       },
+      {
+        source: "/api/admin/:path*",
+        destination: "/api/v1/admin/:path*",
+      },
     ];
   },
 };

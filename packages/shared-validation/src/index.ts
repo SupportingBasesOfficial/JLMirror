@@ -45,7 +45,9 @@ export const assignRolePermissionsSchema = z.object({
   role_id: z.string().uuid(),
   permissions: z.array(z.string()),
 });
-export type AssignRolePermissionsInput = z.infer<typeof assignRolePermissionsSchema>;
+export type AssignRolePermissionsInput = z.infer<
+  typeof assignRolePermissionsSchema
+>;
 
 // ========== Profile Schemas ==========
 export const updateProfileSchema = z.object({
@@ -68,7 +70,9 @@ export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 export const updateTenantSettingsSchema = z.object({
   settings: z.record(z.unknown()),
 });
-export type UpdateTenantSettingsInput = z.infer<typeof updateTenantSettingsSchema>;
+export type UpdateTenantSettingsInput = z.infer<
+  typeof updateTenantSettingsSchema
+>;
 
 export const testSmtpSchema = z.object({
   smtp_host: z.string().min(1),
@@ -91,14 +95,18 @@ export const zabbixCreateHostSchema = z.object({
   host: z.string().min(1),
   name: z.string().min(1),
   groupids: z.array(z.string()).min(1),
-  interfaces: z.array(z.object({
-    type: z.number().int().default(1),
-    ip: z.string().min(1),
-    dns: z.string().optional(),
-    port: z.string().default("10050"),
-    main: z.number().int().default(1),
-    useip: z.number().int().default(1),
-  })).min(1),
+  interfaces: z
+    .array(
+      z.object({
+        type: z.number().int().default(1),
+        ip: z.string().min(1),
+        dns: z.string().optional(),
+        port: z.string().default("10050"),
+        main: z.number().int().default(1),
+        useip: z.number().int().default(1),
+      }),
+    )
+    .min(1),
   templateids: z.array(z.string()).optional(),
 });
 export type ZabbixCreateHostInput = z.infer<typeof zabbixCreateHostSchema>;
@@ -107,14 +115,18 @@ export const zabbixUpdateHostSchema = z.object({
   host: z.string().optional(),
   name: z.string().optional(),
   groupids: z.array(z.string()).optional(),
-  interfaces: z.array(z.object({
-    type: z.number().int(),
-    ip: z.string(),
-    dns: z.string().optional(),
-    port: z.string(),
-    main: z.number().int(),
-    useip: z.number().int(),
-  })).optional(),
+  interfaces: z
+    .array(
+      z.object({
+        type: z.number().int(),
+        ip: z.string(),
+        dns: z.string().optional(),
+        port: z.string(),
+        main: z.number().int(),
+        useip: z.number().int(),
+      }),
+    )
+    .optional(),
   templateids: z.array(z.string()).optional(),
   status: z.number().int().optional(),
 });
@@ -148,7 +160,9 @@ export const zabbixCreateTriggerSchema = z.object({
   expression: z.string().min(1),
   priority: z.number().int().min(0).max(5).default(1),
 });
-export type ZabbixCreateTriggerInput = z.infer<typeof zabbixCreateTriggerSchema>;
+export type ZabbixCreateTriggerInput = z.infer<
+  typeof zabbixCreateTriggerSchema
+>;
 
 export const zabbixUpdateTriggerSchema = z.object({
   description: z.string().optional(),
@@ -156,17 +170,23 @@ export const zabbixUpdateTriggerSchema = z.object({
   priority: z.number().int().min(0).max(5).optional(),
   status: z.number().int().optional(),
 });
-export type ZabbixUpdateTriggerInput = z.infer<typeof zabbixUpdateTriggerSchema>;
+export type ZabbixUpdateTriggerInput = z.infer<
+  typeof zabbixUpdateTriggerSchema
+>;
 
 export const zabbixCreateHostGroupSchema = z.object({
   name: z.string().min(1),
 });
-export type ZabbixCreateHostGroupInput = z.infer<typeof zabbixCreateHostGroupSchema>;
+export type ZabbixCreateHostGroupInput = z.infer<
+  typeof zabbixCreateHostGroupSchema
+>;
 
 export const zabbixUpdateHostGroupSchema = z.object({
   name: z.string().min(1),
 });
-export type ZabbixUpdateHostGroupInput = z.infer<typeof zabbixUpdateHostGroupSchema>;
+export type ZabbixUpdateHostGroupInput = z.infer<
+  typeof zabbixUpdateHostGroupSchema
+>;
 
 export const zabbixCreateMaintenanceSchema = z.object({
   name: z.string().min(1),
@@ -175,13 +195,19 @@ export const zabbixCreateMaintenanceSchema = z.object({
   active_since: z.number().int(),
   active_till: z.number().int(),
   hostids: z.array(z.string()).min(1),
-  timeperiods: z.array(z.object({
-    timeperiod_type: z.number().int().default(0),
-    start_date: z.number().int(),
-    period: z.number().int().default(3600),
-  })).min(1),
+  timeperiods: z
+    .array(
+      z.object({
+        timeperiod_type: z.number().int().default(0),
+        start_date: z.number().int(),
+        period: z.number().int().default(3600),
+      }),
+    )
+    .min(1),
 });
-export type ZabbixCreateMaintenanceInput = z.infer<typeof zabbixCreateMaintenanceSchema>;
+export type ZabbixCreateMaintenanceInput = z.infer<
+  typeof zabbixCreateMaintenanceSchema
+>;
 
 export const zabbixDashboardPrefsSchema = z.object({
   device_type: z.string().default("auto"),
@@ -190,7 +216,9 @@ export const zabbixDashboardPrefsSchema = z.object({
   hidden_metrics: z.array(z.string()).default([]),
   pinned_metrics: z.array(z.string()).default([]),
 });
-export type ZabbixDashboardPrefsInput = z.infer<typeof zabbixDashboardPrefsSchema>;
+export type ZabbixDashboardPrefsInput = z.infer<
+  typeof zabbixDashboardPrefsSchema
+>;
 
 // ========== Zabbix User Schemas ==========
 export const zabbixCreateUserSchema = z.object({
@@ -215,21 +243,31 @@ export type ZabbixUpdateUserInput = z.infer<typeof zabbixUpdateUserSchema>;
 
 export const zabbixCreateUserGroupSchema = z.object({
   name: z.string().min(1),
-  permission: z.object({
-    id: z.string().min(1),
-    permission: z.number().int().min(0).max(4),
-  }).optional(),
+  permission: z
+    .object({
+      id: z.string().min(1),
+      permission: z.number().int().min(0).max(4),
+    })
+    .optional(),
 });
-export type ZabbixCreateUserGroupInput = z.infer<typeof zabbixCreateUserGroupSchema>;
+export type ZabbixCreateUserGroupInput = z.infer<
+  typeof zabbixCreateUserGroupSchema
+>;
 
 export const zabbixUpdateUserGroupSchema = z.object({
   name: z.string().optional(),
-  rights: z.array(z.object({
-    id: z.string().min(1),
-    permission: z.number().int().min(0).max(4),
-  })).optional(),
+  rights: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        permission: z.number().int().min(0).max(4),
+      }),
+    )
+    .optional(),
 });
-export type ZabbixUpdateUserGroupInput = z.infer<typeof zabbixUpdateUserGroupSchema>;
+export type ZabbixUpdateUserGroupInput = z.infer<
+  typeof zabbixUpdateUserGroupSchema
+>;
 
 // ========== User Host Group Assignment ==========
 export const assignUserHostGroupSchema = z.object({
@@ -237,7 +275,9 @@ export const assignUserHostGroupSchema = z.object({
   zabbix_host_group_id: z.string().min(1),
   zabbix_host_group_name: z.string().optional(),
 });
-export type AssignUserHostGroupInput = z.infer<typeof assignUserHostGroupSchema>;
+export type AssignUserHostGroupInput = z.infer<
+  typeof assignUserHostGroupSchema
+>;
 
 // ========== Monitoring Schemas ==========
 export const monitoringHistoryQuerySchema = z.object({
@@ -247,7 +287,9 @@ export const monitoringHistoryQuerySchema = z.object({
   to: z.string().or(z.number()),
   value_type: z.number().int().optional(),
 });
-export type MonitoringHistoryQueryInput = z.infer<typeof monitoringHistoryQuerySchema>;
+export type MonitoringHistoryQueryInput = z.infer<
+  typeof monitoringHistoryQuerySchema
+>;
 
 export const monitoringProblemsQuerySchema = z.object({
   device_id: z.string().optional(),
@@ -255,7 +297,9 @@ export const monitoringProblemsQuerySchema = z.object({
   recent: z.boolean().optional(),
   severity_min: z.number().int().optional(),
 });
-export type MonitoringProblemsQueryInput = z.infer<typeof monitoringProblemsQuerySchema>;
+export type MonitoringProblemsQueryInput = z.infer<
+  typeof monitoringProblemsQuerySchema
+>;
 
 export const monitoringEventsQuerySchema = z.object({
   device_id: z.string().optional(),
@@ -263,18 +307,24 @@ export const monitoringEventsQuerySchema = z.object({
   to: z.string().or(z.number()).optional(),
   value: z.number().int().optional(),
 });
-export type MonitoringEventsQueryInput = z.infer<typeof monitoringEventsQuerySchema>;
+export type MonitoringEventsQueryInput = z.infer<
+  typeof monitoringEventsQuerySchema
+>;
 
 export const monitoringGraphQuerySchema = z.object({
   device_id: z.string().min(1),
 });
-export type MonitoringGraphQueryInput = z.infer<typeof monitoringGraphQuerySchema>;
+export type MonitoringGraphQueryInput = z.infer<
+  typeof monitoringGraphQuerySchema
+>;
 
 export const monitoringMetricsQuerySchema = z.object({
   device_id: z.string().min(1),
   key_search: z.string().optional(),
 });
-export type MonitoringMetricsQueryInput = z.infer<typeof monitoringMetricsQuerySchema>;
+export type MonitoringMetricsQueryInput = z.infer<
+  typeof monitoringMetricsQuerySchema
+>;
 
 // ========== SLA Schemas ==========
 export const createServiceSchema = z.object({
@@ -300,14 +350,18 @@ export const createMaintenanceWindowSchema = z.object({
   end_time: z.string(),
   reason: z.string().min(1),
 });
-export type CreateMaintenanceWindowInput = z.infer<typeof createMaintenanceWindowSchema>;
+export type CreateMaintenanceWindowInput = z.infer<
+  typeof createMaintenanceWindowSchema
+>;
 
 export const updateMaintenanceWindowSchema = z.object({
   start_time: z.string().optional(),
   end_time: z.string().optional(),
   reason: z.string().optional(),
 });
-export type UpdateMaintenanceWindowInput = z.infer<typeof updateMaintenanceWindowSchema>;
+export type UpdateMaintenanceWindowInput = z.infer<
+  typeof updateMaintenanceWindowSchema
+>;
 
 export const createServiceIncidentSchema = z.object({
   service_id: z.string().uuid(),
@@ -315,7 +369,9 @@ export const createServiceIncidentSchema = z.object({
   description: z.string().optional(),
   severity: z.number().int().min(0).max(5),
 });
-export type CreateServiceIncidentInput = z.infer<typeof createServiceIncidentSchema>;
+export type CreateServiceIncidentInput = z.infer<
+  typeof createServiceIncidentSchema
+>;
 
 export const updateServiceIncidentSchema = z.object({
   title: z.string().optional(),
@@ -324,7 +380,9 @@ export const updateServiceIncidentSchema = z.object({
   status: z.string().optional(),
   resolved_at: z.string().optional(),
 });
-export type UpdateServiceIncidentInput = z.infer<typeof updateServiceIncidentSchema>;
+export type UpdateServiceIncidentInput = z.infer<
+  typeof updateServiceIncidentSchema
+>;
 
 export const slaReportQuerySchema = z.object({
   from: z.string().optional(),
@@ -489,14 +547,18 @@ export const createScheduledTaskSchema = z.object({
   command: z.string().optional(),
   is_active: z.boolean().default(true),
 });
-export type CreateScheduledTaskInput = z.infer<typeof createScheduledTaskSchema>;
+export type CreateScheduledTaskInput = z.infer<
+  typeof createScheduledTaskSchema
+>;
 
 export const updateScheduledTaskSchema = z.object({
   name: z.string().optional(),
   cron: z.string().optional(),
   is_active: z.boolean().optional(),
 });
-export type UpdateScheduledTaskInput = z.infer<typeof updateScheduledTaskSchema>;
+export type UpdateScheduledTaskInput = z.infer<
+  typeof updateScheduledTaskSchema
+>;
 
 // ========== Report Schemas ==========
 export const createReportTemplateSchema = z.object({
@@ -505,7 +567,9 @@ export const createReportTemplateSchema = z.object({
   type: z.string().min(1),
   config: z.record(z.unknown()),
 });
-export type CreateReportTemplateInput = z.infer<typeof createReportTemplateSchema>;
+export type CreateReportTemplateInput = z.infer<
+  typeof createReportTemplateSchema
+>;
 
 export const createScheduledReportSchema = z.object({
   template_id: z.string().uuid(),
@@ -513,7 +577,9 @@ export const createScheduledReportSchema = z.object({
   recipients: z.array(z.string().email()),
   format: z.enum(["pdf", "csv", "json"]).default("pdf"),
 });
-export type CreateScheduledReportInput = z.infer<typeof createScheduledReportSchema>;
+export type CreateScheduledReportInput = z.infer<
+  typeof createScheduledReportSchema
+>;
 
 export const updateScheduledReportSchema = z.object({
   cron: z.string().optional(),
@@ -521,7 +587,9 @@ export const updateScheduledReportSchema = z.object({
   format: z.enum(["pdf", "csv", "json"]).optional(),
   is_active: z.boolean().optional(),
 });
-export type UpdateScheduledReportInput = z.infer<typeof updateScheduledReportSchema>;
+export type UpdateScheduledReportInput = z.infer<
+  typeof updateScheduledReportSchema
+>;
 
 // ========== Feature Flag Schemas ==========
 export const createFeatureFlagSchema = z.object({
@@ -600,7 +668,13 @@ export const updateK8sClusterSchema = z.object({
 });
 export type UpdateK8sClusterInput = z.infer<typeof updateK8sClusterSchema>;
 
-export const k8sResourceTypeSchema = z.enum(["pods", "services", "deployments", "nodes", "namespaces"]);
+export const k8sResourceTypeSchema = z.enum([
+  "pods",
+  "services",
+  "deployments",
+  "nodes",
+  "namespaces",
+]);
 export type K8sResourceType = z.infer<typeof k8sResourceTypeSchema>;
 
 // ========== KB Schemas ==========
@@ -638,7 +712,9 @@ export const createSslCertificateSchema = z.object({
   cert_pem: z.string().optional(),
   key_pem: z.string().optional(),
 });
-export type CreateSslCertificateInput = z.infer<typeof createSslCertificateSchema>;
+export type CreateSslCertificateInput = z.infer<
+  typeof createSslCertificateSchema
+>;
 
 export const updateSslCertificateSchema = z.object({
   issuer: z.string().optional(),
@@ -646,7 +722,9 @@ export const updateSslCertificateSchema = z.object({
   key_pem: z.string().optional(),
   is_active: z.boolean().optional(),
 });
-export type UpdateSslCertificateInput = z.infer<typeof updateSslCertificateSchema>;
+export type UpdateSslCertificateInput = z.infer<
+  typeof updateSslCertificateSchema
+>;
 
 // ========== System Health Schemas ==========
 export const createHealthCheckSchema = z.object({
@@ -713,7 +791,9 @@ export const createChangeRequestSchema = z.object({
   impact: z.string().min(1),
   rollback_plan: z.string().optional(),
 });
-export type CreateChangeRequestInput = z.infer<typeof createChangeRequestSchema>;
+export type CreateChangeRequestInput = z.infer<
+  typeof createChangeRequestSchema
+>;
 
 export const updateChangeRequestSchema = z.object({
   title: z.string().optional(),
@@ -721,7 +801,9 @@ export const updateChangeRequestSchema = z.object({
   priority: z.number().int().min(0).max(4).optional(),
   status: z.string().optional(),
 });
-export type UpdateChangeRequestInput = z.infer<typeof updateChangeRequestSchema>;
+export type UpdateChangeRequestInput = z.infer<
+  typeof updateChangeRequestSchema
+>;
 
 export const createChangeTaskSchema = z.object({
   change_request_id: z.string().uuid(),
@@ -744,13 +826,17 @@ export const createExportTemplateSchema = z.object({
   type: z.string().min(1),
   config: z.record(z.unknown()),
 });
-export type CreateExportTemplateInput = z.infer<typeof createExportTemplateSchema>;
+export type CreateExportTemplateInput = z.infer<
+  typeof createExportTemplateSchema
+>;
 
 export const updateExportTemplateSchema = z.object({
   name: z.string().optional(),
   config: z.record(z.unknown()).optional(),
 });
-export type UpdateExportTemplateInput = z.infer<typeof updateExportTemplateSchema>;
+export type UpdateExportTemplateInput = z.infer<
+  typeof updateExportTemplateSchema
+>;
 
 export const createDataExportSchema = z.object({
   template_id: z.string().uuid().optional(),
@@ -919,16 +1005,27 @@ export const createClientContactSchema = z.object({
   phone: z.string().optional(),
   company_id: z.string().uuid().optional(),
   role: z.string().optional(),
+  department: z.string().optional(),
+  is_primary: z.boolean().optional().default(false),
+  notes: z.string().optional(),
 });
-export type CreateClientContactInput = z.infer<typeof createClientContactSchema>;
+export type CreateClientContactInput = z.infer<
+  typeof createClientContactSchema
+>;
 
 export const updateClientContactSchema = z.object({
   name: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
   role: z.string().optional(),
+  department: z.string().optional(),
+  is_primary: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+  notes: z.string().optional(),
 });
-export type UpdateClientContactInput = z.infer<typeof updateClientContactSchema>;
+export type UpdateClientContactInput = z.infer<
+  typeof updateClientContactSchema
+>;
 
 export const upsertClientCompanySchema = z.object({
   name: z.string().min(1),
@@ -938,7 +1035,9 @@ export const upsertClientCompanySchema = z.object({
   address: z.string().optional(),
   phone: z.string().optional(),
 });
-export type UpsertClientCompanyInput = z.infer<typeof upsertClientCompanySchema>;
+export type UpsertClientCompanyInput = z.infer<
+  typeof upsertClientCompanySchema
+>;
 
 // ========== Report Schemas (additional) ==========
 export const createReportSchema = z.object({
@@ -1084,10 +1183,18 @@ export const finopsOptimizationSchema = z.object({
 export type FinopsOptimizationInput = z.infer<typeof finopsOptimizationSchema>;
 
 export const finopsOptimizationStatusSchema = z.object({
-  status: z.enum(["identified", "approved", "in_progress", "implemented", "rejected"]),
+  status: z.enum([
+    "identified",
+    "approved",
+    "in_progress",
+    "implemented",
+    "rejected",
+  ]),
   actual_savings_monthly: z.number().optional(),
 });
-export type FinopsOptimizationStatusInput = z.infer<typeof finopsOptimizationStatusSchema>;
+export type FinopsOptimizationStatusInput = z.infer<
+  typeof finopsOptimizationStatusSchema
+>;
 
 export const finopsBudgetSchema = z.object({
   month: z.number().int().min(1).max(12),
@@ -1102,7 +1209,13 @@ export type FinopsBudgetInput = z.infer<typeof finopsBudgetSchema>;
 // ========== ITSM Schemas ==========
 export const itsmConnectorSchema = z.object({
   name: z.string().min(1),
-  connector_type: z.enum(["jira", "freshservice", "servicenow", "zendesk", "custom"]),
+  connector_type: z.enum([
+    "jira",
+    "freshservice",
+    "servicenow",
+    "zendesk",
+    "custom",
+  ]),
   base_url: z.string().min(1),
   auth_type: z.string().min(1),
   api_key: z.string().optional(),
@@ -1157,15 +1270,19 @@ export const clientPortalUserSchema = z.object({
 export type ClientPortalUserInput = z.infer<typeof clientPortalUserSchema>;
 
 // ========== Marketplace Schemas ==========
-export const marketplaceInstallSchema = z.object({
-  config: z.record(z.unknown()).optional(),
-}).optional();
+export const marketplaceInstallSchema = z
+  .object({
+    config: z.record(z.unknown()).optional(),
+  })
+  .optional();
 export type MarketplaceInstallInput = z.infer<typeof marketplaceInstallSchema>;
 
 export const marketplaceConfigureSchema = z.object({
   config: z.record(z.unknown()).optional(),
 });
-export type MarketplaceConfigureInput = z.infer<typeof marketplaceConfigureSchema>;
+export type MarketplaceConfigureInput = z.infer<
+  typeof marketplaceConfigureSchema
+>;
 
 // ========== Predictions Schemas ==========
 export const predictionAnalyzeSchema = z.object({
