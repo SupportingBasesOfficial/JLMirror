@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { statusPageConfigSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const statusPageRoute = new Hono();
@@ -123,25 +125,11 @@ statusPageRoute.get("/admin/config", jwtAuth, tenantContext, requirePermission("
 });
 
 // PUT /api/v1/status-page/admin/config — cria ou atualiza config (upsert)
-statusPageRoute.put("/admin/config", jwtAuth, tenantContext, requirePermission("status_page:manage"), async (c) => {
+statusPageRoute.put("/admin/config", jwtAuth, tenantContext, requirePermission("status_page:manage"), validate({ schema: statusPageConfigSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
-  const {
-    slug, page_title, company_name, logo_url, primary_color,
-    show_uptime, show_incident_history, show_sla_percentage, days_of_history,
-    support_email, support_url, is_published,
-  } = body;
-
-  if (!slug || !company_name) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "slug e company_name são obrigatórios" } }, 400);
-  }
-
-  // Valida slug (apenas letras, numeros, hifens)
-  if (!/^[a-z0-9-]+$/.test(slug)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Slug deve conter apenas letras minúsculas, números e hífens" } }, 400);
-  }
+  const body = c.get("validatedData") as { slug: string; page_title?: string; company_name: string; logo_url?: string; primary_color?: string; show_uptime?: boolean; show_incident_history?: boolean; show_sla_percentage?: boolean; days_of_history?: number; support_email?: string; support_url?: string; is_published?: boolean };
+  const { slug, page_title, company_name, logo_url, primary_color, show_uptime, show_incident_history, show_sla_percentage, days_of_history, support_email, support_url, is_published } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.status_pages

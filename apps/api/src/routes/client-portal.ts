@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { clientPortalUserSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const clientPortalRoute = new Hono();
@@ -48,16 +50,11 @@ clientPortalRoute.get("/users", jwtAuth, tenantContext, requirePermission("clien
 });
 
 // POST /api/v1/client-portal/users — cria usuario do portal
-clientPortalRoute.post("/users", jwtAuth, tenantContext, requirePermission("client_portal:manage"), async (c) => {
+clientPortalRoute.post("/users", jwtAuth, tenantContext, requirePermission("client_portal:manage"), validate({ schema: clientPortalUserSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { email: string; contact_name: string; company_name?: string; phone?: string; can_view_incidents?: boolean; can_view_sla?: boolean; can_view_services?: boolean; can_create_tickets?: boolean };
   const { email, contact_name, company_name, phone, can_view_incidents, can_view_sla, can_view_services, can_create_tickets } = body;
-
-  if (!email || !contact_name) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "email e contact_name são obrigatórios" } }, 400);
-  }
 
   // Gera token unico
   const { randomUUID } = await import("node:crypto");

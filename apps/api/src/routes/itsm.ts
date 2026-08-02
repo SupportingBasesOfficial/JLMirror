@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { itsmConnectorSchema, itsmCreateTicketSchema } from "@repo/shared-validation";
 import { createTicket, type ITSMConnectorConfig } from "../lib/itsm-connector.js";
 import "../types.js";
 
@@ -32,25 +34,12 @@ itsmRoute.get("/connectors", requirePermission("itsm:read"), async (c) => {
 });
 
 // POST /api/v1/itsm/connectors — cria connector
-itsmRoute.post("/connectors", requirePermission("itsm:write"), async (c) => {
+itsmRoute.post("/connectors", requirePermission("itsm:write"), validate({ schema: itsmConnectorSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { name: string; connector_type: string; base_url: string; auth_type: string; api_key?: string; username?: string; password?: string; bearer_token?: string; oauth_client_id?: string; oauth_client_secret?: string; oauth_token_url?: string; field_mapping?: Record<string, unknown>; sync_direction?: string; auto_create_on_incident?: boolean; auto_update_on_resolve?: boolean; is_active?: boolean };
 
-  const {
-    name, connector_type, base_url, auth_type,
-    api_key, username, password, bearer_token,
-    oauth_client_id, oauth_client_secret, oauth_token_url,
-    field_mapping, sync_direction, auto_create_on_incident, auto_update_on_resolve, is_active,
-  } = body;
-
-  if (!name || !connector_type || !base_url || !auth_type) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "name, connector_type, base_url e auth_type são obrigatórios" } }, 400);
-  }
-
-  if (!["jira", "freshservice", "servicenow", "zendesk", "custom"].includes(connector_type)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "connector_type inválido" } }, 400);
-  }
+  const { name, connector_type, base_url, auth_type, api_key, username, password, bearer_token, oauth_client_id, oauth_client_secret, oauth_token_url, field_mapping, sync_direction, auto_create_on_incident, auto_update_on_resolve, is_active } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.itsm_connectors
@@ -148,11 +137,11 @@ itsmRoute.post("/connectors/:id/test", requirePermission("itsm:write"), async (c
 });
 
 // POST /api/v1/itsm/connectors/:id/create-ticket — cria ticket no ITSM
-itsmRoute.post("/connectors/:id/create-ticket", requirePermission("itsm:write"), async (c) => {
+itsmRoute.post("/connectors/:id/create-ticket", requirePermission("itsm:write"), validate({ schema: itsmCreateTicketSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
   const connectorId = c.req.param("id");
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { title: string; description?: string; severity?: string; source_id?: string; source_type?: string; extra_fields?: Record<string, unknown> };
 
   const configResult = await query<ITSMConnectorConfig>(
     "SELECT * FROM public.itsm_connectors WHERE id = $1 AND tenant_id = $2 LIMIT 1",

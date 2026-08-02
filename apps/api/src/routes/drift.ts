@@ -6,6 +6,8 @@ import { createHash } from "node:crypto";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { driftBaselineSchema, driftScanSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const driftRoute = new Hono();
@@ -34,16 +36,11 @@ driftRoute.get("/baselines", requirePermission("drift:read"), async (c) => {
 });
 
 // POST /api/v1/drift/baselines — captura baseline de um dispositivo
-driftRoute.post("/baselines", requirePermission("drift:write"), async (c) => {
+driftRoute.post("/baselines", requirePermission("drift:write"), validate({ schema: driftBaselineSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { device_id: string; name: string; config_snapshot: Record<string, unknown> };
   const { device_id, name, config_snapshot } = body;
-
-  if (!device_id || !name || !config_snapshot) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "device_id, name e config_snapshot são obrigatórios" } }, 400);
-  }
 
   // Valida que o dispositivo pertence ao tenant
   const deviceResult = await query("SELECT id, hostname FROM public.devices WHERE id = $1 AND tenant_id = $2", [device_id, tenantId]);
@@ -126,16 +123,11 @@ driftRoute.get("/events", requirePermission("drift:read"), async (c) => {
 });
 
 // POST /api/v1/drift/scan — escanea um dispositivo contra baseline
-driftRoute.post("/scan", requirePermission("drift:write"), async (c) => {
+driftRoute.post("/scan", requirePermission("drift:write"), validate({ schema: driftScanSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { device_id: string; current_config: Record<string, unknown> };
   const { device_id, current_config } = body;
-
-  if (!device_id || !current_config) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "device_id e current_config são obrigatórios" } }, 400);
-  }
 
   // Busca baseline ativo
   const baselineResult = await query<{ id: string; config_snapshot: Record<string, unknown>; config_hash: string }>(

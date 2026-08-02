@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { marketplaceConfigureSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const marketplaceRoute = new Hono();
@@ -157,11 +159,11 @@ marketplaceRoute.post("/apps/:id/install", requirePermission("marketplace:write"
 });
 
 // PUT /api/v1/marketplace/installs/:id/configure — configura a instalacao
-marketplaceRoute.put("/installs/:id/configure", requirePermission("marketplace:write"), async (c) => {
+marketplaceRoute.put("/installs/:id/configure", requirePermission("marketplace:write"), validate({ schema: marketplaceConfigureSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
   const installId = c.req.param("id");
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { config?: Record<string, unknown> };
 
   await query(
     "UPDATE public.marketplace_installs SET config = $1, status = 'configured', configured_at = timezone('utc'::text, now()) WHERE id = $2 AND tenant_id = $3",

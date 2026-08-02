@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { anomalyAnalyzeSchema, anomalyConfigSchema } from "@repo/shared-validation";
 import { detectAnomaly, type AnomalyConfig } from "../lib/anomaly-detector.js";
 import "../types.js";
 
@@ -53,16 +55,12 @@ anomalyRoute.get("/detections", requirePermission("anomaly:read"), async (c) => 
 });
 
 // POST /api/v1/anomaly/analyze — analisa uma metrica de um dispositivo
-anomalyRoute.post("/analyze", requirePermission("anomaly:write"), async (c) => {
+anomalyRoute.post("/analyze", requirePermission("anomaly:write"), validate({ schema: anomalyAnalyzeSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { device_id: string; metric_name: string; values: number[]; observed_value: number };
 
   const { device_id, metric_name, values, observed_value } = body;
-
-  if (!device_id || !metric_name || !values || !Array.isArray(values) || observed_value === undefined) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "device_id, metric_name, values (array) e observed_value são obrigatórios" } }, 400);
-  }
 
   // Busca configuracao ativa para a metrica
   const configResult = await query<{
@@ -173,19 +171,12 @@ anomalyRoute.get("/config", requirePermission("anomaly:read"), async (c) => {
 });
 
 // PUT /api/v1/anomaly/config — cria ou atualiza configuracao
-anomalyRoute.put("/config", requirePermission("anomaly:write"), async (c) => {
+anomalyRoute.put("/config", requirePermission("anomaly:write"), validate({ schema: anomalyConfigSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { metric_name: string; algorithm?: string; window_size?: number; zscore_threshold?: number; iqr_multiplier?: number; ewma_alpha?: number; warning_threshold?: number; critical_threshold?: number; is_active?: boolean };
 
-  const {
-    metric_name, algorithm, window_size, zscore_threshold,
-    iqr_multiplier, ewma_alpha, warning_threshold, critical_threshold, is_active,
-  } = body;
-
-  if (!metric_name) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "metric_name é obrigatório" } }, 400);
-  }
+  const { metric_name, algorithm, window_size, zscore_threshold, iqr_multiplier, ewma_alpha, warning_threshold, critical_threshold, is_active } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.anomaly_config

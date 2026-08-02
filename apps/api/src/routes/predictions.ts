@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { predictionAnalyzeSchema, predictionConfigSchema } from "@repo/shared-validation";
 import { predictFailure, type PredictionConfig } from "../lib/failure-predictor.js";
 import "../types.js";
 
@@ -48,16 +50,11 @@ predictionRoute.get("/", requirePermission("prediction:read"), async (c) => {
 });
 
 // POST /api/v1/predictions/analyze — analisa uma metrica e gera predicao
-predictionRoute.post("/analyze", requirePermission("prediction:write"), async (c) => {
+predictionRoute.post("/analyze", requirePermission("prediction:write"), validate({ schema: predictionAnalyzeSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { device_id: string; metric_name: string; values: number[] };
   const { device_id, metric_name, values } = body;
-
-  if (!device_id || !metric_name || !values || !Array.isArray(values)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "device_id, metric_name e values (array) são obrigatórios" } }, 400);
-  }
 
   // Busca configuracao ativa
   const configResult = await query<{
@@ -184,20 +181,11 @@ predictionRoute.get("/config", requirePermission("prediction:read"), async (c) =
 });
 
 // PUT /api/v1/predictions/config
-predictionRoute.put("/config", requirePermission("prediction:write"), async (c) => {
+predictionRoute.put("/config", requirePermission("prediction:write"), validate({ schema: predictionConfigSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
-  const {
-    metric_name, model_type, window_size, threshold_value,
-    threshold_direction, prediction_horizon_hours,
-    warning_probability, critical_probability, is_active,
-  } = body;
-
-  if (!metric_name || threshold_value === undefined) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "metric_name e threshold_value são obrigatórios" } }, 400);
-  }
+  const body = c.get("validatedData") as { metric_name: string; model_type?: string; window_size?: number; threshold_value: number; threshold_direction?: string; prediction_horizon_hours?: number; warning_probability?: number; critical_probability?: number; is_active?: boolean };
+  const { metric_name, model_type, window_size, threshold_value, threshold_direction, prediction_horizon_hours, warning_probability, critical_probability, is_active } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.prediction_config

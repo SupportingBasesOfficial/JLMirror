@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { finopsCostSchema, finopsOptimizationSchema, finopsOptimizationStatusSchema, finopsBudgetSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const finopsRoute = new Hono();
@@ -44,16 +46,11 @@ finopsRoute.get("/costs", requirePermission("finops:read"), async (c) => {
 });
 
 // POST /api/v1/finops/costs — registra custo
-finopsRoute.post("/costs", requirePermission("finops:write"), async (c) => {
+finopsRoute.post("/costs", requirePermission("finops:write"), validate({ schema: finopsCostSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { period_start: string; period_end: string; category: string; resource_name?: string; resource_type?: string; cost_amount: number; currency?: string; usage_quantity?: number; usage_unit?: string; source?: string };
   const { period_start, period_end, category, resource_name, resource_type, cost_amount, currency, usage_quantity, usage_unit, source } = body;
-
-  if (!period_start || !period_end || !category || cost_amount === undefined) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "period_start, period_end, category e cost_amount são obrigatórios" } }, 400);
-  }
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.cost_entries (tenant_id, period_start, period_end, category, resource_name, resource_type, cost_amount, currency, usage_quantity, usage_unit, source)
@@ -134,16 +131,11 @@ finopsRoute.get("/optimizations", requirePermission("finops:read"), async (c) =>
 });
 
 // POST /api/v1/finops/optimizations — cria otimizacao
-finopsRoute.post("/optimizations", requirePermission("finops:write"), async (c) => {
+finopsRoute.post("/optimizations", requirePermission("finops:write"), validate({ schema: finopsOptimizationSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { category: string; resource_name?: string; title: string; description?: string; estimated_savings_monthly: number; estimated_savings_annual?: number; currency?: string; effort?: string };
   const { category, resource_name, title, description, estimated_savings_monthly, estimated_savings_annual, currency, effort } = body;
-
-  if (!title || !category || estimated_savings_monthly === undefined) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "title, category e estimated_savings_monthly são obrigatórios" } }, 400);
-  }
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.cost_optimizations (tenant_id, category, resource_name, title, description, estimated_savings_monthly, estimated_savings_annual, currency, effort, identified_by)
@@ -160,17 +152,12 @@ finopsRoute.post("/optimizations", requirePermission("finops:write"), async (c) 
 });
 
 // PUT /api/v1/finops/optimizations/:id/status — atualiza status
-finopsRoute.put("/optimizations/:id/status", requirePermission("finops:write"), async (c) => {
+finopsRoute.put("/optimizations/:id/status", requirePermission("finops:write"), validate({ schema: finopsOptimizationStatusSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
   const optimizationId = c.req.param("id");
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { status: string; actual_savings_monthly?: number };
   const { status, actual_savings_monthly } = body;
-
-  if (!status || !["identified", "approved", "in_progress", "implemented", "rejected"].includes(status)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "status inválido" } }, 400);
-  }
 
   if (status === "implemented") {
     await query(
@@ -204,16 +191,11 @@ finopsRoute.get("/budgets", requirePermission("finops:read"), async (c) => {
 });
 
 // PUT /api/v1/finops/budgets — cria ou atualiza orcamento
-finopsRoute.put("/budgets", requirePermission("finops:write"), async (c) => {
+finopsRoute.put("/budgets", requirePermission("finops:write"), validate({ schema: finopsBudgetSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { month: number; year: number; category?: string; budget_amount: number; currency?: string; alert_threshold_pct?: number };
   const { month, year, category, budget_amount, currency, alert_threshold_pct } = body;
-
-  if (!month || !year || budget_amount === undefined) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "month, year e budget_amount são obrigatórios" } }, 400);
-  }
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.cost_budgets (tenant_id, month, year, category, budget_amount, currency, alert_threshold_pct, created_by)

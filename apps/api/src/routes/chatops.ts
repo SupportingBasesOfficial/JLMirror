@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { chatopsConfigSchema } from "@repo/shared-validation";
 import { processChatOpsCommand } from "../lib/chatops-processor.js";
 import "../types.js";
 
@@ -124,19 +126,12 @@ chatopsRoute.get("/config", jwtAuth, tenantContext, requirePermission("chatops:m
 });
 
 // PUT /api/v1/chatops/config — cria ou atualiza config (upsert)
-chatopsRoute.put("/config", jwtAuth, tenantContext, requirePermission("chatops:manage"), async (c) => {
+chatopsRoute.put("/config", jwtAuth, tenantContext, requirePermission("chatops:manage"), validate({ schema: chatopsConfigSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { platform: string; slack_verification_token?: string; slack_signing_secret?: string; slack_bot_token?: string; teams_app_id?: string; teams_app_password?: string; enabled_commands?: string[]; is_active?: boolean };
 
-  const {
-    platform, slack_verification_token, slack_signing_secret, slack_bot_token,
-    teams_app_id, teams_app_password, enabled_commands, is_active,
-  } = body;
-
-  if (!platform || !["slack", "teams"].includes(platform)) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "platform deve ser 'slack' ou 'teams'" } }, 400);
-  }
+  const { platform, slack_verification_token, slack_signing_secret, slack_bot_token, teams_app_id, teams_app_password, enabled_commands, is_active } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.chatops_config

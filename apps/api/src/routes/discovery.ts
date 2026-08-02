@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { discoverySessionSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const discoveryRoute = new Hono();
@@ -33,19 +35,12 @@ discoveryRoute.get("/sessions", requirePermission("discovery:read"), async (c) =
 });
 
 // POST /api/v1/discovery/sessions — cria nova sessao de discovery
-discoveryRoute.post("/sessions", requirePermission("discovery:write"), async (c) => {
+discoveryRoute.post("/sessions", requirePermission("discovery:write"), validate({ schema: discoverySessionSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { name: string; ip_ranges: string[]; snmp_communities?: string[]; snmp_ports?: number[]; snmp_timeout_ms?: number; snmp_retries?: number; use_snmp?: boolean; use_lldp?: boolean; use_arp?: boolean };
 
-  const {
-    name, ip_ranges, snmp_communities, snmp_ports, snmp_timeout_ms, snmp_retries,
-    use_snmp, use_lldp, use_arp,
-  } = body;
-
-  if (!name || !ip_ranges || !Array.isArray(ip_ranges) || ip_ranges.length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "name e ip_ranges (array) são obrigatórios" } }, 400);
-  }
+  const { name, ip_ranges, snmp_communities, snmp_ports, snmp_timeout_ms, snmp_retries, use_snmp, use_lldp, use_arp } = body;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.discovery_sessions

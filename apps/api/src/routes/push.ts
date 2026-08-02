@@ -5,6 +5,8 @@ import { query } from "@repo/db";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { validate } from "../middleware/validate.js";
+import { pushSubscribeSchema, pushUnsubscribeSchema, pushBroadcastSchema } from "@repo/shared-validation";
 import { getVapidPublicKey, sendPushToUser, sendPushToTenant, configureVapid } from "../lib/web-push.js";
 import "../types.js";
 
@@ -23,16 +25,12 @@ pushRoute.get("/vapid-public-key", async (c) => {
 });
 
 // POST /api/v1/push/subscribe — inscreve o usuario para push notifications
-pushRoute.post("/subscribe", async (c) => {
+pushRoute.post("/subscribe", validate({ schema: pushSubscribeSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { endpoint: string; keys: { p256dh: string; auth: string }; device_type?: string; user_agent?: string };
 
   const { endpoint, keys, device_type, user_agent } = body;
-
-  if (!endpoint || !keys?.p256dh || !keys?.auth) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "endpoint, keys.p256dh e keys.auth são obrigatórios" } }, 400);
-  }
 
   // Upsert — se ja existe o endpoint+user_id, atualiza as keys
   const result = await query<{ id: string }>(
@@ -52,14 +50,10 @@ pushRoute.post("/subscribe", async (c) => {
 });
 
 // POST /api/v1/push/unsubscribe — remove a inscricao
-pushRoute.post("/unsubscribe", async (c) => {
+pushRoute.post("/unsubscribe", validate({ schema: pushUnsubscribeSchema }), async (c) => {
   const user = c.get("user");
-  const body = await c.req.json();
+  const body = c.get("validatedData") as { endpoint: string };
   const { endpoint } = body;
-
-  if (!endpoint) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "endpoint é obrigatório" } }, 400);
-  }
 
   await query(
     "UPDATE public.push_subscriptions SET is_active = false WHERE endpoint = $1 AND user_id = $2",
@@ -118,15 +112,11 @@ pushRoute.post("/test", async (c) => {
 });
 
 // POST /api/v1/push/broadcast — admin envia push para todo o tenant
-pushRoute.post("/broadcast", requirePermission("notifications:write"), async (c) => {
+pushRoute.post("/broadcast", requirePermission("notifications:write"), validate({ schema: pushBroadcastSchema }), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
-  const body = await c.req.json();
-
+  const body = c.get("validatedData") as { title: string; message: string };
   const { title, message } = body;
-  if (!title || !message) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "title e message são obrigatórios" } }, 400);
-  }
 
   try {
     configureVapid();

@@ -13,5 +13,6 @@ declare module "hono" {
   interface ContextVariableMap {
     user: AuthUser;
     correlationId: string;
+    validatedData: unknown;
   }
 }

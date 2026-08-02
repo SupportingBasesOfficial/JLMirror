@@ -982,3 +982,225 @@ export const ingestMetricsBatchSchema = z.object({
   metrics: z.array(ingestMetricSchema).min(1).max(10000),
 });
 export type IngestMetricsBatchInput = z.infer<typeof ingestMetricsBatchSchema>;
+
+// ========== Push Schemas ==========
+export const pushSubscribeSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({
+    p256dh: z.string().min(1),
+    auth: z.string().min(1),
+  }),
+  device_type: z.string().optional(),
+  user_agent: z.string().optional(),
+});
+export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
+
+export const pushUnsubscribeSchema = z.object({
+  endpoint: z.string().min(1),
+});
+export type PushUnsubscribeInput = z.infer<typeof pushUnsubscribeSchema>;
+
+export const pushBroadcastSchema = z.object({
+  title: z.string().min(1),
+  message: z.string().min(1),
+});
+export type PushBroadcastInput = z.infer<typeof pushBroadcastSchema>;
+
+// ========== Anomaly Schemas ==========
+export const anomalyAnalyzeSchema = z.object({
+  device_id: z.string().min(1),
+  metric_name: z.string().min(1),
+  values: z.array(z.number()).min(1),
+  observed_value: z.number(),
+});
+export type AnomalyAnalyzeInput = z.infer<typeof anomalyAnalyzeSchema>;
+
+export const anomalyConfigSchema = z.object({
+  metric_name: z.string().min(1),
+  algorithm: z.enum(["zscore", "iqr", "ewma"]).optional(),
+  window_size: z.number().int().min(2).optional(),
+  zscore_threshold: z.number().positive().optional(),
+  iqr_multiplier: z.number().positive().optional(),
+  ewma_alpha: z.number().min(0).max(1).optional(),
+  warning_threshold: z.number().optional(),
+  critical_threshold: z.number().optional(),
+  is_active: z.boolean().optional(),
+});
+export type AnomalyConfigInput = z.infer<typeof anomalyConfigSchema>;
+
+// ========== Drift Schemas ==========
+export const driftBaselineSchema = z.object({
+  device_id: z.string().min(1),
+  name: z.string().min(1),
+  config_snapshot: z.record(z.unknown()),
+});
+export type DriftBaselineInput = z.infer<typeof driftBaselineSchema>;
+
+export const driftScanSchema = z.object({
+  device_id: z.string().min(1),
+  current_config: z.record(z.unknown()),
+});
+export type DriftScanInput = z.infer<typeof driftScanSchema>;
+
+// ========== Discovery Schemas ==========
+export const discoverySessionSchema = z.object({
+  name: z.string().min(1),
+  ip_ranges: z.array(z.string()).min(1),
+  snmp_communities: z.array(z.string()).optional(),
+  snmp_ports: z.array(z.number().int()).optional(),
+  snmp_timeout_ms: z.number().int().positive().optional(),
+  snmp_retries: z.number().int().min(0).optional(),
+  use_snmp: z.boolean().optional(),
+  use_lldp: z.boolean().optional(),
+  use_arp: z.boolean().optional(),
+});
+export type DiscoverySessionInput = z.infer<typeof discoverySessionSchema>;
+
+// ========== Finops Schemas ==========
+export const finopsCostSchema = z.object({
+  period_start: z.string().min(1),
+  period_end: z.string().min(1),
+  category: z.string().min(1),
+  resource_name: z.string().optional(),
+  resource_type: z.string().optional(),
+  cost_amount: z.number(),
+  currency: z.string().optional(),
+  usage_quantity: z.number().optional(),
+  usage_unit: z.string().optional(),
+  source: z.string().optional(),
+});
+export type FinopsCostInput = z.infer<typeof finopsCostSchema>;
+
+export const finopsOptimizationSchema = z.object({
+  category: z.string().min(1),
+  resource_name: z.string().optional(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  estimated_savings_monthly: z.number(),
+  estimated_savings_annual: z.number().optional(),
+  currency: z.string().optional(),
+  effort: z.enum(["low", "medium", "high"]).optional(),
+});
+export type FinopsOptimizationInput = z.infer<typeof finopsOptimizationSchema>;
+
+export const finopsOptimizationStatusSchema = z.object({
+  status: z.enum(["identified", "approved", "in_progress", "implemented", "rejected"]),
+  actual_savings_monthly: z.number().optional(),
+});
+export type FinopsOptimizationStatusInput = z.infer<typeof finopsOptimizationStatusSchema>;
+
+export const finopsBudgetSchema = z.object({
+  month: z.number().int().min(1).max(12),
+  year: z.number().int().min(2000),
+  category: z.string().optional(),
+  budget_amount: z.number(),
+  currency: z.string().optional(),
+  alert_threshold_pct: z.number().optional(),
+});
+export type FinopsBudgetInput = z.infer<typeof finopsBudgetSchema>;
+
+// ========== ITSM Schemas ==========
+export const itsmConnectorSchema = z.object({
+  name: z.string().min(1),
+  connector_type: z.enum(["jira", "freshservice", "servicenow", "zendesk", "custom"]),
+  base_url: z.string().min(1),
+  auth_type: z.string().min(1),
+  api_key: z.string().optional(),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  bearer_token: z.string().optional(),
+  oauth_client_id: z.string().optional(),
+  oauth_client_secret: z.string().optional(),
+  oauth_token_url: z.string().optional(),
+  field_mapping: z.record(z.unknown()).optional(),
+  sync_direction: z.string().optional(),
+  auto_create_on_incident: z.boolean().optional(),
+  auto_update_on_resolve: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+});
+export type ItsmConnectorInput = z.infer<typeof itsmConnectorSchema>;
+
+export const itsmCreateTicketSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  severity: z.enum(["info", "warning", "critical"]).optional(),
+  source_id: z.string().optional(),
+  source_type: z.string().optional(),
+  extra_fields: z.record(z.unknown()).optional(),
+});
+export type ItsmCreateTicketInput = z.infer<typeof itsmCreateTicketSchema>;
+
+// ========== ChatOps Schemas ==========
+export const chatopsConfigSchema = z.object({
+  platform: z.enum(["slack", "teams"]),
+  slack_verification_token: z.string().optional(),
+  slack_signing_secret: z.string().optional(),
+  slack_bot_token: z.string().optional(),
+  teams_app_id: z.string().optional(),
+  teams_app_password: z.string().optional(),
+  enabled_commands: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
+});
+export type ChatopsConfigInput = z.infer<typeof chatopsConfigSchema>;
+
+// ========== Client Portal Schemas ==========
+export const clientPortalUserSchema = z.object({
+  email: z.string().email(),
+  contact_name: z.string().min(1),
+  company_name: z.string().optional(),
+  phone: z.string().optional(),
+  can_view_incidents: z.boolean().optional(),
+  can_view_sla: z.boolean().optional(),
+  can_view_services: z.boolean().optional(),
+  can_create_tickets: z.boolean().optional(),
+});
+export type ClientPortalUserInput = z.infer<typeof clientPortalUserSchema>;
+
+// ========== Marketplace Schemas ==========
+export const marketplaceInstallSchema = z.object({
+  config: z.record(z.unknown()).optional(),
+}).optional();
+export type MarketplaceInstallInput = z.infer<typeof marketplaceInstallSchema>;
+
+export const marketplaceConfigureSchema = z.object({
+  config: z.record(z.unknown()).optional(),
+});
+export type MarketplaceConfigureInput = z.infer<typeof marketplaceConfigureSchema>;
+
+// ========== Predictions Schemas ==========
+export const predictionAnalyzeSchema = z.object({
+  device_id: z.string().min(1),
+  metric_name: z.string().min(1),
+  values: z.array(z.number()).min(1),
+});
+export type PredictionAnalyzeInput = z.infer<typeof predictionAnalyzeSchema>;
+
+export const predictionConfigSchema = z.object({
+  metric_name: z.string().min(1),
+  model_type: z.enum(["linear", "exponential", "arima", "lstm"]).optional(),
+  window_size: z.number().int().min(2).optional(),
+  threshold_value: z.number(),
+  threshold_direction: z.enum(["above", "below"]).optional(),
+  prediction_horizon_hours: z.number().int().positive().optional(),
+  warning_probability: z.number().min(0).max(1).optional(),
+  critical_probability: z.number().min(0).max(1).optional(),
+  is_active: z.boolean().optional(),
+});
+export type PredictionConfigInput = z.infer<typeof predictionConfigSchema>;
+
+// ========== Status Page Schemas ==========
+export const statusPageConfigSchema = z.object({
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  page_title: z.string().optional(),
+  company_name: z.string().min(1),
+  logo_url: z.string().optional(),
+  primary_color: z.string().optional(),
+  show_uptime: z.boolean().optional(),
+  show_incident_history: z.boolean().optional(),
+  show_sla_percentage: z.boolean().optional(),
+  days_of_history: z.number().int().min(1).optional(),
+  support_email: z.string().optional(),
+  support_url: z.string().optional(),
+  is_published: z.boolean().optional(),
+});
+export type StatusPageConfigInput = z.infer<typeof statusPageConfigSchema>;
