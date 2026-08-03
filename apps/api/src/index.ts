@@ -84,7 +84,11 @@ import { startPartitionManager } from "./lib/partition-manager.js";
 import { startCorrelationEngine } from "./lib/correlation-engine.js";
 import { startMetricsCollector } from "./lib/metrics-collector.js";
 import { initializeSecrets } from "@repo/secrets";
-import { validateEnv, waitForDatabase, setupGracefulShutdown } from "./lib/lifecycle.js";
+import {
+  validateEnv,
+  waitForDatabase,
+  setupGracefulShutdown,
+} from "./lib/lifecycle.js";
 import "./types.js";
 
 loadEnv();
@@ -167,55 +171,12 @@ app.route("/api/v1/docs", docsRoute);
 app.use("/api/v1/auth/*", rateLimitAuth);
 app.route("/api/v1/auth", authRoute);
 
-// Middlewares de autenticação e isolamento de tenant
-// Padrão sem /* para garantir que o Hono matcheie tanto a rota raiz quanto sub-rotas
-const protectedPaths = [
-  "/api/v1/devices",
-  "/api/v1/mfa",
-  "/api/v1/audit",
-  "/api/v1/rbac",
-  "/api/v1/users",
-  "/api/v1/logs",
-  "/api/v1/traces",
-  "/api/v1/scripts",
-  "/api/v1/executions",
-  "/api/v1/firewall",
-  "/api/v1/k8s",
-  "/api/v1/ssl",
-  "/api/v1/backups",
-  "/api/v1/notifications",
-  "/api/v1/assets",
-  "/api/v1/capacity",
-  "/api/v1/compliance",
-  "/api/v1/tickets",
-  "/api/v1/kb",
-  "/api/v1/system-health",
-  "/api/v1/api-keys",
-  "/api/v1/webhooks",
-  "/api/v1/tasks",
-  "/api/v1/data-transfer",
-  "/api/v1/feature-flags",
-  "/api/v1/profile",
-  "/api/v1/settings",
-  "/api/v1/dashboard/executive",
-  "/api/v1/reports",
-  "/api/v1/changes",
-  "/api/v1/admin",
-  "/api/v1/dashboard",
-  "/api/v1/dashboard/overview",
-  "/api/v1/sla",
-  "/api/v1/apm",
-  "/api/v1/client-portal",
-];
-
-for (const p of protectedPaths) {
-  app.use(p, jwtAuth);
-  app.use(p, tenantContext);
-  app.use(p, auditMiddleware);
-  app.use(p + "/*", jwtAuth);
-  app.use(p + "/*", tenantContext);
-  app.use(p + "/*", auditMiddleware);
-}
+// Middlewares de autenticação e isolamento de tenant — aplicados globalmente
+// Rotas publicas (health, metrics, docs, auth) sao montadas ANTES destes middlewares
+// e portanto nao sao afetadas. Todas as demais rotas exigem JWT + tenant context.
+app.use("/api/v1/*", jwtAuth);
+app.use("/api/v1/*", tenantContext);
+app.use("/api/v1/*", auditMiddleware);
 
 // Rotas protegidas — modulos ATIVOS (sem requireModule)
 app.route("/api/v1/zabbix", zabbixRoute);
@@ -229,135 +190,186 @@ app.route("/api/v1/dashboard", dashboardRoute);
 app.route("/api/v1/ws", wsRoute);
 
 // Rotas protegidas — modulos DESATIVADOS (requireModule bloqueia se flag off)
+// requireModule aplicado em ambos path e path/* para cobrir rota raiz e sub-rotas
+app.use("/api/v1/devices", requireModule("module_devices"));
 app.use("/api/v1/devices/*", requireModule("module_devices"));
 app.route("/api/v1/devices", devicesRoute);
 
+app.use("/api/v1/audit", requireModule("module_audit"));
 app.use("/api/v1/audit/*", requireModule("module_audit"));
 app.route("/api/v1/audit", auditRoute);
 
+app.use("/api/v1/logs", requireModule("module_logs"));
 app.use("/api/v1/logs/*", requireModule("module_logs"));
 app.route("/api/v1/logs", logsRoute);
 
+app.use("/api/v1/traces", requireModule("module_traces"));
 app.use("/api/v1/traces/*", requireModule("module_traces"));
 app.route("/api/v1/traces", tracesRoute);
 
+app.use("/api/v1/scripts", requireModule("module_scripts"));
 app.use("/api/v1/scripts/*", requireModule("module_scripts"));
 app.route("/api/v1/scripts", scriptsRoute);
 
+app.use("/api/v1/executions", requireModule("module_executions"));
 app.use("/api/v1/executions/*", requireModule("module_executions"));
 app.route("/api/v1/executions", executionsRoute);
 
+app.use("/api/v1/firewall", requireModule("module_firewall"));
 app.use("/api/v1/firewall/*", requireModule("module_firewall"));
 app.route("/api/v1/firewall", firewallRoute);
 
+app.use("/api/v1/k8s", requireModule("module_k8s"));
 app.use("/api/v1/k8s/*", requireModule("module_k8s"));
 app.route("/api/v1/k8s", k8sRoute);
 
+app.use("/api/v1/ssl", requireModule("module_ssl"));
 app.use("/api/v1/ssl/*", requireModule("module_ssl"));
 app.route("/api/v1/ssl", sslRoute);
 
+app.use("/api/v1/backups", requireModule("module_backup"));
 app.use("/api/v1/backups/*", requireModule("module_backup"));
 app.route("/api/v1/backups", backupRoute);
 
+app.use("/api/v1/notifications", requireModule("module_notifications"));
 app.use("/api/v1/notifications/*", requireModule("module_notifications"));
 app.route("/api/v1/notifications", notificationRoute);
 
+app.use("/api/v1/assets", requireModule("module_assets"));
 app.use("/api/v1/assets/*", requireModule("module_assets"));
 app.route("/api/v1/assets", assetRoute);
 
+app.use("/api/v1/capacity", requireModule("module_capacity"));
 app.use("/api/v1/capacity/*", requireModule("module_capacity"));
 app.route("/api/v1/capacity", capacityRoute);
 
+app.use("/api/v1/compliance", requireModule("module_compliance"));
 app.use("/api/v1/compliance/*", requireModule("module_compliance"));
 app.route("/api/v1/compliance", complianceRoute);
 
+app.use("/api/v1/tickets", requireModule("module_tickets"));
 app.use("/api/v1/tickets/*", requireModule("module_tickets"));
 app.route("/api/v1/tickets", ticketRoute);
 
+app.use("/api/v1/kb", requireModule("module_kb"));
 app.use("/api/v1/kb/*", requireModule("module_kb"));
 app.route("/api/v1/kb", kbRoute);
 
+app.use("/api/v1/system-health", requireModule("module_system_health"));
 app.use("/api/v1/system-health/*", requireModule("module_system_health"));
 app.route("/api/v1/system-health", systemHealthRoute);
 
+app.use("/api/v1/api-keys", requireModule("module_api_keys"));
 app.use("/api/v1/api-keys/*", requireModule("module_api_keys"));
 app.route("/api/v1/api-keys", apiKeyRoute);
 
+app.use("/api/v1/webhooks", requireModule("module_webhooks"));
 app.use("/api/v1/webhooks/*", requireModule("module_webhooks"));
 app.route("/api/v1/webhooks", webhookRoute);
 
+app.use("/api/v1/tasks", requireModule("module_tasks"));
 app.use("/api/v1/tasks/*", requireModule("module_tasks"));
 app.route("/api/v1/tasks", taskRoute);
 
+app.use("/api/v1/data-transfer", requireModule("module_data_transfer"));
 app.use("/api/v1/data-transfer/*", requireModule("module_data_transfer"));
 app.route("/api/v1/data-transfer", dataTransferRoute);
 
+app.use("/api/v1/lgpd", requireModule("module_lgpd"));
 app.use("/api/v1/lgpd/*", requireModule("module_lgpd"));
 app.route("/api/v1/lgpd", lgpdRoute);
 
+app.use("/api/v1/escalation", requireModule("module_escalation"));
 app.use("/api/v1/escalation/*", requireModule("module_escalation"));
 app.route("/api/v1/escalation", escalationRoute);
 
+app.use("/api/v1/patches", requireModule("module_patches"));
 app.use("/api/v1/patches/*", requireModule("module_patches"));
 app.route("/api/v1/patches", patchRoute);
 
+app.use("/api/v1/security-audit", requireModule("module_security_audit"));
 app.use("/api/v1/security-audit/*", requireModule("module_security_audit"));
 app.route("/api/v1/security-audit", securityAuditRoute);
 
+app.use("/api/v1/correlation", requireModule("module_correlation"));
 app.use("/api/v1/correlation/*", requireModule("module_correlation"));
 app.route("/api/v1/correlation", correlationRoute);
 
+app.use("/api/v1/workflows", requireModule("module_workflows"));
 app.use("/api/v1/workflows/*", requireModule("module_workflows"));
 app.route("/api/v1/workflows", workflowRoute);
 
+app.use("/api/v1/push", requireModule("module_push"));
 app.use("/api/v1/push/*", requireModule("module_push"));
 app.route("/api/v1/push", pushRoute);
 
+app.use("/api/v1/client-portal", requireModule("module_client_portal"));
 app.use("/api/v1/client-portal/*", requireModule("module_client_portal"));
 app.route("/api/v1/client-portal", clientPortalRoute);
 
+app.use("/api/v1/chatops", requireModule("module_chatops"));
 app.use("/api/v1/chatops/*", requireModule("module_chatops"));
 app.route("/api/v1/chatops", chatopsRoute);
 
+app.use("/api/v1/status-page", requireModule("module_status_page"));
 app.use("/api/v1/status-page/*", requireModule("module_status_page"));
 app.route("/api/v1/status-page", statusPageRoute);
 
+app.use("/api/v1/drift", requireModule("module_drift"));
 app.use("/api/v1/drift/*", requireModule("module_drift"));
 app.route("/api/v1/drift", driftRoute);
 
+app.use("/api/v1/itsm", requireModule("module_itsm"));
 app.use("/api/v1/itsm/*", requireModule("module_itsm"));
 app.route("/api/v1/itsm", itsmRoute);
 
+app.use("/api/v1/discovery", requireModule("module_discovery"));
 app.use("/api/v1/discovery/*", requireModule("module_discovery"));
 app.route("/api/v1/discovery", discoveryRoute);
 
+app.use("/api/v1/anomaly", requireModule("module_anomaly"));
 app.use("/api/v1/anomaly/*", requireModule("module_anomaly"));
 app.route("/api/v1/anomaly", anomalyRoute);
 
+app.use("/api/v1/predictions", requireModule("module_predictions"));
 app.use("/api/v1/predictions/*", requireModule("module_predictions"));
 app.route("/api/v1/predictions", predictionRoute);
 
+app.use("/api/v1/finops", requireModule("module_finops"));
 app.use("/api/v1/finops/*", requireModule("module_finops"));
 app.route("/api/v1/finops", finopsRoute);
 
+app.use("/api/v1/marketplace", requireModule("module_marketplace"));
 app.use("/api/v1/marketplace/*", requireModule("module_marketplace"));
 app.route("/api/v1/marketplace", marketplaceRoute);
 
-app.use("/api/v1/dashboard/executive/*", requireModule("module_executive_dashboard"));
+app.use(
+  "/api/v1/dashboard/executive",
+  requireModule("module_executive_dashboard"),
+);
+app.use(
+  "/api/v1/dashboard/executive/*",
+  requireModule("module_executive_dashboard"),
+);
 app.route("/api/v1/dashboard/executive", executiveDashboardRoute);
 
+app.use("/api/v1/reports", requireModule("module_reports"));
 app.use("/api/v1/reports/*", requireModule("module_reports"));
 app.route("/api/v1/reports", reportsRoute);
 
+app.use("/api/v1/changes", requireModule("module_changes"));
 app.use("/api/v1/changes/*", requireModule("module_changes"));
 app.route("/api/v1/changes", changesRoute);
 
+app.use("/api/v1/admin", requireModule("module_admin"));
 app.use("/api/v1/admin/*", requireModule("module_admin"));
 app.route("/api/v1/admin", adminRoute);
 
+app.use("/api/v1/sla", requireModule("module_sla"));
 app.use("/api/v1/sla/*", requireModule("module_sla"));
 app.route("/api/v1/sla", slaRoute);
 
+app.use("/api/v1/apm", requireModule("module_apm"));
 app.use("/api/v1/apm/*", requireModule("module_apm"));
 app.route("/api/v1/apm", apmRoute);
 
@@ -383,7 +395,9 @@ async function bootstrap(): Promise<void> {
       port,
     },
     (info) => {
-      console.warn(`API JLMIRROR rodando em http://localhost:${info.port} (WebSocket em ws://localhost:${info.port}/ws)`);
+      console.warn(
+        `API JLMIRROR rodando em http://localhost:${info.port} (WebSocket em ws://localhost:${info.port}/ws)`,
+      );
     },
   );
 
