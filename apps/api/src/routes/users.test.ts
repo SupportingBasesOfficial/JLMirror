@@ -1,7 +1,10 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { describe, it, expect } from "vitest";
-import { updateProfileSchema, updatePreferencesSchema } from "@repo/shared-validation";
+import {
+  updateProfileSchema,
+  updatePreferencesSchema,
+} from "@repo/shared-validation";
 
 describe("users — profile schemas used by users route", () => {
   it("updateProfileSchema valida nome e email", () => {
@@ -28,17 +31,15 @@ describe("users — profile schemas used by users route", () => {
 
   it("updatePreferencesSchema valida preferencias", () => {
     const result = updatePreferencesSchema.safeParse({
-      preferences: {
-        notification_email: true,
-        theme: "dark",
-      },
+      notification_email: true,
+      theme: "dark",
     });
     expect(result.success).toBe(true);
   });
 
-  it("updatePreferencesSchema rejeita sem preferences", () => {
+  it("updatePreferencesSchema rejeita valor invalido para theme", () => {
     const result = updatePreferencesSchema.safeParse({
-      theme: "dark",
+      theme: "invalid-theme",
     });
     expect(result.success).toBe(false);
   });
