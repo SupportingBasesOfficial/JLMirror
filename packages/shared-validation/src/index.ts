@@ -38,7 +38,7 @@ export const createRoleSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   permissions: z.array(z.string()).default([]),
-  key: z.string().min(1),
+  key: z.string().min(1).optional(),
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 

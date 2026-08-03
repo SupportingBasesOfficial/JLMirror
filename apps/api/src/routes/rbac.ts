@@ -87,12 +87,12 @@ rbacRoute.post(
       );
     }
 
-    const { key, description, permissions } = parsed.data;
+    const { key, description, permissions, name } = parsed.data;
 
     // Cria role
     const roleResult = await query<{ id: string }>(
       "INSERT INTO public.roles (key, description, is_system) VALUES ($1, $2, false) RETURNING id",
-      [key, description ?? null],
+      [key ?? name, description ?? null],
     );
 
     if (roleResult.error || !roleResult.data?.rows[0]) {
