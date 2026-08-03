@@ -10,9 +10,29 @@ import "../types.js";
 // via AsyncLocalStorage — sem precisar passar tenant_id manualmente.
 export const tenantContext = createMiddleware(async (c, next) => {
   const user = c.get("user");
-  if (!user || !user.tenant_id) {
+  if (!user) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Autenticação necessária" } },
+      401,
+    );
+  }
+
+  // Usuarios global (JL staff) podem acessar rotas sem tenant_id — operam em public.*
+  if (user.scope === "global" && !user.tenant_id) {
     await next();
     return;
+  }
+
+  if (!user.tenant_id) {
+    return c.json(
+      {
+        error: {
+          code: "TENANT_REQUIRED",
+          message: "Tenant não identificado no token",
+        },
+      },
+      403,
+    );
   }
 
   // runWithTenant propaga tenant_id via AsyncLocalStorage para todas as
