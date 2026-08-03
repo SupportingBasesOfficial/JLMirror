@@ -371,34 +371,40 @@ usersRoute.delete(
 );
 
 // GET /api/v1/users/roles — lista roles disponíveis (sistema + custom do tenant)
-usersRoute.get("/roles", jwtAuth, tenantContext, async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
+usersRoute.get(
+  "/roles",
+  jwtAuth,
+  tenantContext,
+  requirePermission("tenant:users:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
 
-  // Roles do sistema (globais)
-  const systemRoles = await query<{
-    id: string;
-    key: string;
-    description: string | null;
-    is_system: boolean;
-  }>("SELECT id, key, description, is_system FROM public.roles ORDER BY key");
+    // Roles do sistema (globais)
+    const systemRoles = await query<{
+      id: string;
+      key: string;
+      description: string | null;
+      is_system: boolean;
+    }>("SELECT id, key, description, is_system FROM public.roles ORDER BY key");
 
-  // Roles customizadas do tenant
-  const customRoles = await query<{
-    id: string;
-    key: string;
-    description: string | null;
-    is_active: boolean;
-  }>(
-    "SELECT id, key, description, is_active FROM public.tenant_custom_roles WHERE tenant_id = $1 ORDER BY key",
-    [tenantId],
-  );
+    // Roles customizadas do tenant
+    const customRoles = await query<{
+      id: string;
+      key: string;
+      description: string | null;
+      is_active: boolean;
+    }>(
+      "SELECT id, key, description, is_active FROM public.tenant_custom_roles WHERE tenant_id = $1 ORDER BY key",
+      [tenantId],
+    );
 
-  return c.json({
-    system_roles: systemRoles.data?.rows ?? [],
-    custom_roles: customRoles.data?.rows ?? [],
-  });
-});
+    return c.json({
+      system_roles: systemRoles.data?.rows ?? [],
+      custom_roles: customRoles.data?.rows ?? [],
+    });
+  },
+);
 
 // POST /api/v1/users/custom-roles — cria role customizada no tenant
 usersRoute.post(
