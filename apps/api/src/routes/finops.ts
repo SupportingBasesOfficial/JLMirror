@@ -2,17 +2,17 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { validate } from "../middleware/validate.js";
-import { finopsCostSchema, finopsOptimizationSchema, finopsOptimizationStatusSchema, finopsBudgetSchema } from "@repo/shared-validation";
+import {
+  finopsCostSchema,
+  finopsOptimizationSchema,
+  finopsOptimizationStatusSchema,
+  finopsBudgetSchema,
+} from "@repo/shared-validation";
 import "../types.js";
 
 export const finopsRoute = new Hono();
-
-finopsRoute.use("/*", jwtAuth);
-finopsRoute.use("/*", tenantContext);
 
 // ========== Cost Entries ==========
 
@@ -46,25 +46,64 @@ finopsRoute.get("/costs", requirePermission("finops:read"), async (c) => {
 });
 
 // POST /api/v1/finops/costs — registra custo
-finopsRoute.post("/costs", requirePermission("finops:write"), validate({ schema: finopsCostSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { period_start: string; period_end: string; category: string; resource_name?: string; resource_type?: string; cost_amount: number; currency?: string; usage_quantity?: number; usage_unit?: string; source?: string };
-  const { period_start, period_end, category, resource_name, resource_type, cost_amount, currency, usage_quantity, usage_unit, source } = body;
+finopsRoute.post(
+  "/costs",
+  requirePermission("finops:write"),
+  validate({ schema: finopsCostSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      period_start: string;
+      period_end: string;
+      category: string;
+      resource_name?: string;
+      resource_type?: string;
+      cost_amount: number;
+      currency?: string;
+      usage_quantity?: number;
+      usage_unit?: string;
+      source?: string;
+    };
+    const {
+      period_start,
+      period_end,
+      category,
+      resource_name,
+      resource_type,
+      cost_amount,
+      currency,
+      usage_quantity,
+      usage_unit,
+      source,
+    } = body;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.cost_entries (tenant_id, period_start, period_end, category, resource_name, resource_type, cost_amount, currency, usage_quantity, usage_unit, source)
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.cost_entries (tenant_id, period_start, period_end, category, resource_name, resource_type, cost_amount, currency, usage_quantity, usage_unit, source)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (tenant_id, period_start, category, resource_name) DO UPDATE SET
        cost_amount = EXCLUDED.cost_amount,
        usage_quantity = EXCLUDED.usage_quantity,
        usage_unit = EXCLUDED.usage_unit
      RETURNING id`,
-    [tenantId, period_start, period_end, category, resource_name ?? null, resource_type ?? null, cost_amount, currency ?? "BRL", usage_quantity ?? null, usage_unit ?? null, source ?? "manual"],
-  );
+      [
+        tenantId,
+        period_start,
+        period_end,
+        category,
+        resource_name ?? null,
+        resource_type ?? null,
+        cost_amount,
+        currency ?? "BRL",
+        usage_quantity ?? null,
+        usage_unit ?? null,
+        source ?? "manual",
+      ],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, created: true });
-});
+    return c.json({ id: result.data?.rows[0]?.id, created: true });
+  },
+);
 
 // ========== Cost Summary ==========
 
@@ -110,69 +149,115 @@ finopsRoute.get("/summary", requirePermission("finops:read"), async (c) => {
 // ========== Optimizations ==========
 
 // GET /api/v1/finops/optimizations — lista otimizacoes
-finopsRoute.get("/optimizations", requirePermission("finops:read"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const status = c.req.query("status");
+finopsRoute.get(
+  "/optimizations",
+  requirePermission("finops:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const status = c.req.query("status");
 
-  let sql = "SELECT * FROM public.cost_optimizations WHERE tenant_id = $1";
-  const params: unknown[] = [tenantId];
+    let sql = "SELECT * FROM public.cost_optimizations WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
 
-  if (status) {
-    sql += " AND status = $2";
-    params.push(status);
-  }
+    if (status) {
+      sql += " AND status = $2";
+      params.push(status);
+    }
 
-  sql += " ORDER BY estimated_savings_annual DESC";
+    sql += " ORDER BY estimated_savings_annual DESC";
 
-  const result = await query(sql, params);
+    const result = await query(sql, params);
 
-  return c.json({ optimizations: result.data?.rows ?? [] });
-});
+    return c.json({ optimizations: result.data?.rows ?? [] });
+  },
+);
 
 // POST /api/v1/finops/optimizations — cria otimizacao
-finopsRoute.post("/optimizations", requirePermission("finops:write"), validate({ schema: finopsOptimizationSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { category: string; resource_name?: string; title: string; description?: string; estimated_savings_monthly: number; estimated_savings_annual?: number; currency?: string; effort?: string };
-  const { category, resource_name, title, description, estimated_savings_monthly, estimated_savings_annual, currency, effort } = body;
+finopsRoute.post(
+  "/optimizations",
+  requirePermission("finops:write"),
+  validate({ schema: finopsOptimizationSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      category: string;
+      resource_name?: string;
+      title: string;
+      description?: string;
+      estimated_savings_monthly: number;
+      estimated_savings_annual?: number;
+      currency?: string;
+      effort?: string;
+    };
+    const {
+      category,
+      resource_name,
+      title,
+      description,
+      estimated_savings_monthly,
+      estimated_savings_annual,
+      currency,
+      effort,
+    } = body;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.cost_optimizations (tenant_id, category, resource_name, title, description, estimated_savings_monthly, estimated_savings_annual, currency, effort, identified_by)
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.cost_optimizations (tenant_id, category, resource_name, title, description, estimated_savings_monthly, estimated_savings_annual, currency, effort, identified_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [tenantId, category, resource_name ?? null, title, description ?? null, estimated_savings_monthly, estimated_savings_annual ?? estimated_savings_monthly * 12, currency ?? "BRL", effort ?? "medium", user.sub],
-  );
+      [
+        tenantId,
+        category,
+        resource_name ?? null,
+        title,
+        description ?? null,
+        estimated_savings_monthly,
+        estimated_savings_annual ?? estimated_savings_monthly * 12,
+        currency ?? "BRL",
+        effort ?? "medium",
+        user.sub,
+      ],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'finops.optimization.create', 'cost_optimizations', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, title })],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'finops.optimization.create', 'cost_optimizations', NULL, $2, NULL, NULL)",
+      [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, title })],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, created: true });
-});
+    return c.json({ id: result.data?.rows[0]?.id, created: true });
+  },
+);
 
 // PUT /api/v1/finops/optimizations/:id/status — atualiza status
-finopsRoute.put("/optimizations/:id/status", requirePermission("finops:write"), validate({ schema: finopsOptimizationStatusSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const optimizationId = c.req.param("id");
-  const body = c.get("validatedData") as { status: string; actual_savings_monthly?: number };
-  const { status, actual_savings_monthly } = body;
+finopsRoute.put(
+  "/optimizations/:id/status",
+  requirePermission("finops:write"),
+  validate({ schema: finopsOptimizationStatusSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const optimizationId = c.req.param("id");
+    const body = c.get("validatedData") as {
+      status: string;
+      actual_savings_monthly?: number;
+    };
+    const { status, actual_savings_monthly } = body;
 
-  if (status === "implemented") {
-    await query(
-      "UPDATE public.cost_optimizations SET status = $1, implemented_at = timezone('utc'::text, now()), actual_savings_monthly = $2 WHERE id = $3 AND tenant_id = $4",
-      [status, actual_savings_monthly ?? null, optimizationId, tenantId],
-    );
-  } else {
-    await query(
-      "UPDATE public.cost_optimizations SET status = $1 WHERE id = $2 AND tenant_id = $3",
-      [status, optimizationId, tenantId],
-    );
-  }
+    if (status === "implemented") {
+      await query(
+        "UPDATE public.cost_optimizations SET status = $1, implemented_at = timezone('utc'::text, now()), actual_savings_monthly = $2 WHERE id = $3 AND tenant_id = $4",
+        [status, actual_savings_monthly ?? null, optimizationId, tenantId],
+      );
+    } else {
+      await query(
+        "UPDATE public.cost_optimizations SET status = $1 WHERE id = $2 AND tenant_id = $3",
+        [status, optimizationId, tenantId],
+      );
+    }
 
-  return c.json({ updated: true });
-});
+    return c.json({ updated: true });
+  },
+);
 
 // ========== Budgets ==========
 
@@ -191,25 +276,53 @@ finopsRoute.get("/budgets", requirePermission("finops:read"), async (c) => {
 });
 
 // PUT /api/v1/finops/budgets — cria ou atualiza orcamento
-finopsRoute.put("/budgets", requirePermission("finops:write"), validate({ schema: finopsBudgetSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { month: number; year: number; category?: string; budget_amount: number; currency?: string; alert_threshold_pct?: number };
-  const { month, year, category, budget_amount, currency, alert_threshold_pct } = body;
+finopsRoute.put(
+  "/budgets",
+  requirePermission("finops:write"),
+  validate({ schema: finopsBudgetSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      month: number;
+      year: number;
+      category?: string;
+      budget_amount: number;
+      currency?: string;
+      alert_threshold_pct?: number;
+    };
+    const {
+      month,
+      year,
+      category,
+      budget_amount,
+      currency,
+      alert_threshold_pct,
+    } = body;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.cost_budgets (tenant_id, month, year, category, budget_amount, currency, alert_threshold_pct, created_by)
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.cost_budgets (tenant_id, month, year, category, budget_amount, currency, alert_threshold_pct, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (tenant_id, year, month, category) DO UPDATE SET
        budget_amount = EXCLUDED.budget_amount,
        currency = EXCLUDED.currency,
        alert_threshold_pct = EXCLUDED.alert_threshold_pct
      RETURNING id`,
-    [tenantId, month, year, category ?? null, budget_amount, currency ?? "BRL", alert_threshold_pct ?? 80, user.sub],
-  );
+      [
+        tenantId,
+        month,
+        year,
+        category ?? null,
+        budget_amount,
+        currency ?? "BRL",
+        alert_threshold_pct ?? 80,
+        user.sub,
+      ],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, updated: true });
-});
+    return c.json({ id: result.data?.rows[0]?.id, updated: true });
+  },
+);
 
 // ========== Stats ==========
 
@@ -244,12 +357,16 @@ finopsRoute.get("/stats", requirePermission("finops:read"), async (c) => {
     [tenantId, year],
   );
 
-  const getValue = (r: { data?: { rows?: Array<Record<string, unknown>> } | null }): string => {
+  const getValue = (r: {
+    data?: { rows?: Array<Record<string, unknown>> } | null;
+  }): string => {
     const row = r.data?.rows?.[0];
     return (row?.total as string) ?? "0";
   };
 
-  const getCount = (r: { data?: { rows?: Array<Record<string, unknown>> } | null }): number => {
+  const getCount = (r: {
+    data?: { rows?: Array<Record<string, unknown>> } | null;
+  }): number => {
     const row = r.data?.rows?.[0];
     return row ? parseInt((row.count as string) ?? "0", 10) : 0;
   };

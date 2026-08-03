@@ -2,24 +2,24 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
 import "../types.js";
 
 export const dashboardRoute = new Hono();
 
-dashboardRoute.use("/*", jwtAuth);
-dashboardRoute.use("/*", tenantContext);
 dashboardRoute.use("/*", requirePermission("dashboard:read"));
 
-function safeCount(result: { data?: { rows?: Array<Record<string, unknown>> } | null }): number {
+function safeCount(result: {
+  data?: { rows?: Array<Record<string, unknown>> } | null;
+}): number {
   const row = result.data?.rows?.[0];
   return row ? parseInt((row.count as string) ?? "0", 10) : 0;
 }
 
-function safeRows(result: { data?: { rows?: Array<Record<string, unknown>> } | null }): Array<Record<string, unknown>> {
+function safeRows(result: {
+  data?: { rows?: Array<Record<string, unknown>> } | null;
+}): Array<Record<string, unknown>> {
   return result.data?.rows ?? [];
 }
 
@@ -30,17 +30,36 @@ dashboardRoute.get("/", httpCache(30), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
-  const [totalDevicesR, onlineDevicesR, openTicketsR, criticalTicketsR] = await Promise.all([
-    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1 AND status = 'active'", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND priority = 'urgent' AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
-  ]);
+  const [totalDevicesR, onlineDevicesR, openTicketsR, criticalTicketsR] =
+    await Promise.all([
+      query(
+        "SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1",
+        [tenantId],
+      ),
+      query(
+        "SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1 AND status = 'active'",
+        [tenantId],
+      ),
+      query(
+        "SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')",
+        [tenantId],
+      ),
+      query(
+        "SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND priority = 'urgent' AND status NOT IN ('resolved','closed','cancelled')",
+        [tenantId],
+      ),
+    ]);
 
   return c.json({
     kpis: {
-      devices: { total: safeCount(totalDevicesR), online: safeCount(onlineDevicesR) },
-      tickets: { open: safeCount(openTicketsR), critical: safeCount(criticalTicketsR) },
+      devices: {
+        total: safeCount(totalDevicesR),
+        online: safeCount(onlineDevicesR),
+      },
+      tickets: {
+        open: safeCount(openTicketsR),
+        critical: safeCount(criticalTicketsR),
+      },
     },
   });
 });
@@ -50,34 +69,87 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
   const tenantId = user?.tenant_id ?? null;
 
   // Devices — tabela em public.devices com RLS
-  const [totalDevicesR, onlineDevicesR, openTicketsR, criticalTicketsR,
-    complianceScansR, sslCertsR, sslExpiringR, totalBackupsR, successfulBackupsR,
-    firewallRulesR, activeFirewallRulesR, pendingChangesR, inProgressChangesR,
-    totalAssetsR, totalScriptsR, unreadNotificationsR, recentActivityR,
-    recentTicketsR, upcomingChangesR, sslExpiringSoonR] = await Promise.all([
-    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1 AND status = 'active'", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND priority = 'urgent' AND status NOT IN ('resolved','closed','cancelled')", [tenantId]),
+  const [
+    totalDevicesR,
+    onlineDevicesR,
+    openTicketsR,
+    criticalTicketsR,
+    complianceScansR,
+    sslCertsR,
+    sslExpiringR,
+    totalBackupsR,
+    successfulBackupsR,
+    firewallRulesR,
+    activeFirewallRulesR,
+    pendingChangesR,
+    inProgressChangesR,
+    totalAssetsR,
+    totalScriptsR,
+    unreadNotificationsR,
+    recentActivityR,
+    recentTicketsR,
+    upcomingChangesR,
+    sslExpiringSoonR,
+  ] = await Promise.all([
+    query("SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1", [
+      tenantId,
+    ]),
+    query(
+      "SELECT COUNT(*) as count FROM public.devices WHERE tenant_id = $1 AND status = 'active'",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.tickets WHERE tenant_id = $1 AND priority = 'urgent' AND status NOT IN ('resolved','closed','cancelled')",
+      [tenantId],
+    ),
     query(
       `SELECT COALESCE(SUM(total_checks), 0) as total, COALESCE(SUM(passed_checks), 0) as passed
        FROM public.compliance_scans WHERE tenant_id = $1 AND status = 'completed'`,
       [tenantId],
     ),
-    query("SELECT COUNT(*) as count FROM public.ssl_certificates WHERE tenant_id = $1 AND is_active = true", [tenantId]),
+    query(
+      "SELECT COUNT(*) as count FROM public.ssl_certificates WHERE tenant_id = $1 AND is_active = true",
+      [tenantId],
+    ),
     query(
       `SELECT COUNT(*) as count FROM public.ssl_certificates
        WHERE tenant_id = $1 AND is_active = true AND valid_to <= timezone('utc'::text, now()) + INTERVAL '30 days'`,
       [tenantId],
     ),
-    query("SELECT COUNT(*) as count FROM public.backup_snapshots WHERE tenant_id = $1", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.backup_snapshots WHERE tenant_id = $1 AND status IN ('completed','verified')", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.firewall_rules WHERE tenant_id = $1", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.firewall_rules WHERE tenant_id = $1 AND is_active = true", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('submitted','under_review')", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'in_progress'", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.assets WHERE tenant_id = $1", [tenantId]),
-    query("SELECT COUNT(*) as count FROM public.scripts WHERE tenant_id = $1", [tenantId]),
+    query(
+      "SELECT COUNT(*) as count FROM public.backup_snapshots WHERE tenant_id = $1",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.backup_snapshots WHERE tenant_id = $1 AND status IN ('completed','verified')",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.firewall_rules WHERE tenant_id = $1",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.firewall_rules WHERE tenant_id = $1 AND is_active = true",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('submitted','under_review')",
+      [tenantId],
+    ),
+    query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'in_progress'",
+      [tenantId],
+    ),
+    query("SELECT COUNT(*) as count FROM public.assets WHERE tenant_id = $1", [
+      tenantId,
+    ]),
+    query("SELECT COUNT(*) as count FROM public.scripts WHERE tenant_id = $1", [
+      tenantId,
+    ]),
     query(
       `SELECT COUNT(*) as count FROM public.notification_log
        WHERE tenant_id = $1 AND status = 'sent' AND created_at > timezone('utc'::text, now()) - INTERVAL '24 hours'`,
@@ -109,10 +181,16 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
   const onlineDevices = safeCount(onlineDevicesR);
   const openTickets = safeCount(openTicketsR);
   const criticalTickets = safeCount(criticalTicketsR);
-  const complianceRow = complianceScansR.data?.rows?.[0] ?? { total: "0", passed: "0" };
+  const complianceRow = complianceScansR.data?.rows?.[0] ?? {
+    total: "0",
+    passed: "0",
+  };
   const complianceTotal = parseInt(String(complianceRow.total ?? "0"), 10);
   const compliancePassed = parseInt(String(complianceRow.passed ?? "0"), 10);
-  const complianceRate = complianceTotal > 0 ? Math.round((compliancePassed / complianceTotal) * 100) : 0;
+  const complianceRate =
+    complianceTotal > 0
+      ? Math.round((compliancePassed / complianceTotal) * 100)
+      : 0;
   const sslCerts = safeCount(sslCertsR);
   const sslExpiring = safeCount(sslExpiringR);
   const totalBackups = safeCount(totalBackupsR);
@@ -133,9 +211,20 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
     kpis: {
       devices: { total: totalDevices, online: onlineDevices },
       tickets: { open: openTickets, critical: criticalTickets },
-      compliance: { total: complianceTotal, compliant: compliancePassed, rate: complianceRate },
+      compliance: {
+        total: complianceTotal,
+        compliant: compliancePassed,
+        rate: complianceRate,
+      },
       ssl: { total: sslCerts, expiring: sslExpiring },
-      backups: { total: totalBackups, successful: successfulBackups, rate: totalBackups > 0 ? Math.round((successfulBackups / totalBackups) * 100) : 0 },
+      backups: {
+        total: totalBackups,
+        successful: successfulBackups,
+        rate:
+          totalBackups > 0
+            ? Math.round((successfulBackups / totalBackups) * 100)
+            : 0,
+      },
       firewall: { total: firewallRules, active: activeFirewallRules },
       changes: { pending: pendingChanges, in_progress: inProgressChanges },
       assets: { total: totalAssets },
@@ -158,7 +247,11 @@ dashboardRoute.get("/navigation", async (c) => {
         label: "Monitoramento",
         items: [
           { label: "Dashboard", href: "/dashboard", icon: "grid" },
-          { label: "Dashboard Executivo", href: "/executive-dashboard", icon: "chart" },
+          {
+            label: "Dashboard Executivo",
+            href: "/executive-dashboard",
+            icon: "chart",
+          },
           { label: "Devices", href: "/dashboard/devices", icon: "server" },
           { label: "K8s", href: "/k8s", icon: "k8s" },
           { label: "System Health", href: "/system-health", icon: "heart" },

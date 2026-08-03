@@ -3,17 +3,12 @@
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import { createHash } from "node:crypto";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { validate } from "../middleware/validate.js";
 import { driftBaselineSchema, driftScanSchema } from "@repo/shared-validation";
 import "../types.js";
 
 export const driftRoute = new Hono();
-
-driftRoute.use("/*", jwtAuth);
-driftRoute.use("/*", tenantContext);
 
 // ========== Baselines ==========
 
@@ -36,22 +31,43 @@ driftRoute.get("/baselines", requirePermission("drift:read"), async (c) => {
 });
 
 // POST /api/v1/drift/baselines — captura baseline de um dispositivo
-driftRoute.post("/baselines", requirePermission("drift:write"), validate({ schema: driftBaselineSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { device_id: string; name: string; config_snapshot: Record<string, unknown> };
-  const { device_id, name, config_snapshot } = body;
+driftRoute.post(
+  "/baselines",
+  requirePermission("drift:write"),
+  validate({ schema: driftBaselineSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      device_id: string;
+      name: string;
+      config_snapshot: Record<string, unknown>;
+    };
+    const { device_id, name, config_snapshot } = body;
 
-  // Valida que o dispositivo pertence ao tenant
-  const deviceResult = await query("SELECT id, hostname FROM public.devices WHERE id = $1 AND tenant_id = $2", [device_id, tenantId]);
-  if (!deviceResult.data?.rows[0]) {
-    return c.json({ error: { code: "DEVICE_NOT_FOUND", message: "Dispositivo não encontrado" } }, 404);
-  }
+    // Valida que o dispositivo pertence ao tenant
+    const deviceResult = await query(
+      "SELECT id, hostname FROM public.devices WHERE id = $1 AND tenant_id = $2",
+      [device_id, tenantId],
+    );
+    if (!deviceResult.data?.rows[0]) {
+      return c.json(
+        {
+          error: {
+            code: "DEVICE_NOT_FOUND",
+            message: "Dispositivo não encontrado",
+          },
+        },
+        404,
+      );
+    }
 
-  const configHash = createHash("sha256").update(JSON.stringify(config_snapshot)).digest("hex");
+    const configHash = createHash("sha256")
+      .update(JSON.stringify(config_snapshot))
+      .digest("hex");
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.config_baselines (tenant_id, device_id, name, config_snapshot, config_hash, captured_by)
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.config_baselines (tenant_id, device_id, name, config_snapshot, config_hash, captured_by)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (device_id, name) DO UPDATE SET
        config_snapshot = EXCLUDED.config_snapshot,
@@ -60,32 +76,54 @@ driftRoute.post("/baselines", requirePermission("drift:write"), validate({ schem
        captured_by = EXCLUDED.captured_by,
        is_active = true
      RETURNING id`,
-    [tenantId, device_id, name, JSON.stringify(config_snapshot), configHash, user.sub],
-  );
+      [
+        tenantId,
+        device_id,
+        name,
+        JSON.stringify(config_snapshot),
+        configHash,
+        user.sub,
+      ],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'drift.baseline.create', 'config_baselines', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, device_id, name })],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'drift.baseline.create', 'config_baselines', NULL, $2, NULL, NULL)",
+      [
+        user.sub,
+        JSON.stringify({ id: result.data?.rows[0]?.id, device_id, name }),
+      ],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, created: true, config_hash: configHash });
-});
+    return c.json({
+      id: result.data?.rows[0]?.id,
+      created: true,
+      config_hash: configHash,
+    });
+  },
+);
 
 // DELETE /api/v1/drift/baselines/:id — remove baseline
-driftRoute.delete("/baselines/:id", requirePermission("drift:write"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const baselineId = c.req.param("id");
+driftRoute.delete(
+  "/baselines/:id",
+  requirePermission("drift:write"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const baselineId = c.req.param("id");
 
-  await query("DELETE FROM public.config_baselines WHERE id = $1 AND tenant_id = $2", [baselineId, tenantId]);
+    await query(
+      "DELETE FROM public.config_baselines WHERE id = $1 AND tenant_id = $2",
+      [baselineId, tenantId],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'drift.baseline.delete', 'config_baselines', $2, NULL, NULL, NULL)",
-    [user.sub, baselineId],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'drift.baseline.delete', 'config_baselines', $2, NULL, NULL, NULL)",
+      [user.sub, baselineId],
+    );
 
-  return c.json({ deleted: true });
-});
+    return c.json({ deleted: true });
+  },
+);
 
 // ========== Drift Events ==========
 
@@ -123,100 +161,183 @@ driftRoute.get("/events", requirePermission("drift:read"), async (c) => {
 });
 
 // POST /api/v1/drift/scan — escanea um dispositivo contra baseline
-driftRoute.post("/scan", requirePermission("drift:write"), validate({ schema: driftScanSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { device_id: string; current_config: Record<string, unknown> };
-  const { device_id, current_config } = body;
+driftRoute.post(
+  "/scan",
+  requirePermission("drift:write"),
+  validate({ schema: driftScanSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      device_id: string;
+      current_config: Record<string, unknown>;
+    };
+    const { device_id, current_config } = body;
 
-  // Busca baseline ativo
-  const baselineResult = await query<{ id: string; config_snapshot: Record<string, unknown>; config_hash: string }>(
-    "SELECT id, config_snapshot, config_hash FROM public.config_baselines WHERE device_id = $1 AND tenant_id = $2 AND is_active = true ORDER BY captured_at DESC LIMIT 1",
-    [device_id, tenantId],
-  );
-
-  const baseline = baselineResult.data?.rows[0];
-  if (!baseline) {
-    return c.json({ error: { code: "NO_BASELINE", message: "Nenhum baseline ativo encontrado para este dispositivo" } }, 404);
-  }
-
-  const baselineConfig = baseline.config_snapshot as Record<string, unknown>;
-  const drifts: Array<{ path: string; drift_type: string; old_value: string | null; new_value: string | null; severity: string }> = [];
-
-  // Compara chaves
-  const allKeys = new Set([...Object.keys(baselineConfig), ...Object.keys(current_config)]);
-
-  for (const key of allKeys) {
-    const inBaseline = key in baselineConfig;
-    const inCurrent = key in current_config;
-    const oldVal = inBaseline ? JSON.stringify(baselineConfig[key]) : null;
-    const newVal = inCurrent ? JSON.stringify(current_config[key]) : null;
-
-    if (!inBaseline && inCurrent) {
-      drifts.push({ path: key, drift_type: "added", old_value: null, new_value: newVal, severity: "warning" });
-    } else if (inBaseline && !inCurrent) {
-      drifts.push({ path: key, drift_type: "removed", old_value: oldVal, new_value: null, severity: "critical" });
-    } else if (oldVal !== newVal) {
-      drifts.push({ path: key, drift_type: "modified", old_value: oldVal, new_value: newVal, severity: "warning" });
-    }
-  }
-
-  // Registra drifts no banco
-  let inserted = 0;
-  for (const drift of drifts) {
-    await query(
-      `INSERT INTO public.config_drift_events (tenant_id, device_id, baseline_id, drift_type, config_path, old_value, new_value, severity)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [tenantId, device_id, baseline.id, drift.drift_type, drift.path, drift.old_value, drift.new_value, drift.severity],
+    // Busca baseline ativo
+    const baselineResult = await query<{
+      id: string;
+      config_snapshot: Record<string, unknown>;
+      config_hash: string;
+    }>(
+      "SELECT id, config_snapshot, config_hash FROM public.config_baselines WHERE device_id = $1 AND tenant_id = $2 AND is_active = true ORDER BY captured_at DESC LIMIT 1",
+      [device_id, tenantId],
     );
-    inserted++;
-  }
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'drift.scan', 'config_drift_events', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ device_id, baseline_id: baseline.id, drifts_found: inserted })],
-  );
+    const baseline = baselineResult.data?.rows[0];
+    if (!baseline) {
+      return c.json(
+        {
+          error: {
+            code: "NO_BASELINE",
+            message: "Nenhum baseline ativo encontrado para este dispositivo",
+          },
+        },
+        404,
+      );
+    }
 
-  return c.json({ drifts_found: inserted, drifts });
-});
+    const baselineConfig = baseline.config_snapshot as Record<string, unknown>;
+    const drifts: Array<{
+      path: string;
+      drift_type: string;
+      old_value: string | null;
+      new_value: string | null;
+      severity: string;
+    }> = [];
+
+    // Compara chaves
+    const allKeys = new Set([
+      ...Object.keys(baselineConfig),
+      ...Object.keys(current_config),
+    ]);
+
+    for (const key of allKeys) {
+      const inBaseline = key in baselineConfig;
+      const inCurrent = key in current_config;
+      const oldVal = inBaseline ? JSON.stringify(baselineConfig[key]) : null;
+      const newVal = inCurrent ? JSON.stringify(current_config[key]) : null;
+
+      if (!inBaseline && inCurrent) {
+        drifts.push({
+          path: key,
+          drift_type: "added",
+          old_value: null,
+          new_value: newVal,
+          severity: "warning",
+        });
+      } else if (inBaseline && !inCurrent) {
+        drifts.push({
+          path: key,
+          drift_type: "removed",
+          old_value: oldVal,
+          new_value: null,
+          severity: "critical",
+        });
+      } else if (oldVal !== newVal) {
+        drifts.push({
+          path: key,
+          drift_type: "modified",
+          old_value: oldVal,
+          new_value: newVal,
+          severity: "warning",
+        });
+      }
+    }
+
+    // Registra drifts no banco
+    let inserted = 0;
+    for (const drift of drifts) {
+      await query(
+        `INSERT INTO public.config_drift_events (tenant_id, device_id, baseline_id, drift_type, config_path, old_value, new_value, severity)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          tenantId,
+          device_id,
+          baseline.id,
+          drift.drift_type,
+          drift.path,
+          drift.old_value,
+          drift.new_value,
+          drift.severity,
+        ],
+      );
+      inserted++;
+    }
+
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'drift.scan', 'config_drift_events', NULL, $2, NULL, NULL)",
+      [
+        user.sub,
+        JSON.stringify({
+          device_id,
+          baseline_id: baseline.id,
+          drifts_found: inserted,
+        }),
+      ],
+    );
+
+    return c.json({ drifts_found: inserted, drifts });
+  },
+);
 
 // PUT /api/v1/drift/events/:id/resolve — resolve um drift
-driftRoute.put("/events/:id/resolve", requirePermission("drift:write"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const eventId = c.req.param("id");
+driftRoute.put(
+  "/events/:id/resolve",
+  requirePermission("drift:write"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const eventId = c.req.param("id");
 
-  await query(
-    "UPDATE public.config_drift_events SET status = 'resolved', resolved_by = $1, resolved_at = timezone('utc'::text, now()) WHERE id = $2 AND tenant_id = $3",
-    [user.sub, eventId, tenantId],
-  );
+    await query(
+      "UPDATE public.config_drift_events SET status = 'resolved', resolved_by = $1, resolved_at = timezone('utc'::text, now()) WHERE id = $2 AND tenant_id = $3",
+      [user.sub, eventId, tenantId],
+    );
 
-  return c.json({ resolved: true });
-});
+    return c.json({ resolved: true });
+  },
+);
 
 // PUT /api/v1/drift/events/:id/acknowledge — reconhece um drift
-driftRoute.put("/events/:id/acknowledge", requirePermission("drift:write"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const eventId = c.req.param("id");
+driftRoute.put(
+  "/events/:id/acknowledge",
+  requirePermission("drift:write"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const eventId = c.req.param("id");
 
-  await query(
-    "UPDATE public.config_drift_events SET status = 'acknowledged' WHERE id = $1 AND tenant_id = $2",
-    [eventId, tenantId],
-  );
+    await query(
+      "UPDATE public.config_drift_events SET status = 'acknowledged' WHERE id = $1 AND tenant_id = $2",
+      [eventId, tenantId],
+    );
 
-  return c.json({ acknowledged: true });
-});
+    return c.json({ acknowledged: true });
+  },
+);
 
 // GET /api/v1/drift/stats — estatisticas
 driftRoute.get("/stats", requirePermission("drift:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
 
-  const totalBaselines = await query("SELECT COUNT(*) as count FROM public.config_baselines WHERE tenant_id = $1 AND is_active = true", [tenantId]);
-  const openDrifts = await query("SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND status = 'open'", [tenantId]);
-  const criticalDrifts = await query("SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND status = 'open' AND severity = 'critical'", [tenantId]);
-  const recentDrifts = await query("SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND detected_at >= timezone('utc'::text, now()) - INTERVAL '24 hours'", [tenantId]);
+  const totalBaselines = await query(
+    "SELECT COUNT(*) as count FROM public.config_baselines WHERE tenant_id = $1 AND is_active = true",
+    [tenantId],
+  );
+  const openDrifts = await query(
+    "SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND status = 'open'",
+    [tenantId],
+  );
+  const criticalDrifts = await query(
+    "SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND status = 'open' AND severity = 'critical'",
+    [tenantId],
+  );
+  const recentDrifts = await query(
+    "SELECT COUNT(*) as count FROM public.config_drift_events WHERE tenant_id = $1 AND detected_at >= timezone('utc'::text, now()) - INTERVAL '24 hours'",
+    [tenantId],
+  );
   const byDevice = await query(
     `SELECT d.hostname, COUNT(*) as drift_count
      FROM public.config_drift_events e
@@ -226,7 +347,9 @@ driftRoute.get("/stats", requirePermission("drift:read"), async (c) => {
     [tenantId],
   );
 
-  const getCount = (r: { data?: { rows?: Array<Record<string, unknown>> } | null }): number => {
+  const getCount = (r: {
+    data?: { rows?: Array<Record<string, unknown>> } | null;
+  }): number => {
     const row = r.data?.rows?.[0];
     return row ? parseInt((row.count as string) ?? "0", 10) : 0;
   };
