@@ -2,14 +2,12 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 
 export const apmRoute = new Hono();
 
 // GET /api/v1/apm/overview — dashboard de observabilidade runtime
-apmRoute.get("/overview", jwtAuth, tenantContext, requirePermission("traces:read"), async (c) => {
+apmRoute.get("/overview", requirePermission("traces:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
@@ -141,12 +139,16 @@ apmRoute.get("/overview", jwtAuth, tenantContext, requirePermission("traces:read
 });
 
 // GET /api/v1/apm/throughput — throughput por minuto em tempo real
-apmRoute.get("/throughput", jwtAuth, tenantContext, requirePermission("traces:read"), async (c) => {
+apmRoute.get("/throughput", requirePermission("traces:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const minutes = parseInt(c.req.query("minutes") ?? "15", 10);
 
-  const result = await query<{ minute: string; count: string; error_count: string }>(
+  const result = await query<{
+    minute: string;
+    count: string;
+    error_count: string;
+  }>(
     `SELECT
       date_trunc('minute', start_time) as minute,
       COUNT(*)::text as count,

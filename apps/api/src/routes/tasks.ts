@@ -8,17 +8,18 @@ import {
   type CreateScheduledTaskInput,
   type UpdateScheduledTaskInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
-import { parsePaginationParams, buildPaginatedResponse } from "../lib/pagination.js";
+import {
+  parsePaginationParams,
+  buildPaginatedResponse,
+} from "../lib/pagination.js";
 import "../types.js";
 
 export const taskRoute = new Hono();
 
 // ========== List ==========
 
-taskRoute.get("/", jwtAuth, tenantContext, requirePermission("tasks:read"), async (c) => {
+taskRoute.get("/", requirePermission("tasks:read"), async (c) => {
   const user = c.get("user");
   const activeOnly = c.req.query("active") === "true";
   const taskType = c.req.query("type");
@@ -33,12 +34,20 @@ taskRoute.get("/", jwtAuth, tenantContext, requirePermission("tasks:read"), asyn
   const params: unknown[] = [user?.tenant_id ?? null];
   let paramIdx = 2;
 
-  if (activeOnly) { conditions.push("is_active = true"); }
-  if (taskType) { conditions.push(`task_type = $${paramIdx++}`); params.push(taskType); }
+  if (activeOnly) {
+    conditions.push("is_active = true");
+  }
+  if (taskType) {
+    conditions.push(`task_type = $${paramIdx++}`);
+    params.push(taskType);
+  }
 
   const whereClause = conditions.join(" AND ");
 
-  const countResult = await query(`SELECT COUNT(*)::int as total FROM public.scheduled_tasks WHERE ${whereClause}`, params);
+  const countResult = await query(
+    `SELECT COUNT(*)::int as total FROM public.scheduled_tasks WHERE ${whereClause}`,
+    params,
+  );
   const total = countResult.data?.rows[0]?.total ?? 0;
 
   params.push(pagination.limit, pagination.offset);
@@ -53,17 +62,22 @@ taskRoute.get("/", jwtAuth, tenantContext, requirePermission("tasks:read"), asyn
     params,
   );
 
-  return c.json(buildPaginatedResponse(result.data?.rows ?? [], total, pagination));
+  return c.json(
+    buildPaginatedResponse(result.data?.rows ?? [], total, pagination),
+  );
 });
 
 // ========== Create ==========
 
-taskRoute.post("/", jwtAuth, tenantContext, requirePermission("tasks:write"), async (c) => {
+taskRoute.post("/", requirePermission("tasks:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateScheduledTaskInput>();
   const parsed = createScheduledTaskSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -81,21 +95,43 @@ taskRoute.post("/", jwtAuth, tenantContext, requirePermission("tasks:write"), as
        notify_on_failure, notify_emails, next_run_at, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
     [
-      user?.tenant_id ?? null, data.name, data.description ?? null,
-      data.task_type, data.cron_expression, JSON.stringify(data.config),
-      data.is_active, data.timezone, data.max_execution_seconds,
-      data.retry_on_failure, data.max_retries, data.retry_delay_seconds,
-      data.notify_on_failure, JSON.stringify(data.notify_emails), nextRun, user.sub,
+      user?.tenant_id ?? null,
+      data.name,
+      data.description ?? null,
+      data.task_type,
+      data.cron_expression,
+      JSON.stringify(data.config),
+      data.is_active,
+      data.timezone,
+      data.max_execution_seconds,
+      data.retry_on_failure,
+      data.max_retries,
+      data.retry_delay_seconds,
+      data.notify_on_failure,
+      JSON.stringify(data.notify_emails),
+      nextRun,
+      user.sub,
     ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao criar tarefa" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao criar tarefa" } },
+      500,
+    );
   }
 
   await query(
     "SELECT public.write_audit_log($1, NULL, 'task.create', 'scheduled_task', $2, $3, NULL, NULL)",
-    [user.sub, result.data.rows[0].id, JSON.stringify({ name: data.name, task_type: data.task_type, cron: data.cron_expression })],
+    [
+      user.sub,
+      result.data.rows[0].id,
+      JSON.stringify({
+        name: data.name,
+        task_type: data.task_type,
+        cron: data.cron_expression,
+      }),
+    ],
   );
 
   return c.json({ id: result.data.rows[0].id, next_run_at: nextRun }, 201);
@@ -103,13 +139,16 @@ taskRoute.post("/", jwtAuth, tenantContext, requirePermission("tasks:write"), as
 
 // ========== Update ==========
 
-taskRoute.put("/:id", jwtAuth, tenantContext, requirePermission("tasks:write"), async (c) => {
+taskRoute.put("/:id", requirePermission("tasks:write"), async (c) => {
   const taskId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateScheduledTaskInput>();
   const parsed = updateScheduledTaskSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -118,10 +157,16 @@ taskRoute.put("/:id", jwtAuth, tenantContext, requirePermission("tasks:write"), 
   let paramIdx = 1;
 
   const fieldMap: Record<string, string> = {
-    name: "name", description: "description", task_type: "task_type",
-    cron_expression: "cron_expression", is_active: "is_active", timezone: "timezone",
-    max_execution_seconds: "max_execution_seconds", retry_on_failure: "retry_on_failure",
-    max_retries: "max_retries", retry_delay_seconds: "retry_delay_seconds",
+    name: "name",
+    description: "description",
+    task_type: "task_type",
+    cron_expression: "cron_expression",
+    is_active: "is_active",
+    timezone: "timezone",
+    max_execution_seconds: "max_execution_seconds",
+    retry_on_failure: "retry_on_failure",
+    max_retries: "max_retries",
+    retry_delay_seconds: "retry_delay_seconds",
     notify_on_failure: "notify_on_failure",
   };
 
@@ -170,7 +215,7 @@ taskRoute.put("/:id", jwtAuth, tenantContext, requirePermission("tasks:write"), 
 
 // ========== Delete ==========
 
-taskRoute.delete("/:id", jwtAuth, tenantContext, requirePermission("tasks:write"), async (c) => {
+taskRoute.delete("/:id", requirePermission("tasks:write"), async (c) => {
   const taskId = c.req.param("id");
   const user = c.get("user");
 
@@ -184,7 +229,7 @@ taskRoute.delete("/:id", jwtAuth, tenantContext, requirePermission("tasks:write"
 
 // ========== Run Manually ==========
 
-taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:write"), async (c) => {
+taskRoute.post("/:id/run", requirePermission("tasks:write"), async (c) => {
   const taskId = c.req.param("id");
   const user = c.get("user");
 
@@ -194,12 +239,20 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
   );
 
   if (taskResult.error || !taskResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Tarefa não encontrada" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Tarefa não encontrada" } },
+      404,
+    );
   }
 
   const task = taskResult.data.rows[0] as {
-    id: string; name: string; task_type: string; config: Record<string, unknown>;
-    max_execution_seconds: number; cron_expression: string; timezone: string;
+    id: string;
+    name: string;
+    task_type: string;
+    config: Record<string, unknown>;
+    max_execution_seconds: number;
+    cron_expression: string;
+    timezone: string;
   };
 
   // Cria registro de execucao
@@ -229,7 +282,12 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      const res = await fetch(url, { method, headers, body, signal: controller.signal });
+      const res = await fetch(url, {
+        method,
+        headers,
+        body,
+        signal: controller.signal,
+      });
       clearTimeout(timeout);
 
       statusCode = res.status;
@@ -252,10 +310,16 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
     } else if (task.task_type === "cleanup") {
       const target = config.target as string;
       if (target === "old_metrics") {
-        const cleanupResult = await query("SELECT public.cleanup_old_metric_snapshots()", []);
+        const cleanupResult = await query(
+          "SELECT public.cleanup_old_metric_snapshots()",
+          [],
+        );
         output = `Cleanup: ${cleanupResult.data?.rows[0]?.cleanup_old_metric_snapshots ?? 0} registros removidos`;
       } else if (target === "reset_api_key_counters") {
-        const resetResult = await query("SELECT public.reset_api_key_counters()", []);
+        const resetResult = await query(
+          "SELECT public.reset_api_key_counters()",
+          [],
+        );
         output = `API key counters reset: ${resetResult.data?.rows[0]?.reset_api_key_counters ?? 0}`;
       } else {
         output = `Cleanup target: ${target ?? "unknown"}`;
@@ -266,7 +330,12 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
         status = "failed";
         errorMsg = "script_id não informado na config da tarefa";
       } else {
-        const scriptResult = await query<{ id: string; content: string; language: string; timeout_seconds: number }>(
+        const scriptResult = await query<{
+          id: string;
+          content: string;
+          language: string;
+          timeout_seconds: number;
+        }>(
           "SELECT id, content, language, timeout_seconds FROM public.scripts WHERE id = $1 AND is_active = true",
           [scriptId],
         );
@@ -277,19 +346,32 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
         } else {
           const { exec } = await import("node:child_process");
           const lang = script.language;
-          const cmd = lang === "python" ? "python3" : lang === "powershell" ? "powershell" : lang === "bash" ? "bash" : lang === "node" ? "node" : null;
+          const cmd =
+            lang === "python"
+              ? "python3"
+              : lang === "powershell"
+                ? "powershell"
+                : lang === "bash"
+                  ? "bash"
+                  : lang === "node"
+                    ? "node"
+                    : null;
           if (!cmd) {
             status = "failed";
             errorMsg = `Linguagem não suportada: ${lang}`;
           } else {
             output = await new Promise<string>((resolve) => {
-              const proc = exec(cmd, { timeout: timeoutMs }, (err, stdout, stderr) => {
-                if (err) {
-                  resolve(`ERROR: ${err.message}\n${stderr}`);
-                } else {
-                  resolve(stdout || stderr || "Script executado sem output");
-                }
-              });
+              const proc = exec(
+                cmd,
+                { timeout: timeoutMs },
+                (err, stdout, stderr) => {
+                  if (err) {
+                    resolve(`ERROR: ${err.message}\n${stderr}`);
+                  } else {
+                    resolve(stdout || stderr || "Script executado sem output");
+                  }
+                },
+              );
               proc.stdin?.end(script.content);
             });
           }
@@ -320,8 +402,14 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
         status = "failed";
         errorMsg = "template_id não informado na config da tarefa";
       } else {
-        const { generateCSV, collectReportData } = await import("../lib/report-generator.js");
-        const templateResult = await query<{ name: string; data_sources: string[]; columns: string[]; format: string }>(
+        const { generateCSV, collectReportData } =
+          await import("../lib/report-generator.js");
+        const templateResult = await query<{
+          name: string;
+          data_sources: string[];
+          columns: string[];
+          format: string;
+        }>(
           "SELECT name, data_sources, columns, format FROM public.report_templates WHERE id = $1",
           [templateId],
         );
@@ -375,7 +463,14 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
        status = $1, finished_at = timezone('utc'::text, now()), duration_ms = $2,
        output = $3, error_message = $4, response_status_code = $5
      WHERE id = $6`,
-    [status, durationMs, output.substring(0, 10000), errorMsg, statusCode, runId],
+    [
+      status,
+      durationMs,
+      output.substring(0, 10000),
+      errorMsg,
+      statusCode,
+      runId,
+    ],
   );
 
   // Atualiza stats da tarefa
@@ -395,8 +490,15 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
        failed_runs = failed_runs + $5,
        next_run_at = $6
      WHERE id = $7`,
-    [status, durationMs, errorMsg, status === "success" ? 1 : 0, status === "success" ? 0 : 1,
-     nextRunResult.data?.rows[0]?.next_run ?? null, taskId],
+    [
+      status,
+      durationMs,
+      errorMsg,
+      status === "success" ? 1 : 0,
+      status === "success" ? 0 : 1,
+      nextRunResult.data?.rows[0]?.next_run ?? null,
+      taskId,
+    ],
   );
 
   return c.json({
@@ -411,7 +513,7 @@ taskRoute.post("/:id/run", jwtAuth, tenantContext, requirePermission("tasks:writ
 
 // ========== Runs (History) ==========
 
-taskRoute.get("/:id/runs", jwtAuth, tenantContext, requirePermission("tasks:read"), async (c) => {
+taskRoute.get("/:id/runs", requirePermission("tasks:read"), async (c) => {
   const taskId = c.req.param("id");
   const user = c.get("user");
   const status = c.req.query("status");
@@ -421,7 +523,10 @@ taskRoute.get("/:id/runs", jwtAuth, tenantContext, requirePermission("tasks:read
   const params: unknown[] = [taskId, user?.tenant_id ?? null];
   let paramIdx = 3;
 
-  if (status) { conditions.push(`status = $${paramIdx++}`); params.push(status); }
+  if (status) {
+    conditions.push(`status = $${paramIdx++}`);
+    params.push(status);
+  }
   params.push(limit);
 
   const result = await query(
@@ -435,7 +540,7 @@ taskRoute.get("/:id/runs", jwtAuth, tenantContext, requirePermission("tasks:read
 
 // ========== Stats ==========
 
-taskRoute.get("/stats/overview", jwtAuth, tenantContext, requirePermission("tasks:read"), async (c) => {
+taskRoute.get("/stats/overview", requirePermission("tasks:read"), async (c) => {
   const user = c.get("user");
 
   const overviewResult = await query(
@@ -478,7 +583,15 @@ taskRoute.get("/stats/overview", jwtAuth, tenantContext, requirePermission("task
   );
 
   return c.json({
-    overview: overviewResult.data?.rows[0] ?? { total_tasks: "0", active_tasks: "0", total_runs: "0", successful_runs: "0", failed_runs: "0", currently_running: "0", due_soon: "0" },
+    overview: overviewResult.data?.rows[0] ?? {
+      total_tasks: "0",
+      active_tasks: "0",
+      total_runs: "0",
+      successful_runs: "0",
+      failed_runs: "0",
+      currently_running: "0",
+      due_soon: "0",
+    },
     by_type: byType.data?.rows ?? [],
     recent_runs: recentRuns.data?.rows ?? [],
     upcoming: upcomingTasks.data?.rows ?? [],

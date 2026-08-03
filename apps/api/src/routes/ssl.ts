@@ -9,15 +9,16 @@ import {
   type CreateSslCertificateInput,
   type UpdateSslCertificateInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const sslRoute = new Hono();
 
 // Funcao que faz handshake TLS real para verificar validade do certificado
-async function checkTlsCertificate(hostname: string, port: number): Promise<{
+async function checkTlsCertificate(
+  hostname: string,
+  port: number,
+): Promise<{
   valid: boolean;
   validTo: Date | null;
   daysUntilExpiry: number | null;
@@ -32,17 +33,40 @@ async function checkTlsCertificate(hostname: string, port: number): Promise<{
         const cert = socket.getPeerCertificate();
         if (!cert || Object.keys(cert).length === 0) {
           socket.destroy();
-          resolve({ valid: false, validTo: null, daysUntilExpiry: null, issuer: null, subject: null, error: "Nenhum certificado retornado pelo servidor" });
+          resolve({
+            valid: false,
+            validTo: null,
+            daysUntilExpiry: null,
+            issuer: null,
+            subject: null,
+            error: "Nenhum certificado retornado pelo servidor",
+          });
           return;
         }
         const validTo = cert.valid_to ? new Date(cert.valid_to) : null;
         const now = new Date();
-        const daysUntilExpiry = validTo ? Math.floor((validTo.getTime() - now.getTime()) / 86400000) : null;
+        const daysUntilExpiry = validTo
+          ? Math.floor((validTo.getTime() - now.getTime()) / 86400000)
+          : null;
         const issuerO = cert.issuer?.O as string | string[] | undefined;
         const subjectCN = cert.subject?.CN as string | string[] | undefined;
         const issuerCN = cert.issuer?.CN as string | string[] | undefined;
-        const issuerStr = typeof issuerO === "string" ? issuerO : (Array.isArray(issuerO) ? issuerO[0] : (typeof issuerCN === "string" ? issuerCN : (Array.isArray(issuerCN) ? issuerCN[0] : null)));
-        const subjectStr = typeof subjectCN === "string" ? subjectCN : (Array.isArray(subjectCN) ? subjectCN[0] : null);
+        const issuerStr =
+          typeof issuerO === "string"
+            ? issuerO
+            : Array.isArray(issuerO)
+              ? issuerO[0]
+              : typeof issuerCN === "string"
+                ? issuerCN
+                : Array.isArray(issuerCN)
+                  ? issuerCN[0]
+                  : null;
+        const subjectStr =
+          typeof subjectCN === "string"
+            ? subjectCN
+            : Array.isArray(subjectCN)
+              ? subjectCN[0]
+              : null;
         socket.destroy();
         resolve({
           valid: daysUntilExpiry !== null && daysUntilExpiry > 0,
@@ -56,21 +80,36 @@ async function checkTlsCertificate(hostname: string, port: number): Promise<{
     );
     socket.setTimeout(10000);
     socket.on("error", (err) => {
-      resolve({ valid: false, validTo: null, daysUntilExpiry: null, issuer: null, subject: null, error: err.message });
+      resolve({
+        valid: false,
+        validTo: null,
+        daysUntilExpiry: null,
+        issuer: null,
+        subject: null,
+        error: err.message,
+      });
     });
     socket.on("timeout", () => {
       socket.destroy();
-      resolve({ valid: false, validTo: null, daysUntilExpiry: null, issuer: null, subject: null, error: "Timeout na conexao TLS" });
+      resolve({
+        valid: false,
+        validTo: null,
+        daysUntilExpiry: null,
+        issuer: null,
+        subject: null,
+        error: "Timeout na conexao TLS",
+      });
     });
   });
 }
 
 // GET /api/v1/ssl/certificates — lista certificados com status calculado
-sslRoute.get("/certificates", jwtAuth, tenantContext, requirePermission("ssl:read"), async (c) => {
+sslRoute.get("/certificates", requirePermission("ssl:read"), async (c) => {
   const user = c.get("user");
   const status = c.req.query("status");
 
-  let sql = "SELECT * FROM public.ssl_certificates_with_status WHERE tenant_id = $1";
+  let sql =
+    "SELECT * FROM public.ssl_certificates_with_status WHERE tenant_id = $1";
   const params: unknown[] = [user?.tenant_id ?? null];
 
   if (status) {
@@ -83,14 +122,19 @@ sslRoute.get("/certificates", jwtAuth, tenantContext, requirePermission("ssl:rea
   const result = await query(sql, params);
 
   if (result.error) {
-    return c.json({ error: { code: "QUERY_ERROR", message: "Erro ao buscar certificados" } }, 500);
+    return c.json(
+      {
+        error: { code: "QUERY_ERROR", message: "Erro ao buscar certificados" },
+      },
+      500,
+    );
   }
 
   return c.json({ certificates: result.data?.rows ?? [] });
 });
 
 // GET /api/v1/ssl/certificates/:id — detalhe com histórico de verificações
-sslRoute.get("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl:read"), async (c) => {
+sslRoute.get("/certificates/:id", requirePermission("ssl:read"), async (c) => {
   const certId = c.req.param("id");
   const user = c.get("user");
 
@@ -100,7 +144,10 @@ sslRoute.get("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl
   );
 
   if (certResult.error || !certResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Certificado não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Certificado não encontrado" } },
+      404,
+    );
   }
 
   const checksResult = await query(
@@ -121,12 +168,15 @@ sslRoute.get("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl
 });
 
 // POST /api/v1/ssl/certificates — registra certificado para monitoramento
-sslRoute.post("/certificates", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
+sslRoute.post("/certificates", requirePermission("ssl:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateSslCertificateInput>();
   const parsed = createSslCertificateSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -136,31 +186,51 @@ sslRoute.post("/certificates", jwtAuth, tenantContext, requirePermission("ssl:wr
      ON CONFLICT (tenant_id, hostname, port) DO UPDATE SET is_active = true, alert_days_before = $5, updated_at = timezone('utc'::text, now())
      RETURNING id`,
     [
-      user?.tenant_id ?? null, data.hostname, data.port, data.protocol,
-      data.alert_days_before, data.is_auto_renewed, data.ca_provider ?? null,
+      user?.tenant_id ?? null,
+      data.hostname,
+      data.port,
+      data.protocol,
+      data.alert_days_before,
+      data.is_auto_renewed,
+      data.ca_provider ?? null,
     ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao registrar certificado" } }, 500);
+    return c.json(
+      {
+        error: {
+          code: "CREATE_ERROR",
+          message: "Erro ao registrar certificado",
+        },
+      },
+      500,
+    );
   }
 
   await query(
     "SELECT public.write_audit_log($1, NULL, 'ssl.cert.register', 'ssl_certificate', $2, $3, NULL, NULL)",
-    [user.sub, result.data.rows[0].id, JSON.stringify({ hostname: data.hostname, port: data.port })],
+    [
+      user.sub,
+      result.data.rows[0].id,
+      JSON.stringify({ hostname: data.hostname, port: data.port }),
+    ],
   );
 
   return c.json({ id: result.data.rows[0].id }, 201);
 });
 
 // PUT /api/v1/ssl/certificates/:id — atualiza config do certificado
-sslRoute.put("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
+sslRoute.put("/certificates/:id", requirePermission("ssl:write"), async (c) => {
   const certId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateSslCertificateInput>();
   const parsed = updateSslCertificateSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -169,9 +239,13 @@ sslRoute.put("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl
   let paramIdx = 1;
 
   const fieldMap: Record<string, string> = {
-    hostname: "hostname", port: "port", protocol: "protocol",
-    alert_days_before: "alert_days_before", is_auto_renewed: "is_auto_renewed",
-    ca_provider: "ca_provider", is_active: "is_active",
+    hostname: "hostname",
+    port: "port",
+    protocol: "protocol",
+    alert_days_before: "alert_days_before",
+    is_auto_renewed: "is_auto_renewed",
+    ca_provider: "ca_provider",
+    is_active: "is_active",
   };
 
   for (const [key, dbField] of Object.entries(fieldMap)) {
@@ -196,38 +270,49 @@ sslRoute.put("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl
 });
 
 // DELETE /api/v1/ssl/certificates/:id — remove certificado
-sslRoute.delete("/certificates/:id", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
-  const certId = c.req.param("id");
-  const user = c.get("user");
+sslRoute.delete(
+  "/certificates/:id",
+  requirePermission("ssl:write"),
+  async (c) => {
+    const certId = c.req.param("id");
+    const user = c.get("user");
 
-  await query(
-    "DELETE FROM public.ssl_certificates WHERE id = $1 AND tenant_id = $2",
-    [certId, user?.tenant_id ?? null],
-  );
+    await query(
+      "DELETE FROM public.ssl_certificates WHERE id = $1 AND tenant_id = $2",
+      [certId, user?.tenant_id ?? null],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'ssl.cert.delete', 'ssl_certificate', $2, NULL, NULL, NULL)",
-    [user.sub, certId],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'ssl.cert.delete', 'ssl_certificate', $2, NULL, NULL, NULL)",
+      [user.sub, certId],
+    );
 
-  return c.json({ deleted: true });
-});
+    return c.json({ deleted: true });
+  },
+);
 
 // POST /api/v1/ssl/check/:id — verifica certificado via TLS handshake real
-sslRoute.post("/check/:id", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
+sslRoute.post("/check/:id", requirePermission("ssl:write"), async (c) => {
   const certId = c.req.param("id");
   const user = c.get("user");
 
   const certResult = await query<{
-    id: string; hostname: string; port: number; alert_days_before: number;
-    valid_to: string | null; tenant_id: string;
-  }>(
-    "SELECT * FROM public.ssl_certificates WHERE id = $1 AND tenant_id = $2",
-    [certId, user?.tenant_id ?? null],
-  );
+    id: string;
+    hostname: string;
+    port: number;
+    alert_days_before: number;
+    valid_to: string | null;
+    tenant_id: string;
+  }>("SELECT * FROM public.ssl_certificates WHERE id = $1 AND tenant_id = $2", [
+    certId,
+    user?.tenant_id ?? null,
+  ]);
 
   if (certResult.error || !certResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Certificado não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Certificado não encontrado" } },
+      404,
+    );
   }
 
   const cert = certResult.data.rows[0];
@@ -268,7 +353,13 @@ sslRoute.post("/check/:id", jwtAuth, tenantContext, requirePermission("ssl:write
   await query(
     `INSERT INTO public.ssl_checks (cert_id, tenant_id, status, days_until_expiry, valid_to)
      VALUES ($1, $2, $3, $4, $5)`,
-    [certId, user?.tenant_id ?? null, status, daysUntilExpiry, validTo?.toISOString() ?? null],
+    [
+      certId,
+      user?.tenant_id ?? null,
+      status,
+      daysUntilExpiry,
+      validTo?.toISOString() ?? null,
+    ],
   );
 
   // Gera alerta se necessário
@@ -277,7 +368,17 @@ sslRoute.post("/check/:id", jwtAuth, tenantContext, requirePermission("ssl:write
   // Auditoria
   await query(
     "SELECT public.write_audit_log($1, NULL, 'ssl.cert.check', 'ssl_certificate', $2, $3, NULL, NULL)",
-    [user.sub, certId, JSON.stringify({ status, days_until_expiry: daysUntilExpiry, issuer: tlsResult.issuer, subject: tlsResult.subject, error: tlsResult.error })],
+    [
+      user.sub,
+      certId,
+      JSON.stringify({
+        status,
+        days_until_expiry: daysUntilExpiry,
+        issuer: tlsResult.issuer,
+        subject: tlsResult.subject,
+        error: tlsResult.error,
+      }),
+    ],
   );
 
   return c.json({
@@ -295,7 +396,7 @@ sslRoute.post("/check/:id", jwtAuth, tenantContext, requirePermission("ssl:write
 });
 
 // POST /api/v1/ssl/check-all — verifica todos os certificados ativos
-sslRoute.post("/check-all", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
+sslRoute.post("/check-all", requirePermission("ssl:write"), async (c) => {
   const user = c.get("user");
 
   const certsResult = await query<{ id: string }>(
@@ -308,7 +409,10 @@ sslRoute.post("/check-all", jwtAuth, tenantContext, requirePermission("ssl:write
 
   for (const row of certIds) {
     const certDetail = await query<{
-      valid_to: string | null; alert_days_before: number; hostname: string; port: number;
+      valid_to: string | null;
+      alert_days_before: number;
+      hostname: string;
+      port: number;
     }>(
       "SELECT valid_to, alert_days_before, hostname, port FROM public.ssl_certificates WHERE id = $1",
       [row.id],
@@ -351,7 +455,13 @@ sslRoute.post("/check-all", jwtAuth, tenantContext, requirePermission("ssl:write
     await query(
       `INSERT INTO public.ssl_checks (cert_id, tenant_id, status, days_until_expiry, valid_to)
        VALUES ($1, $2, $3, $4, $5)`,
-      [row.id, user?.tenant_id ?? null, status, daysUntilExpiry, validTo?.toISOString() ?? null],
+      [
+        row.id,
+        user?.tenant_id ?? null,
+        status,
+        daysUntilExpiry,
+        validTo?.toISOString() ?? null,
+      ],
     );
 
     await query("SELECT public.generate_ssl_alert($1)", [row.id]);
@@ -361,7 +471,14 @@ sslRoute.post("/check-all", jwtAuth, tenantContext, requirePermission("ssl:write
 
   await query(
     "SELECT public.write_audit_log($1, NULL, 'ssl.check_all', 'ssl_certificate', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ total: results.length, expired: results.filter(r => r.status === "expired").length, expiring: results.filter(r => r.status === "expiring_soon").length })],
+    [
+      user.sub,
+      JSON.stringify({
+        total: results.length,
+        expired: results.filter((r) => r.status === "expired").length,
+        expiring: results.filter((r) => r.status === "expiring_soon").length,
+      }),
+    ],
   );
 
   return c.json({
@@ -371,7 +488,7 @@ sslRoute.post("/check-all", jwtAuth, tenantContext, requirePermission("ssl:write
 });
 
 // GET /api/v1/ssl/alerts — lista alertas não reconhecidos
-sslRoute.get("/alerts", jwtAuth, tenantContext, requirePermission("ssl:read"), async (c) => {
+sslRoute.get("/alerts", requirePermission("ssl:read"), async (c) => {
   const user = c.get("user");
   const acknowledged = c.req.query("acknowledged") === "true";
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
@@ -392,20 +509,24 @@ sslRoute.get("/alerts", jwtAuth, tenantContext, requirePermission("ssl:read"), a
 });
 
 // POST /api/v1/ssl/alerts/:id/acknowledge — reconhece alerta
-sslRoute.post("/alerts/:id/acknowledge", jwtAuth, tenantContext, requirePermission("ssl:write"), async (c) => {
-  const alertId = c.req.param("id");
-  const user = c.get("user");
+sslRoute.post(
+  "/alerts/:id/acknowledge",
+  requirePermission("ssl:write"),
+  async (c) => {
+    const alertId = c.req.param("id");
+    const user = c.get("user");
 
-  await query(
-    "UPDATE public.ssl_alerts SET acknowledged = true, acknowledged_by = $1, acknowledged_at = timezone('utc'::text, now()) WHERE id = $2 AND tenant_id = $3",
-    [user.sub, alertId, user?.tenant_id ?? null],
-  );
+    await query(
+      "UPDATE public.ssl_alerts SET acknowledged = true, acknowledged_by = $1, acknowledged_at = timezone('utc'::text, now()) WHERE id = $2 AND tenant_id = $3",
+      [user.sub, alertId, user?.tenant_id ?? null],
+    );
 
-  return c.json({ acknowledged: true });
-});
+    return c.json({ acknowledged: true });
+  },
+);
 
 // GET /api/v1/ssl/stats — estatísticas para dashboard
-sslRoute.get("/stats", jwtAuth, tenantContext, requirePermission("ssl:read"), async (c) => {
+sslRoute.get("/stats", requirePermission("ssl:read"), async (c) => {
   const user = c.get("user");
 
   const statsResult = await query(
@@ -434,7 +555,12 @@ sslRoute.get("/stats", jwtAuth, tenantContext, requirePermission("ssl:read"), as
   );
 
   return c.json({
-    stats: statsResult.data?.rows[0] ?? { total: "0", valid: "0", expiring_soon: "0", expired: "0" },
+    stats: statsResult.data?.rows[0] ?? {
+      total: "0",
+      valid: "0",
+      expiring_soon: "0",
+      expired: "0",
+    },
     unacknowledged_alerts: alertsResult.data?.rows[0]?.count ?? "0",
     upcoming: upcomingResult.data?.rows ?? [],
   });

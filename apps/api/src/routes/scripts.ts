@@ -10,16 +10,17 @@ import {
   type UpdateScriptInput,
   type ExecuteScriptInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
-import { parsePaginationParams, buildPaginatedResponse } from "../lib/pagination.js";
+import {
+  parsePaginationParams,
+  buildPaginatedResponse,
+} from "../lib/pagination.js";
 import "../types.js";
 
 export const scriptsRoute = new Hono();
 
 // GET /api/v1/scripts — lista scripts do tenant com paginação
-scriptsRoute.get("/", jwtAuth, tenantContext, requirePermission("scripts:read"), async (c) => {
+scriptsRoute.get("/", requirePermission("scripts:read"), async (c) => {
   const user = c.get("user");
   const activeOnly = c.req.query("active") === "true";
   const pagination = parsePaginationParams({
@@ -39,7 +40,10 @@ scriptsRoute.get("/", jwtAuth, tenantContext, requirePermission("scripts:read"),
 
   const whereClause = conditions.join(" AND ");
 
-  const countResult = await query(`SELECT COUNT(*)::int as total FROM public.scripts WHERE ${whereClause}`, params);
+  const countResult = await query(
+    `SELECT COUNT(*)::int as total FROM public.scripts WHERE ${whereClause}`,
+    params,
+  );
   const total = countResult.data?.rows[0]?.total ?? 0;
 
   params.push(pagination.limit, pagination.offset);
@@ -53,14 +57,19 @@ scriptsRoute.get("/", jwtAuth, tenantContext, requirePermission("scripts:read"),
   );
 
   if (result.error) {
-    return c.json({ error: { code: "QUERY_ERROR", message: "Erro ao buscar scripts" } }, 500);
+    return c.json(
+      { error: { code: "QUERY_ERROR", message: "Erro ao buscar scripts" } },
+      500,
+    );
   }
 
-  return c.json(buildPaginatedResponse(result.data?.rows ?? [], total, pagination));
+  return c.json(
+    buildPaginatedResponse(result.data?.rows ?? [], total, pagination),
+  );
 });
 
 // GET /api/v1/scripts/:id — detalhe de um script
-scriptsRoute.get("/:id", jwtAuth, tenantContext, requirePermission("scripts:read"), async (c) => {
+scriptsRoute.get("/:id", requirePermission("scripts:read"), async (c) => {
   const scriptId = c.req.param("id");
   const user = c.get("user");
 
@@ -70,7 +79,10 @@ scriptsRoute.get("/:id", jwtAuth, tenantContext, requirePermission("scripts:read
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Script não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Script não encontrado" } },
+      404,
+    );
   }
 
   // Busca versões
@@ -86,12 +98,15 @@ scriptsRoute.get("/:id", jwtAuth, tenantContext, requirePermission("scripts:read
 });
 
 // POST /api/v1/scripts — cria novo script
-scriptsRoute.post("/", jwtAuth, tenantContext, requirePermission("scripts:write"), async (c) => {
+scriptsRoute.post("/", requirePermission("scripts:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateScriptInput>();
   const parsed = createScriptSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -100,14 +115,25 @@ scriptsRoute.post("/", jwtAuth, tenantContext, requirePermission("scripts:write"
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
      RETURNING id`,
     [
-      user?.tenant_id ?? null, data.name, data.description ?? null, data.language,
-      data.content, data.timeout_seconds, data.requires_approval, data.max_concurrent_executions,
-      data.allowed_hosts, data.tags, user.sub,
+      user?.tenant_id ?? null,
+      data.name,
+      data.description ?? null,
+      data.language,
+      data.content,
+      data.timeout_seconds,
+      data.requires_approval,
+      data.max_concurrent_executions,
+      data.allowed_hosts,
+      data.tags,
+      user.sub,
     ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao criar script" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao criar script" } },
+      500,
+    );
   }
 
   const scriptId = result.data.rows[0].id;
@@ -121,20 +147,27 @@ scriptsRoute.post("/", jwtAuth, tenantContext, requirePermission("scripts:write"
   // Auditoria
   await query(
     "SELECT public.write_audit_log($1, NULL, 'script.create', 'script', $2, $3, NULL, NULL)",
-    [user.sub, scriptId, JSON.stringify({ name: data.name, language: data.language })],
+    [
+      user.sub,
+      scriptId,
+      JSON.stringify({ name: data.name, language: data.language }),
+    ],
   );
 
   return c.json({ id: scriptId }, 201);
 });
 
 // PUT /api/v1/scripts/:id — atualiza script (cria nova versão se content mudou)
-scriptsRoute.put("/:id", jwtAuth, tenantContext, requirePermission("scripts:write"), async (c) => {
+scriptsRoute.put("/:id", requirePermission("scripts:write"), async (c) => {
   const scriptId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateScriptInput>();
   const parsed = updateScriptSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -146,27 +179,63 @@ scriptsRoute.put("/:id", jwtAuth, tenantContext, requirePermission("scripts:writ
   );
 
   if (currentResult.error || !currentResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Script não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Script não encontrado" } },
+      404,
+    );
   }
 
   const current = currentResult.data.rows[0];
-  const newVersion = data.content && data.content !== current.content ? current.version + 1 : current.version;
+  const newVersion =
+    data.content && data.content !== current.content
+      ? current.version + 1
+      : current.version;
 
   // Atualiza script
   const updateFields: string[] = [];
   const updateParams: unknown[] = [];
   let paramIdx = 1;
 
-  if (data.name !== undefined) { updateFields.push(`name = $${paramIdx++}`); updateParams.push(data.name); }
-  if (data.description !== undefined) { updateFields.push(`description = $${paramIdx++}`); updateParams.push(data.description); }
-  if (data.language !== undefined) { updateFields.push(`language = $${paramIdx++}`); updateParams.push(data.language); }
-  if (data.content !== undefined) { updateFields.push(`content = $${paramIdx++}`); updateParams.push(data.content); }
-  if (data.timeout_seconds !== undefined) { updateFields.push(`timeout_seconds = $${paramIdx++}`); updateParams.push(data.timeout_seconds); }
-  if (data.requires_approval !== undefined) { updateFields.push(`requires_approval = $${paramIdx++}`); updateParams.push(data.requires_approval); }
-  if (data.max_concurrent_executions !== undefined) { updateFields.push(`max_concurrent_executions = $${paramIdx++}`); updateParams.push(data.max_concurrent_executions); }
-  if (data.allowed_hosts !== undefined) { updateFields.push(`allowed_hosts = $${paramIdx++}`); updateParams.push(data.allowed_hosts); }
-  if (data.tags !== undefined) { updateFields.push(`tags = $${paramIdx++}`); updateParams.push(data.tags); }
-  if (data.is_active !== undefined) { updateFields.push(`is_active = $${paramIdx++}`); updateParams.push(data.is_active); }
+  if (data.name !== undefined) {
+    updateFields.push(`name = $${paramIdx++}`);
+    updateParams.push(data.name);
+  }
+  if (data.description !== undefined) {
+    updateFields.push(`description = $${paramIdx++}`);
+    updateParams.push(data.description);
+  }
+  if (data.language !== undefined) {
+    updateFields.push(`language = $${paramIdx++}`);
+    updateParams.push(data.language);
+  }
+  if (data.content !== undefined) {
+    updateFields.push(`content = $${paramIdx++}`);
+    updateParams.push(data.content);
+  }
+  if (data.timeout_seconds !== undefined) {
+    updateFields.push(`timeout_seconds = $${paramIdx++}`);
+    updateParams.push(data.timeout_seconds);
+  }
+  if (data.requires_approval !== undefined) {
+    updateFields.push(`requires_approval = $${paramIdx++}`);
+    updateParams.push(data.requires_approval);
+  }
+  if (data.max_concurrent_executions !== undefined) {
+    updateFields.push(`max_concurrent_executions = $${paramIdx++}`);
+    updateParams.push(data.max_concurrent_executions);
+  }
+  if (data.allowed_hosts !== undefined) {
+    updateFields.push(`allowed_hosts = $${paramIdx++}`);
+    updateParams.push(data.allowed_hosts);
+  }
+  if (data.tags !== undefined) {
+    updateFields.push(`tags = $${paramIdx++}`);
+    updateParams.push(data.tags);
+  }
+  if (data.is_active !== undefined) {
+    updateFields.push(`is_active = $${paramIdx++}`);
+    updateParams.push(data.is_active);
+  }
 
   updateFields.push(`version = $${paramIdx++}`);
   updateParams.push(newVersion);
@@ -184,7 +253,13 @@ scriptsRoute.put("/:id", jwtAuth, tenantContext, requirePermission("scripts:writ
   if (data.content && data.content !== current.content) {
     await query(
       "INSERT INTO public.script_versions (script_id, version, content, changed_by, change_summary) VALUES ($1, $2, $3, $4, $5)",
-      [scriptId, newVersion, data.content, user.sub, data.description ?? "Atualização de conteúdo"],
+      [
+        scriptId,
+        newVersion,
+        data.content,
+        user.sub,
+        data.description ?? "Atualização de conteúdo",
+      ],
     );
   }
 
@@ -198,7 +273,7 @@ scriptsRoute.put("/:id", jwtAuth, tenantContext, requirePermission("scripts:writ
 });
 
 // DELETE /api/v1/scripts/:id — desativa script (soft delete)
-scriptsRoute.delete("/:id", jwtAuth, tenantContext, requirePermission("scripts:write"), async (c) => {
+scriptsRoute.delete("/:id", requirePermission("scripts:write"), async (c) => {
   const scriptId = c.req.param("id");
   const user = c.get("user");
 
@@ -216,65 +291,100 @@ scriptsRoute.delete("/:id", jwtAuth, tenantContext, requirePermission("scripts:w
 });
 
 // POST /api/v1/scripts/:id/execute — inicia execução (com approval se necessário)
-scriptsRoute.post("/:id/execute", jwtAuth, tenantContext, requirePermission("scripts:execute"), async (c) => {
-  const scriptId = c.req.param("id");
-  const user = c.get("user");
-  const body = await c.req.json<ExecuteScriptInput>();
-  const parsed = executeScriptSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
-  }
+scriptsRoute.post(
+  "/:id/execute",
+  requirePermission("scripts:execute"),
+  async (c) => {
+    const scriptId = c.req.param("id");
+    const user = c.get("user");
+    const body = await c.req.json<ExecuteScriptInput>();
+    const parsed = executeScriptSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
 
-  const result = await query<{ id: string; status: string; requires_approval: boolean }>(
-    "SELECT * FROM public.create_script_execution($1, $2, $3, $4)",
-    [scriptId, parsed.data.target_host, user.sub, user?.tenant_id ?? null],
-  );
+    const result = await query<{
+      id: string;
+      status: string;
+      requires_approval: boolean;
+    }>("SELECT * FROM public.create_script_execution($1, $2, $3, $4)", [
+      scriptId,
+      parsed.data.target_host,
+      user.sub,
+      user?.tenant_id ?? null,
+    ]);
 
-  if (result.error) {
-    return c.json({ error: { code: "EXECUTION_ERROR", message: result.error.message } }, 400);
-  }
+    if (result.error) {
+      return c.json(
+        { error: { code: "EXECUTION_ERROR", message: result.error.message } },
+        400,
+      );
+    }
 
-  const execution = result.data?.rows[0];
-  if (!execution) {
-    return c.json({ error: { code: "EXECUTION_ERROR", message: "Erro ao criar execução" } }, 500);
-  }
+    const execution = result.data?.rows[0];
+    if (!execution) {
+      return c.json(
+        {
+          error: { code: "EXECUTION_ERROR", message: "Erro ao criar execução" },
+        },
+        500,
+      );
+    }
 
-  // Auditoria
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'script.execute', 'script', $2, $3, NULL, NULL)",
-    [user.sub, scriptId, JSON.stringify({ execution_id: execution.id, target_host: parsed.data.target_host })],
-  );
+    // Auditoria
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'script.execute', 'script', $2, $3, NULL, NULL)",
+      [
+        user.sub,
+        scriptId,
+        JSON.stringify({
+          execution_id: execution.id,
+          target_host: parsed.data.target_host,
+        }),
+      ],
+    );
 
-  return c.json({
-    execution_id: execution.id,
-    status: execution.status,
-    requires_approval: execution.requires_approval,
-    message: execution.requires_approval
-      ? "Execução criada. Aguardando aprovação."
-      : "Execução aprovada automaticamente. Pronta para execução.",
-  }, 201);
-});
+    return c.json(
+      {
+        execution_id: execution.id,
+        status: execution.status,
+        requires_approval: execution.requires_approval,
+        message: execution.requires_approval
+          ? "Execução criada. Aguardando aprovação."
+          : "Execução aprovada automaticamente. Pronta para execução.",
+      },
+      201,
+    );
+  },
+);
 
 // GET /api/v1/scripts/:id/executions — histórico de execuções de um script
-scriptsRoute.get("/:id/executions", jwtAuth, tenantContext, requirePermission("scripts:read"), async (c) => {
-  const scriptId = c.req.param("id");
-  const user = c.get("user");
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
-  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+scriptsRoute.get(
+  "/:id/executions",
+  requirePermission("scripts:read"),
+  async (c) => {
+    const scriptId = c.req.param("id");
+    const user = c.get("user");
+    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const offset = parseInt(c.req.query("offset") ?? "0", 10);
 
-  const result = await query(
-    `SELECT id, script_id, version, status, target_host, initiated_by, approved_by, approved_at,
+    const result = await query(
+      `SELECT id, script_id, version, status, target_host, initiated_by, approved_by, approved_at,
             started_at, completed_at, exit_code, duration_ms, created_at
      FROM public.script_executions
      WHERE script_id = $1 AND tenant_id = $2
      ORDER BY created_at DESC
      LIMIT $3 OFFSET $4`,
-    [scriptId, user?.tenant_id ?? null, limit, offset],
-  );
+      [scriptId, user?.tenant_id ?? null, limit, offset],
+    );
 
-  return c.json({
-    executions: result.data?.rows ?? [],
-    limit,
-    offset,
-  });
-});
+    return c.json({
+      executions: result.data?.rows ?? [],
+      limit,
+      offset,
+    });
+  },
+);

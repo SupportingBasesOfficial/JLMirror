@@ -320,7 +320,7 @@ export class LdapAuthProvider {
   async authenticate(
     _username: string,
     _password: string,
-  ): Promise<{ dn: string; email: string } | null> {
+  ): Promise<{ dn: string; email: string; name: string } | null> {
     // Implementacao LDAP simplificada — usa bind simples
     // Em producao, usar ldapjs com TLS
     if (!this.isConfigured()) return null;

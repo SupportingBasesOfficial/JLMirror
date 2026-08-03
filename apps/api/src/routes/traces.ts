@@ -2,8 +2,6 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
@@ -29,7 +27,7 @@ interface TraceSpanRow {
 }
 
 // GET /api/v1/traces/search — lista traces com filtros
-tracesRoute.get("/search", jwtAuth, tenantContext, requirePermission("logs:read"), async (c) => {
+tracesRoute.get("/search", requirePermission("logs:read"), async (c) => {
   const user = c.get("user");
   const service = c.req.query("service");
   const operation = c.req.query("operation");
@@ -88,19 +86,22 @@ tracesRoute.get("/search", jwtAuth, tenantContext, requirePermission("logs:read"
 });
 
 // GET /api/v1/traces/stats — estatísticas por serviço (deve vir antes de /:traceId)
-tracesRoute.get("/stats", jwtAuth, tenantContext, requirePermission("logs:read"), async (c) => {
+tracesRoute.get("/stats", requirePermission("logs:read"), async (c) => {
   const user = c.get("user");
   const from = c.req.query("from");
   const to = c.req.query("to");
 
-  const result = await query(
-    "SELECT * FROM public.traces_stats($1, $2, $3)",
-    [user?.tenant_id ?? null, from ?? null, to ?? null],
-  );
+  const result = await query("SELECT * FROM public.traces_stats($1, $2, $3)", [
+    user?.tenant_id ?? null,
+    from ?? null,
+    to ?? null,
+  ]);
 
   if (result.error) {
     return c.json(
-      { error: { code: "QUERY_ERROR", message: "Erro ao buscar estatísticas" } },
+      {
+        error: { code: "QUERY_ERROR", message: "Erro ao buscar estatísticas" },
+      },
       500,
     );
   }
@@ -111,7 +112,7 @@ tracesRoute.get("/stats", jwtAuth, tenantContext, requirePermission("logs:read")
 });
 
 // GET /api/v1/traces/:traceId — detalhe de um trace com todos os spans
-tracesRoute.get("/:traceId", jwtAuth, tenantContext, requirePermission("logs:read"), async (c) => {
+tracesRoute.get("/:traceId", requirePermission("logs:read"), async (c) => {
   const traceId = c.req.param("traceId");
   const user = c.get("user");
 
@@ -142,7 +143,9 @@ tracesRoute.get("/:traceId", jwtAuth, tenantContext, requirePermission("logs:rea
 
   // Calcula timeline relativa
   const earliestStart = new Date(spans[0].start_time).getTime();
-  const latestEnd = Math.max(...spans.map((s) => new Date(s.end_time).getTime()));
+  const latestEnd = Math.max(
+    ...spans.map((s) => new Date(s.end_time).getTime()),
+  );
   const totalDurationMs = latestEnd - earliestStart;
 
   // Constrói árvore de spans (parent -> children)
@@ -167,4 +170,3 @@ tracesRoute.get("/:traceId", jwtAuth, tenantContext, requirePermission("logs:rea
     })),
   });
 });
-

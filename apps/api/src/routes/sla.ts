@@ -3,8 +3,6 @@
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import {
   createServiceSchema,
@@ -55,7 +53,10 @@ slaRoute.get("/services", requirePermission("sla:read"), async (c) => {
   );
 
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: result.data?.rows ?? [] });
@@ -73,7 +74,10 @@ slaRoute.get("/services/:id", requirePermission("sla:read"), async (c) => {
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Serviço não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Serviço não encontrado" } },
+      404,
+    );
   }
 
   return c.json({ data: result.data.rows[0] });
@@ -87,7 +91,16 @@ slaRoute.post("/services", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<CreateServiceInput>();
   const parsed = createServiceSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -98,15 +111,28 @@ slaRoute.post("/services", requirePermission("sla:write"), async (c) => {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING id`,
     [
-      tenantId, d.name, d.description ?? null, d.service_type, d.status,
-      JSON.stringify(d.device_ids), d.sla_target_percentage, d.coverage_hours,
-      d.coverage_timezone, d.coverage_days, d.priority, d.zabbix_service_id ?? null,
-      JSON.stringify(d.metadata), d.is_active,
+      tenantId,
+      d.name,
+      d.description ?? null,
+      d.service_type,
+      d.status,
+      JSON.stringify(d.device_ids),
+      d.sla_target_percentage,
+      d.coverage_hours,
+      d.coverage_timezone,
+      d.coverage_days,
+      d.priority,
+      d.zabbix_service_id ?? null,
+      JSON.stringify(d.metadata),
+      d.is_active,
     ],
   );
 
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: { id: result.data?.rows[0]?.id } }, 201);
@@ -121,7 +147,16 @@ slaRoute.put("/services/:id", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<UpdateServiceInput>();
   const parsed = updateServiceSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -141,7 +176,10 @@ slaRoute.put("/services/:id", requirePermission("sla:write"), async (c) => {
   addField("description", d.description ?? null);
   addField("service_type", d.service_type);
   addField("status", d.status);
-  addField("device_ids", d.device_ids ? JSON.stringify(d.device_ids) : undefined);
+  addField(
+    "device_ids",
+    d.device_ids ? JSON.stringify(d.device_ids) : undefined,
+  );
   addField("sla_target_percentage", d.sla_target_percentage);
   addField("coverage_hours", d.coverage_hours);
   addField("coverage_timezone", d.coverage_timezone);
@@ -152,7 +190,15 @@ slaRoute.put("/services/:id", requirePermission("sla:write"), async (c) => {
   addField("is_active", d.is_active);
 
   if (fields.length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Nenhum campo para atualizar" } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Nenhum campo para atualizar",
+        },
+      },
+      400,
+    );
   }
 
   values.push(serviceId, tenantId);
@@ -162,7 +208,10 @@ slaRoute.put("/services/:id", requirePermission("sla:write"), async (c) => {
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Serviço não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Serviço não encontrado" } },
+      404,
+    );
   }
 
   return c.json({ data: { id: result.data.rows[0].id } });
@@ -180,7 +229,10 @@ slaRoute.delete("/services/:id", requirePermission("sla:write"), async (c) => {
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Serviço não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Serviço não encontrado" } },
+      404,
+    );
   }
 
   return c.json({ data: { id: result.data.rows[0].id } });
@@ -201,7 +253,16 @@ slaRoute.get("/report", requirePermission("sla:read"), async (c) => {
   });
 
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Parâmetros inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Parâmetros inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   let sql = `SELECT sr.*, s.name as service_name, s.sla_target_percentage::text
@@ -231,7 +292,10 @@ slaRoute.get("/report", requirePermission("sla:read"), async (c) => {
 
   const result = await query(sql, params);
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: result.data?.rows ?? [] });
@@ -258,7 +322,10 @@ slaRoute.get("/incidents", requirePermission("sla:read"), async (c) => {
 
   const result = await query(sql, params);
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: result.data?.rows ?? [] });
@@ -272,7 +339,16 @@ slaRoute.post("/incidents", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<CreateServiceIncidentInput>();
   const parsed = createServiceIncidentSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -282,15 +358,27 @@ slaRoute.post("/incidents", requirePermission("sla:write"), async (c) => {
      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
-      tenantId, d.service_id, d.title, d.description ?? null, d.severity, d.status,
-      d.started_at ?? null, d.resolved_at ?? null, d.root_cause ?? null,
-      d.resolution_notes ?? null, JSON.stringify(d.affected_device_ids),
-      d.ticket_id ?? null, d.zabbix_event_id ?? null,
+      tenantId,
+      d.service_id,
+      d.title,
+      d.description ?? null,
+      d.severity,
+      d.status,
+      d.started_at ?? null,
+      d.resolved_at ?? null,
+      d.root_cause ?? null,
+      d.resolution_notes ?? null,
+      JSON.stringify(d.affected_device_ids),
+      d.ticket_id ?? null,
+      d.zabbix_event_id ?? null,
     ],
   );
 
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: { id: result.data?.rows[0]?.id } }, 201);
@@ -305,7 +393,16 @@ slaRoute.put("/incidents/:id", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<UpdateServiceIncidentInput>();
   const parsed = updateServiceIncidentSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -328,16 +425,29 @@ slaRoute.put("/incidents/:id", requirePermission("sla:write"), async (c) => {
   addField("resolved_at", d.resolved_at ?? null);
   addField("root_cause", d.root_cause ?? null);
   addField("resolution_notes", d.resolution_notes ?? null);
-  addField("affected_device_ids", d.affected_device_ids ? JSON.stringify(d.affected_device_ids) : undefined);
+  addField(
+    "affected_device_ids",
+    d.affected_device_ids ? JSON.stringify(d.affected_device_ids) : undefined,
+  );
   addField("ticket_id", d.ticket_id ?? null);
 
   if (fields.length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Nenhum campo para atualizar" } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Nenhum campo para atualizar",
+        },
+      },
+      400,
+    );
   }
 
   // Se status foi alterado para resolved, calcula downtime_seconds
   if (d.status === "resolved") {
-    fields.push(`downtime_seconds = EXTRACT(EPOCH FROM (COALESCE($${idx}, now()) - started_at))::bigint`);
+    fields.push(
+      `downtime_seconds = EXTRACT(EPOCH FROM (COALESCE($${idx}, now()) - started_at))::bigint`,
+    );
     values.push(d.resolved_at ?? null);
     idx++;
   }
@@ -349,7 +459,10 @@ slaRoute.put("/incidents/:id", requirePermission("sla:write"), async (c) => {
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Incidente não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Incidente não encontrado" } },
+      404,
+    );
   }
 
   return c.json({ data: { id: result.data.rows[0].id } });
@@ -373,7 +486,10 @@ slaRoute.get("/maintenance", requirePermission("sla:read"), async (c) => {
 
   const result = await query(sql, params);
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: result.data?.rows ?? [] });
@@ -387,7 +503,16 @@ slaRoute.post("/maintenance", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<CreateMaintenanceWindowInput>();
   const parsed = createMaintenanceWindowSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -397,13 +522,22 @@ slaRoute.post("/maintenance", requirePermission("sla:write"), async (c) => {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
-      tenantId, d.name, d.description ?? null, JSON.stringify(d.device_ids),
-      d.start_at, d.end_at, d.maintenance_type, JSON.stringify(d.metadata),
+      tenantId,
+      d.name,
+      d.description ?? null,
+      JSON.stringify(d.device_ids),
+      d.start_at,
+      d.end_at,
+      d.maintenance_type,
+      JSON.stringify(d.metadata),
     ],
   );
 
   if (result.error) {
-    return c.json({ error: { code: "DB_ERROR", message: result.error.message } }, 500);
+    return c.json(
+      { error: { code: "DB_ERROR", message: result.error.message } },
+      500,
+    );
   }
 
   return c.json({ data: { id: result.data?.rows[0]?.id } }, 201);
@@ -418,7 +552,16 @@ slaRoute.put("/maintenance/:id", requirePermission("sla:write"), async (c) => {
   const body = await c.req.json<UpdateMaintenanceWindowInput>();
   const parsed = updateMaintenanceWindowSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos", details: parsed.error.flatten() } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Dados inválidos",
+          details: parsed.error.flatten(),
+        },
+      },
+      400,
+    );
   }
 
   const d = parsed.data;
@@ -436,14 +579,25 @@ slaRoute.put("/maintenance/:id", requirePermission("sla:write"), async (c) => {
 
   addField("name", d.name);
   addField("description", d.description ?? null);
-  addField("device_ids", d.device_ids ? JSON.stringify(d.device_ids) : undefined);
+  addField(
+    "device_ids",
+    d.device_ids ? JSON.stringify(d.device_ids) : undefined,
+  );
   addField("start_at", d.start_at);
   addField("end_at", d.end_at);
   addField("status", d.status);
   addField("maintenance_type", d.maintenance_type);
 
   if (fields.length === 0) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Nenhum campo para atualizar" } }, 400);
+    return c.json(
+      {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Nenhum campo para atualizar",
+        },
+      },
+      400,
+    );
   }
 
   values.push(maintenanceId, tenantId);
@@ -453,29 +607,49 @@ slaRoute.put("/maintenance/:id", requirePermission("sla:write"), async (c) => {
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Janela de manutenção não encontrada" } }, 404);
+    return c.json(
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: "Janela de manutenção não encontrada",
+        },
+      },
+      404,
+    );
   }
 
   return c.json({ data: { id: result.data.rows[0].id } });
 });
 
 // DELETE /api/v1/sla/maintenance/:id — remove uma janela de manutenção
-slaRoute.delete("/maintenance/:id", requirePermission("sla:write"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const maintenanceId = c.req.param("id");
+slaRoute.delete(
+  "/maintenance/:id",
+  requirePermission("sla:write"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const maintenanceId = c.req.param("id");
 
-  const result = await query(
-    "DELETE FROM public.maintenance_windows WHERE id = $1 AND tenant_id = $2 RETURNING id",
-    [maintenanceId, tenantId],
-  );
+    const result = await query(
+      "DELETE FROM public.maintenance_windows WHERE id = $1 AND tenant_id = $2 RETURNING id",
+      [maintenanceId, tenantId],
+    );
 
-  if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Janela de manutenção não encontrada" } }, 404);
-  }
+    if (result.error || !result.data?.rows[0]) {
+      return c.json(
+        {
+          error: {
+            code: "NOT_FOUND",
+            message: "Janela de manutenção não encontrada",
+          },
+        },
+        404,
+      );
+    }
 
-  return c.json({ data: { id: result.data.rows[0].id } });
-});
+    return c.json({ data: { id: result.data.rows[0].id } });
+  },
+);
 
 // ========== SLA Dashboard (módulo ativável por tenant via feature flag) ==========
 
@@ -486,7 +660,10 @@ slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
   const tenantId = user.tenant_id;
 
   // Verifica feature flag
-  const flagResult = await query<{ default_value: boolean; is_active: boolean }>(
+  const flagResult = await query<{
+    default_value: boolean;
+    is_active: boolean;
+  }>(
     `SELECT default_value, is_active FROM public.feature_flags
      WHERE key = 'sla_dashboard_enabled' AND (tenant_id IS NULL OR tenant_id = $1) AND is_active = true
      LIMIT 1`,
@@ -495,7 +672,15 @@ slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
 
   const flagEnabled = flagResult.data?.rows[0]?.default_value === true;
   if (!flagEnabled) {
-    return c.json({ error: { code: "MODULE_DISABLED", message: "Módulo SLA Dashboard não está ativado para este tenant" } }, 403);
+    return c.json(
+      {
+        error: {
+          code: "MODULE_DISABLED",
+          message: "Módulo SLA Dashboard não está ativado para este tenant",
+        },
+      },
+      403,
+    );
   }
 
   // Cache de 30s para evitar queries pesadas
@@ -506,7 +691,11 @@ slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
   }
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const monthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+  ).toISOString();
 
   // SLA % do mês por serviço
   const slaResult = await query(

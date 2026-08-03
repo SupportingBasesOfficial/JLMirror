@@ -12,8 +12,6 @@ import {
   type CreateKbArticleInput,
   type UpdateKbArticleInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
@@ -21,7 +19,7 @@ export const kbRoute = new Hono();
 
 // ========== Categories ==========
 
-kbRoute.get("/categories", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
+kbRoute.get("/categories", requirePermission("kb:read"), async (c) => {
   const user = c.get("user");
   const result = await query(
     "SELECT * FROM public.kb_categories WHERE tenant_id = $1 ORDER BY sort_order, name",
@@ -31,37 +29,59 @@ kbRoute.get("/categories", jwtAuth, tenantContext, requirePermission("kb:read"),
   return c.json({ categories: result.data?.rows ?? [] });
 });
 
-kbRoute.post("/categories", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.post("/categories", requirePermission("kb:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateKbCategoryInput>();
   const parsed = createKbCategorySchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
-  const slug = data.slug ?? data.name.toLowerCase().replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const slug =
+    data.slug ??
+    data.name
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.kb_categories (tenant_id, name, description, slug, parent_id, sort_order, is_active)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [user?.tenant_id ?? null, data.name, data.description ?? null, slug, data.parent_id ?? null, data.sort_order, data.is_active],
+    [
+      user?.tenant_id ?? null,
+      data.name,
+      data.description ?? null,
+      slug,
+      data.parent_id ?? null,
+      data.sort_order,
+      data.is_active,
+    ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao criar categoria" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao criar categoria" } },
+      500,
+    );
   }
 
   return c.json({ id: result.data.rows[0].id }, 201);
 });
 
-kbRoute.put("/categories/:id", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.put("/categories/:id", requirePermission("kb:write"), async (c) => {
   const categoryId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateKbCategoryInput>();
   const parsed = updateKbCategorySchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -70,8 +90,12 @@ kbRoute.put("/categories/:id", jwtAuth, tenantContext, requirePermission("kb:wri
   let paramIdx = 1;
 
   const fieldMap: Record<string, string> = {
-    name: "name", description: "description", slug: "slug",
-    parent_id: "parent_id", sort_order: "sort_order", is_active: "is_active",
+    name: "name",
+    description: "description",
+    slug: "slug",
+    parent_id: "parent_id",
+    sort_order: "sort_order",
+    is_active: "is_active",
   };
 
   for (const [key, dbField] of Object.entries(fieldMap)) {
@@ -95,7 +119,7 @@ kbRoute.put("/categories/:id", jwtAuth, tenantContext, requirePermission("kb:wri
   return c.json({ id: categoryId });
 });
 
-kbRoute.delete("/categories/:id", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.delete("/categories/:id", requirePermission("kb:write"), async (c) => {
   const categoryId = c.req.param("id");
   const user = c.get("user");
 
@@ -109,7 +133,7 @@ kbRoute.delete("/categories/:id", jwtAuth, tenantContext, requirePermission("kb:
 
 // ========== Articles ==========
 
-kbRoute.get("/articles", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
+kbRoute.get("/articles", requirePermission("kb:read"), async (c) => {
   const user = c.get("user");
   const status = c.req.query("status");
   const categoryId = c.req.query("category_id");
@@ -120,9 +144,18 @@ kbRoute.get("/articles", jwtAuth, tenantContext, requirePermission("kb:read"), a
   const params: unknown[] = [user?.tenant_id ?? null];
   let paramIdx = 2;
 
-  if (status) { conditions.push(`status = $${paramIdx++}`); params.push(status); }
-  if (categoryId) { conditions.push(`category_id = $${paramIdx++}`); params.push(categoryId); }
-  if (tag) { conditions.push(`tags @> $${paramIdx++}::jsonb`); params.push(JSON.stringify([tag])); }
+  if (status) {
+    conditions.push(`status = $${paramIdx++}`);
+    params.push(status);
+  }
+  if (categoryId) {
+    conditions.push(`category_id = $${paramIdx++}`);
+    params.push(categoryId);
+  }
+  if (tag) {
+    conditions.push(`tags @> $${paramIdx++}::jsonb`);
+    params.push(JSON.stringify([tag]));
+  }
 
   params.push(limit);
 
@@ -139,7 +172,7 @@ kbRoute.get("/articles", jwtAuth, tenantContext, requirePermission("kb:read"), a
   return c.json({ articles: result.data?.rows ?? [] });
 });
 
-kbRoute.get("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
+kbRoute.get("/articles/:id", requirePermission("kb:read"), async (c) => {
   const articleId = c.req.param("id");
   const user = c.get("user");
 
@@ -152,7 +185,10 @@ kbRoute.get("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:read"
   );
 
   if (articleResult.error || !articleResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Artigo não encontrado" } }, 404);
+    return c.json(
+      { error: { code: "NOT_FOUND", message: "Artigo não encontrado" } },
+      404,
+    );
   }
 
   // Incrementa view_count
@@ -173,12 +209,15 @@ kbRoute.get("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:read"
   });
 });
 
-kbRoute.post("/articles", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.post("/articles", requirePermission("kb:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateKbArticleInput>();
   const parsed = createKbArticleSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -190,25 +229,43 @@ kbRoute.post("/articles", jwtAuth, tenantContext, requirePermission("kb:write"),
   );
 
   if (slugResult.error || !slugResult.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao gerar slug" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao gerar slug" } },
+      500,
+    );
   }
 
   const slug = slugResult.data.rows[0].generate_kb_slug;
-  const publishedAt = data.status === "published" ? new Date().toISOString() : null;
+  const publishedAt =
+    data.status === "published" ? new Date().toISOString() : null;
 
   const result = await query<{ id: string }>(
     `INSERT INTO public.kb_articles (tenant_id, category_id, title, slug, summary, content, content_format, status, visibility, author_id, author_name, tags, is_pinned, published_at, current_version)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 1)
      RETURNING id`,
     [
-      user?.tenant_id ?? null, data.category_id ?? null, data.title, slug,
-      data.summary ?? null, data.content, data.content_format, data.status, data.visibility,
-      user.sub, user.sub, JSON.stringify(data.tags), data.is_pinned, publishedAt,
+      user?.tenant_id ?? null,
+      data.category_id ?? null,
+      data.title,
+      slug,
+      data.summary ?? null,
+      data.content,
+      data.content_format,
+      data.status,
+      data.visibility,
+      user.sub,
+      user.sub,
+      JSON.stringify(data.tags),
+      data.is_pinned,
+      publishedAt,
     ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao criar artigo" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao criar artigo" } },
+      500,
+    );
   }
 
   const articleId = result.data.rows[0].id;
@@ -217,31 +274,53 @@ kbRoute.post("/articles", jwtAuth, tenantContext, requirePermission("kb:write"),
   await query(
     `INSERT INTO public.kb_article_versions (tenant_id, article_id, version_number, title, summary, content, tags, edited_by, edited_by_name, change_summary)
      VALUES ($1, $2, 1, $3, $4, $5, $6, $7, $8, 'Versão inicial')`,
-    [user?.tenant_id ?? null, articleId, data.title, data.summary ?? null, data.content, JSON.stringify(data.tags), user.sub, user.sub],
+    [
+      user?.tenant_id ?? null,
+      articleId,
+      data.title,
+      data.summary ?? null,
+      data.content,
+      JSON.stringify(data.tags),
+      user.sub,
+      user.sub,
+    ],
   );
 
   await query(
     "SELECT public.write_audit_log($1, NULL, 'kb.article.create', 'kb_article', $2, $3, NULL, NULL)",
-    [user.sub, articleId, JSON.stringify({ title: data.title, status: data.status })],
+    [
+      user.sub,
+      articleId,
+      JSON.stringify({ title: data.title, status: data.status }),
+    ],
   );
 
   return c.json({ id: articleId, slug }, 201);
 });
 
-kbRoute.put("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.put("/articles/:id", requirePermission("kb:write"), async (c) => {
   const articleId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateKbArticleInput>();
   const parsed = updateKbArticleSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
 
   // Busca versão atual para criar nova versão se content mudou
   if (data.content !== undefined || data.title !== undefined) {
-    const currentResult = await query<{ title: string; summary: string | null; content: string; tags: string[]; current_version: number }>(
+    const currentResult = await query<{
+      title: string;
+      summary: string | null;
+      content: string;
+      tags: string[];
+      current_version: number;
+    }>(
       "SELECT title, summary, content, tags, current_version FROM public.kb_articles WHERE id = $1",
       [articleId],
     );
@@ -254,11 +333,18 @@ kbRoute.put("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write
         `INSERT INTO public.kb_article_versions (tenant_id, article_id, version_number, title, summary, content, tags, edited_by, edited_by_name, change_summary)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
-          user?.tenant_id ?? null, articleId, newVersion,
-          data.title ?? current.title, data.summary ?? current.summary,
+          user?.tenant_id ?? null,
+          articleId,
+          newVersion,
+          data.title ?? current.title,
+          data.summary ?? current.summary,
           data.content ?? current.content,
-          JSON.stringify(data.tags ?? current.tags), user.sub, user.sub,
-          data.content !== undefined ? "Conteúdo atualizado" : "Título atualizado",
+          JSON.stringify(data.tags ?? current.tags),
+          user.sub,
+          user.sub,
+          data.content !== undefined
+            ? "Conteúdo atualizado"
+            : "Título atualizado",
         ],
       );
 
@@ -275,9 +361,15 @@ kbRoute.put("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write
   let paramIdx = 1;
 
   const fieldMap: Record<string, string> = {
-    category_id: "category_id", title: "title", summary: "summary",
-    content: "content", content_format: "content_format", status: "status",
-    visibility: "visibility", is_pinned: "is_pinned", expires_at: "expires_at",
+    category_id: "category_id",
+    title: "title",
+    summary: "summary",
+    content: "content",
+    content_format: "content_format",
+    status: "status",
+    visibility: "visibility",
+    is_pinned: "is_pinned",
+    expires_at: "expires_at",
   };
 
   for (const [key, dbField] of Object.entries(fieldMap)) {
@@ -294,7 +386,9 @@ kbRoute.put("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write
 
   // Marca published_at se status mudou para published
   if (data.status === "published") {
-    updateFields.push(`published_at = COALESCE(published_at, timezone('utc'::text, now()))`);
+    updateFields.push(
+      `published_at = COALESCE(published_at, timezone('utc'::text, now()))`,
+    );
   }
 
   if (updateFields.length > 0) {
@@ -308,7 +402,7 @@ kbRoute.put("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write
   return c.json({ id: articleId });
 });
 
-kbRoute.delete("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:write"), async (c) => {
+kbRoute.delete("/articles/:id", requirePermission("kb:write"), async (c) => {
   const articleId = c.req.param("id");
   const user = c.get("user");
 
@@ -322,28 +416,32 @@ kbRoute.delete("/articles/:id", jwtAuth, tenantContext, requirePermission("kb:wr
 
 // ========== Feedback ==========
 
-kbRoute.post("/articles/:id/feedback", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
-  const articleId = c.req.param("id");
-  const body = await c.req.json<{ helpful: boolean }>();
+kbRoute.post(
+  "/articles/:id/feedback",
+  requirePermission("kb:read"),
+  async (c) => {
+    const articleId = c.req.param("id");
+    const body = await c.req.json<{ helpful: boolean }>();
 
-  if (body.helpful) {
-    await query(
-      "UPDATE public.kb_articles SET helpful_count = helpful_count + 1 WHERE id = $1",
-      [articleId],
-    );
-  } else {
-    await query(
-      "UPDATE public.kb_articles SET unhelpful_count = unhelpful_count + 1 WHERE id = $1",
-      [articleId],
-    );
-  }
+    if (body.helpful) {
+      await query(
+        "UPDATE public.kb_articles SET helpful_count = helpful_count + 1 WHERE id = $1",
+        [articleId],
+      );
+    } else {
+      await query(
+        "UPDATE public.kb_articles SET unhelpful_count = unhelpful_count + 1 WHERE id = $1",
+        [articleId],
+      );
+    }
 
-  return c.json({ recorded: true });
-});
+    return c.json({ recorded: true });
+  },
+);
 
 // ========== Search ==========
 
-kbRoute.get("/search", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
+kbRoute.get("/search", requirePermission("kb:read"), async (c) => {
   const user = c.get("user");
   const q = c.req.query("q");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 100);
@@ -371,7 +469,7 @@ kbRoute.get("/search", jwtAuth, tenantContext, requirePermission("kb:read"), asy
 
 // ========== Stats ==========
 
-kbRoute.get("/stats", jwtAuth, tenantContext, requirePermission("kb:read"), async (c) => {
+kbRoute.get("/stats", requirePermission("kb:read"), async (c) => {
   const user = c.get("user");
 
   const overviewResult = await query(
@@ -408,7 +506,16 @@ kbRoute.get("/stats", jwtAuth, tenantContext, requirePermission("kb:read"), asyn
   );
 
   return c.json({
-    overview: overviewResult.data?.rows[0] ?? { total_articles: "0", published: "0", drafts: "0", archived: "0", pinned: "0", total_views: "0", total_helpful: "0", total_unhelpful: "0" },
+    overview: overviewResult.data?.rows[0] ?? {
+      total_articles: "0",
+      published: "0",
+      drafts: "0",
+      archived: "0",
+      pinned: "0",
+      total_views: "0",
+      total_helpful: "0",
+      total_unhelpful: "0",
+    },
     by_category: categoryResult.data?.rows ?? [],
     top_articles: topArticles.data?.rows ?? [],
   });

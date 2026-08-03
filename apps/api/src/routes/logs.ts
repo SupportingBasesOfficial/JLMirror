@@ -10,15 +10,13 @@ import {
   type LogIngestBatchInput,
   type LogSearchInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const logsRoute = new Hono();
 
 // POST /api/v1/logs/ingest — insere um log (requer auth)
-logsRoute.post("/ingest", jwtAuth, tenantContext, async (c) => {
+logsRoute.post("/ingest", async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
@@ -67,7 +65,7 @@ logsRoute.post("/ingest", jwtAuth, tenantContext, async (c) => {
 });
 
 // POST /api/v1/logs/ingest/batch — insere múltiplos logs
-logsRoute.post("/ingest/batch", jwtAuth, tenantContext, async (c) => {
+logsRoute.post("/ingest/batch", async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
@@ -131,7 +129,7 @@ logsRoute.post("/ingest/batch", jwtAuth, tenantContext, async (c) => {
 });
 
 // GET /api/v1/logs/search — busca logs com filtros avançados e regex
-logsRoute.get("/search", jwtAuth, tenantContext, requirePermission("logs:read"), async (c) => {
+logsRoute.get("/search", requirePermission("logs:read"), async (c) => {
   const user = c.get("user");
   const level = c.req.query("level");
   const source = c.req.query("source");
@@ -215,7 +213,7 @@ logsRoute.get("/search", jwtAuth, tenantContext, requirePermission("logs:read"),
 });
 
 // GET /api/v1/logs/stats — estatísticas de logs por nível
-logsRoute.get("/stats", jwtAuth, tenantContext, requirePermission("logs:read"), async (c) => {
+logsRoute.get("/stats", requirePermission("logs:read"), async (c) => {
   const user = c.get("user");
   const from = c.req.query("from");
   const to = c.req.query("to");
@@ -237,7 +235,7 @@ logsRoute.get("/stats", jwtAuth, tenantContext, requirePermission("logs:read"), 
 });
 
 // GET /api/v1/logs/levels — lista níveis disponíveis
-logsRoute.get("/levels", jwtAuth, tenantContext, async (c) => {
+logsRoute.get("/levels", async (c) => {
   return c.json({
     levels: ["trace", "debug", "info", "warn", "error", "fatal"],
   });

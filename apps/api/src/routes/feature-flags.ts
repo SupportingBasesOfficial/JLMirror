@@ -13,8 +13,6 @@ import {
   type EvaluateFlagInput,
   type CreateOverrideInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
@@ -25,14 +23,26 @@ function hashString(input: string): number {
   return hash.readUInt32BE(0);
 }
 
-function evaluatePercentage(flagKey: string, userId: string, percentage: number): boolean {
+function evaluatePercentage(
+  flagKey: string,
+  userId: string,
+  percentage: number,
+): boolean {
   const hashVal = hashString(`${flagKey}:${userId}`) % 10000;
-  return hashVal < (percentage * 100);
+  return hashVal < percentage * 100;
 }
 
-function pickVariant(flagKey: string, userId: string, variants: Array<{ key: string; value: unknown; weight: number }>): { key: string; value: unknown } {
+function pickVariant(
+  flagKey: string,
+  userId: string,
+  variants: Array<{ key: string; value: unknown; weight: number }>,
+): { key: string; value: unknown } {
   const totalWeight = variants.reduce((sum, v) => sum + v.weight, 0);
-  if (totalWeight === 0) return { key: variants[0]?.key ?? "default", value: variants[0]?.value ?? false };
+  if (totalWeight === 0)
+    return {
+      key: variants[0]?.key ?? "default",
+      value: variants[0]?.value ?? false,
+    };
   const hashVal = hashString(`${flagKey}:${userId}:variant`) % totalWeight;
   let cumulative = 0;
   for (const v of variants) {
@@ -44,149 +54,205 @@ function pickVariant(flagKey: string, userId: string, variants: Array<{ key: str
 
 // ========== List ==========
 
-featureFlagRoute.get("/", jwtAuth, tenantContext, requirePermission("feature_flags:read"), async (c) => {
-  const user = c.get("user");
-  const activeOnly = c.req.query("active") === "true";
+featureFlagRoute.get(
+  "/",
+  requirePermission("feature_flags:read"),
+  async (c) => {
+    const user = c.get("user");
+    const activeOnly = c.req.query("active") === "true";
 
-  const conditions: string[] = ["tenant_id IS NULL OR tenant_id = $1"];
-  const params: unknown[] = [user?.tenant_id ?? null];
-  if (activeOnly) { conditions.push("is_active = true"); }
+    const conditions: string[] = ["tenant_id IS NULL OR tenant_id = $1"];
+    const params: unknown[] = [user?.tenant_id ?? null];
+    if (activeOnly) {
+      conditions.push("is_active = true");
+    }
 
-  const result = await query(
-    `SELECT id, key, name, description, flag_type, is_active, default_value,
+    const result = await query(
+      `SELECT id, key, name, description, flag_type, is_active, default_value,
        rollout_percentage, variants, target_segments, excluded_tenant_ids,
        starts_at, ends_at, total_evaluations, true_evaluations, false_evaluations,
        created_at, updated_at
      FROM public.feature_flags WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
-    params,
-  );
+      params,
+    );
 
-  return c.json({ flags: result.data?.rows ?? [] });
-});
+    return c.json({ flags: result.data?.rows ?? [] });
+  },
+);
 
 // ========== Create ==========
 
-featureFlagRoute.post("/", jwtAuth, tenantContext, requirePermission("feature_flags:write"), async (c) => {
-  const user = c.get("user");
-  const body = await c.req.json<CreateFeatureFlagInput>();
-  const parsed = createFeatureFlagSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
-  }
+featureFlagRoute.post(
+  "/",
+  requirePermission("feature_flags:write"),
+  async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json<CreateFeatureFlagInput>();
+    const parsed = createFeatureFlagSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
 
-  const data = parsed.data;
+    const data = parsed.data;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.feature_flags (tenant_id, key, name, description, flag_type, is_active,
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.feature_flags (tenant_id, key, name, description, flag_type, is_active,
        default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids,
        starts_at, ends_at, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
-    [
-      user?.tenant_id ?? null, data.key, data.name, data.description ?? null,
-      data.flag_type, data.is_active, JSON.stringify(data.default_value),
-      data.rollout_percentage, JSON.stringify(data.variants), JSON.stringify(data.target_segments),
-      JSON.stringify(data.excluded_tenant_ids),
-      data.starts_at ?? null, data.ends_at ?? null, user.sub,
-    ],
-  );
+      [
+        user?.tenant_id ?? null,
+        data.key,
+        data.name,
+        data.description ?? null,
+        data.flag_type,
+        data.is_active,
+        JSON.stringify(data.default_value),
+        data.rollout_percentage,
+        JSON.stringify(data.variants),
+        JSON.stringify(data.target_segments),
+        JSON.stringify(data.excluded_tenant_ids),
+        data.starts_at ?? null,
+        data.ends_at ?? null,
+        user.sub,
+      ],
+    );
 
-  if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao criar feature flag" } }, 500);
-  }
+    if (result.error || !result.data?.rows[0]) {
+      return c.json(
+        {
+          error: {
+            code: "CREATE_ERROR",
+            message: "Erro ao criar feature flag",
+          },
+        },
+        500,
+      );
+    }
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'feature_flag.create', 'feature_flag', $2, $3, NULL, NULL)",
-    [user.sub, result.data.rows[0].id, JSON.stringify({ key: data.key, name: data.name, type: data.flag_type })],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'feature_flag.create', 'feature_flag', $2, $3, NULL, NULL)",
+      [
+        user.sub,
+        result.data.rows[0].id,
+        JSON.stringify({
+          key: data.key,
+          name: data.name,
+          type: data.flag_type,
+        }),
+      ],
+    );
 
-  return c.json({ id: result.data.rows[0].id }, 201);
-});
+    return c.json({ id: result.data.rows[0].id }, 201);
+  },
+);
 
 // ========== Update ==========
 
-featureFlagRoute.put("/:id", jwtAuth, tenantContext, requirePermission("feature_flags:write"), async (c) => {
-  const flagId = c.req.param("id");
-  const user = c.get("user");
-  const body = await c.req.json<UpdateFeatureFlagInput>();
-  const parsed = updateFeatureFlagSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
-  }
-
-  const data = parsed.data;
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIdx = 1;
-
-  const fieldMap: Record<string, string> = {
-    name: "name", description: "description", flag_type: "flag_type",
-    is_active: "is_active", rollout_percentage: "rollout_percentage",
-    starts_at: "starts_at", ends_at: "ends_at",
-  };
-
-  for (const [key, dbField] of Object.entries(fieldMap)) {
-    if (data[key as keyof typeof data] !== undefined) {
-      updateFields.push(`${dbField} = $${paramIdx++}`);
-      params.push(data[key as keyof typeof data]);
+featureFlagRoute.put(
+  "/:id",
+  requirePermission("feature_flags:write"),
+  async (c) => {
+    const flagId = c.req.param("id");
+    const user = c.get("user");
+    const body = await c.req.json<UpdateFeatureFlagInput>();
+    const parsed = updateFeatureFlagSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
     }
-  }
 
-  if (data.default_value !== undefined) {
-    updateFields.push(`default_value = $${paramIdx++}`);
-    params.push(JSON.stringify(data.default_value));
-  }
+    const data = parsed.data;
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
 
-  if (data.variants !== undefined) {
-    updateFields.push(`variants = $${paramIdx++}`);
-    params.push(JSON.stringify(data.variants));
-  }
+    const fieldMap: Record<string, string> = {
+      name: "name",
+      description: "description",
+      flag_type: "flag_type",
+      is_active: "is_active",
+      rollout_percentage: "rollout_percentage",
+      starts_at: "starts_at",
+      ends_at: "ends_at",
+    };
 
-  if (data.target_segments !== undefined) {
-    updateFields.push(`target_segments = $${paramIdx++}`);
-    params.push(JSON.stringify(data.target_segments));
-  }
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (data[key as keyof typeof data] !== undefined) {
+        updateFields.push(`${dbField} = $${paramIdx++}`);
+        params.push(data[key as keyof typeof data]);
+      }
+    }
 
-  if (data.excluded_tenant_ids !== undefined) {
-    updateFields.push(`excluded_tenant_ids = $${paramIdx++}`);
-    params.push(JSON.stringify(data.excluded_tenant_ids));
-  }
+    if (data.default_value !== undefined) {
+      updateFields.push(`default_value = $${paramIdx++}`);
+      params.push(JSON.stringify(data.default_value));
+    }
 
-  if (updateFields.length === 0) {
+    if (data.variants !== undefined) {
+      updateFields.push(`variants = $${paramIdx++}`);
+      params.push(JSON.stringify(data.variants));
+    }
+
+    if (data.target_segments !== undefined) {
+      updateFields.push(`target_segments = $${paramIdx++}`);
+      params.push(JSON.stringify(data.target_segments));
+    }
+
+    if (data.excluded_tenant_ids !== undefined) {
+      updateFields.push(`excluded_tenant_ids = $${paramIdx++}`);
+      params.push(JSON.stringify(data.excluded_tenant_ids));
+    }
+
+    if (updateFields.length === 0) {
+      return c.json({ id: flagId });
+    }
+
+    params.push(flagId);
+
+    await query(
+      `UPDATE public.feature_flags SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND (tenant_id IS NULL OR tenant_id = $${paramIdx++})`,
+      [...params, user?.tenant_id ?? null],
+    );
+
     return c.json({ id: flagId });
-  }
-
-  params.push(flagId);
-
-  await query(
-    `UPDATE public.feature_flags SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND (tenant_id IS NULL OR tenant_id = $${paramIdx++})`,
-    [...params, user?.tenant_id ?? null],
-  );
-
-  return c.json({ id: flagId });
-});
+  },
+);
 
 // ========== Delete ==========
 
-featureFlagRoute.delete("/:id", jwtAuth, tenantContext, requirePermission("feature_flags:write"), async (c) => {
-  const flagId = c.req.param("id");
-  const user = c.get("user");
+featureFlagRoute.delete(
+  "/:id",
+  requirePermission("feature_flags:write"),
+  async (c) => {
+    const flagId = c.req.param("id");
+    const user = c.get("user");
 
-  await query(
-    "DELETE FROM public.feature_flags WHERE id = $1 AND (tenant_id IS NULL OR tenant_id = $2)",
-    [flagId, user?.tenant_id ?? null],
-  );
+    await query(
+      "DELETE FROM public.feature_flags WHERE id = $1 AND (tenant_id IS NULL OR tenant_id = $2)",
+      [flagId, user?.tenant_id ?? null],
+    );
 
-  return c.json({ deleted: true });
-});
+    return c.json({ deleted: true });
+  },
+);
 
 // ========== Evaluate ==========
 
-featureFlagRoute.post("/evaluate", jwtAuth, tenantContext, async (c) => {
+featureFlagRoute.post("/evaluate", async (c) => {
   const user = c.get("user");
   const body = await c.req.json<EvaluateFlagInput>();
   const parsed = evaluateFlagSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -204,24 +270,47 @@ featureFlagRoute.post("/evaluate", jwtAuth, tenantContext, async (c) => {
   }
 
   const flag = flagResult.data.rows[0] as {
-    id: string; key: string; flag_type: string; is_active: boolean; default_value: unknown;
-    rollout_percentage: number; variants: Array<{ key: string; value: unknown; weight: number }>;
-    excluded_tenant_ids: string[]; starts_at: string | null; ends_at: string | null;
+    id: string;
+    key: string;
+    flag_type: string;
+    is_active: boolean;
+    default_value: unknown;
+    rollout_percentage: number;
+    variants: Array<{ key: string; value: unknown; weight: number }>;
+    excluded_tenant_ids: string[];
+    starts_at: string | null;
+    ends_at: string | null;
     target_segments: string[];
   };
 
   // Verifica periodo de validade
   const now = new Date();
   if (flag.starts_at && new Date(flag.starts_at) > now) {
-    return c.json({ key: data.key, value: flag.default_value, reason: "not_started" });
+    return c.json({
+      key: data.key,
+      value: flag.default_value,
+      reason: "not_started",
+    });
   }
   if (flag.ends_at && new Date(flag.ends_at) < now) {
-    return c.json({ key: data.key, value: flag.default_value, reason: "ended" });
+    return c.json({
+      key: data.key,
+      value: flag.default_value,
+      reason: "ended",
+    });
   }
 
   // Verifica exclusao de tenant
-  if (Array.isArray(flag.excluded_tenant_ids) && tenantId && flag.excluded_tenant_ids.includes(tenantId)) {
-    return c.json({ key: data.key, value: flag.default_value, reason: "excluded_tenant" });
+  if (
+    Array.isArray(flag.excluded_tenant_ids) &&
+    tenantId &&
+    flag.excluded_tenant_ids.includes(tenantId)
+  ) {
+    return c.json({
+      key: data.key,
+      value: flag.default_value,
+      reason: "excluded_tenant",
+    });
   }
 
   // Verifica override
@@ -235,12 +324,23 @@ featureFlagRoute.post("/evaluate", jwtAuth, tenantContext, async (c) => {
     // Atualiza contadores
     await query(
       "UPDATE public.feature_flags SET total_evaluations = total_evaluations + 1, true_evaluations = true_evaluations + $1, false_evaluations = false_evaluations + $2 WHERE id = $3",
-      [overrideValue === true ? 1 : 0, overrideValue === false ? 1 : 0, flag.id],
+      [
+        overrideValue === true ? 1 : 0,
+        overrideValue === false ? 1 : 0,
+        flag.id,
+      ],
     );
     // Registra evento
     await query(
       "INSERT INTO public.feature_flag_events (tenant_id, flag_id, flag_key, user_id, evaluated_value, context) VALUES ($1, $2, $3, $4, $5, $6)",
-      [tenantId, flag.id, flag.key, userId, JSON.stringify(overrideValue), JSON.stringify(data.context)],
+      [
+        tenantId,
+        flag.id,
+        flag.key,
+        userId,
+        JSON.stringify(overrideValue),
+        JSON.stringify(data.context),
+      ],
     );
     return c.json({ key: data.key, value: overrideValue, reason: "override" });
   }
@@ -286,7 +386,14 @@ featureFlagRoute.post("/evaluate", jwtAuth, tenantContext, async (c) => {
   // Registra evento
   await query(
     "INSERT INTO public.feature_flag_events (tenant_id, flag_id, flag_key, user_id, evaluated_value, context) VALUES ($1, $2, $3, $4, $5, $6)",
-    [tenantId, flag.id, flag.key, userId, JSON.stringify(value), JSON.stringify(data.context)],
+    [
+      tenantId,
+      flag.id,
+      flag.key,
+      userId,
+      JSON.stringify(value),
+      JSON.stringify(data.context),
+    ],
   );
 
   return c.json({ key: data.key, value, reason });
@@ -294,76 +401,105 @@ featureFlagRoute.post("/evaluate", jwtAuth, tenantContext, async (c) => {
 
 // ========== Overrides ==========
 
-featureFlagRoute.get("/:id/overrides", jwtAuth, tenantContext, requirePermission("feature_flags:read"), async (c) => {
-  const flagId = c.req.param("id");
-  const user = c.get("user");
+featureFlagRoute.get(
+  "/:id/overrides",
+  requirePermission("feature_flags:read"),
+  async (c) => {
+    const flagId = c.req.param("id");
+    const user = c.get("user");
 
-  const result = await query(
-    "SELECT * FROM public.feature_flag_overrides WHERE flag_id = $1 AND tenant_id = $2 ORDER BY created_at DESC",
-    [flagId, user?.tenant_id ?? null],
-  );
+    const result = await query(
+      "SELECT * FROM public.feature_flag_overrides WHERE flag_id = $1 AND tenant_id = $2 ORDER BY created_at DESC",
+      [flagId, user?.tenant_id ?? null],
+    );
 
-  return c.json({ overrides: result.data?.rows ?? [] });
-});
+    return c.json({ overrides: result.data?.rows ?? [] });
+  },
+);
 
-featureFlagRoute.post("/overrides", jwtAuth, tenantContext, requirePermission("feature_flags:write"), async (c) => {
-  const user = c.get("user");
-  const body = await c.req.json<CreateOverrideInput>();
-  const parsed = createOverrideSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
-  }
+featureFlagRoute.post(
+  "/overrides",
+  requirePermission("feature_flags:write"),
+  async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json<CreateOverrideInput>();
+    const parsed = createOverrideSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
 
-  const data = parsed.data;
+    const data = parsed.data;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.feature_flag_overrides (tenant_id, flag_id, target_type, target_id, value, reason, created_by)
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.feature_flag_overrides (tenant_id, flag_id, target_type, target_id, value, reason, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (flag_id, target_type, target_id) DO UPDATE SET value = $5, reason = $6, created_at = timezone('utc'::text, now())
      RETURNING id`,
-    [user?.tenant_id ?? null, data.flag_id, data.target_type, data.target_id,
-     JSON.stringify(data.value), data.reason ?? null, user.sub],
-  );
+      [
+        user?.tenant_id ?? null,
+        data.flag_id,
+        data.target_type,
+        data.target_id,
+        JSON.stringify(data.value),
+        data.reason ?? null,
+        user.sub,
+      ],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id }, 201);
-});
+    return c.json({ id: result.data?.rows[0]?.id }, 201);
+  },
+);
 
-featureFlagRoute.delete("/overrides/:overrideId", jwtAuth, tenantContext, requirePermission("feature_flags:write"), async (c) => {
-  const overrideId = c.req.param("overrideId");
-  const user = c.get("user");
+featureFlagRoute.delete(
+  "/overrides/:overrideId",
+  requirePermission("feature_flags:write"),
+  async (c) => {
+    const overrideId = c.req.param("overrideId");
+    const user = c.get("user");
 
-  await query(
-    "DELETE FROM public.feature_flag_overrides WHERE id = $1 AND tenant_id = $2",
-    [overrideId, user?.tenant_id ?? null],
-  );
+    await query(
+      "DELETE FROM public.feature_flag_overrides WHERE id = $1 AND tenant_id = $2",
+      [overrideId, user?.tenant_id ?? null],
+    );
 
-  return c.json({ deleted: true });
-});
+    return c.json({ deleted: true });
+  },
+);
 
 // ========== Events ==========
 
-featureFlagRoute.get("/:id/events", jwtAuth, tenantContext, requirePermission("feature_flags:read"), async (c) => {
-  const flagId = c.req.param("id");
-  const user = c.get("user");
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+featureFlagRoute.get(
+  "/:id/events",
+  requirePermission("feature_flags:read"),
+  async (c) => {
+    const flagId = c.req.param("id");
+    const user = c.get("user");
+    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
 
-  const result = await query(
-    `SELECT * FROM public.feature_flag_events WHERE flag_id = $1 AND tenant_id = $2
+    const result = await query(
+      `SELECT * FROM public.feature_flag_events WHERE flag_id = $1 AND tenant_id = $2
      ORDER BY created_at DESC LIMIT $3`,
-    [flagId, user?.tenant_id ?? null, limit],
-  );
+      [flagId, user?.tenant_id ?? null, limit],
+    );
 
-  return c.json({ events: result.data?.rows ?? [] });
-});
+    return c.json({ events: result.data?.rows ?? [] });
+  },
+);
 
 // ========== Stats ==========
 
-featureFlagRoute.get("/stats/overview", jwtAuth, tenantContext, requirePermission("feature_flags:read"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user?.tenant_id ?? null;
+featureFlagRoute.get(
+  "/stats/overview",
+  requirePermission("feature_flags:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-  const overviewResult = await query(
-    `SELECT
+    const overviewResult = await query(
+      `SELECT
        COUNT(*) as total_flags,
        COUNT(*) FILTER (WHERE is_active = true) as active_flags,
        COUNT(*) FILTER (WHERE flag_type = 'boolean') as boolean_flags,
@@ -374,36 +510,47 @@ featureFlagRoute.get("/stats/overview", jwtAuth, tenantContext, requirePermissio
        SUM(true_evaluations) as true_evaluations,
        SUM(false_evaluations) as false_evaluations
      FROM public.feature_flags WHERE tenant_id IS NULL OR tenant_id = $1`,
-    [tenantId],
-  );
+      [tenantId],
+    );
 
-  const topFlags = await query(
-    `SELECT id, key, name, flag_type, is_active, rollout_percentage,
+    const topFlags = await query(
+      `SELECT id, key, name, flag_type, is_active, rollout_percentage,
        total_evaluations, true_evaluations, false_evaluations
      FROM public.feature_flags WHERE tenant_id IS NULL OR tenant_id = $1
      ORDER BY total_evaluations DESC LIMIT 5`,
-    [tenantId],
-  );
+      [tenantId],
+    );
 
-  const recentEvents = await query(
-    `SELECT e.id, e.flag_key, e.evaluated_value, e.created_at, e.user_id,
+    const recentEvents = await query(
+      `SELECT e.id, e.flag_key, e.evaluated_value, e.created_at, e.user_id,
        f.name as flag_name
      FROM public.feature_flag_events e
      LEFT JOIN public.feature_flags f ON e.flag_id = f.id
      WHERE e.tenant_id = $1
      ORDER BY e.created_at DESC LIMIT 10`,
-    [tenantId],
-  );
+      [tenantId],
+    );
 
-  const overrideCount = await query(
-    "SELECT COUNT(*) as count FROM public.feature_flag_overrides WHERE tenant_id = $1",
-    [tenantId],
-  );
+    const overrideCount = await query(
+      "SELECT COUNT(*) as count FROM public.feature_flag_overrides WHERE tenant_id = $1",
+      [tenantId],
+    );
 
-  return c.json({
-    overview: overviewResult.data?.rows[0] ?? { total_flags: "0", active_flags: "0", boolean_flags: "0", percentage_flags: "0", variant_flags: "0", kill_switches: "0", total_evaluations: "0", true_evaluations: "0", false_evaluations: "0" },
-    top_flags: topFlags.data?.rows ?? [],
-    recent_events: recentEvents.data?.rows ?? [],
-    overrides_count: overrideCount.data?.rows[0]?.count ?? "0",
-  });
-});
+    return c.json({
+      overview: overviewResult.data?.rows[0] ?? {
+        total_flags: "0",
+        active_flags: "0",
+        boolean_flags: "0",
+        percentage_flags: "0",
+        variant_flags: "0",
+        kill_switches: "0",
+        total_evaluations: "0",
+        true_evaluations: "0",
+        false_evaluations: "0",
+      },
+      top_flags: topFlags.data?.rows ?? [],
+      recent_events: recentEvents.data?.rows ?? [],
+      overrides_count: overrideCount.data?.rows[0]?.count ?? "0",
+    });
+  },
+);

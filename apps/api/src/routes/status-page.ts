@@ -2,8 +2,6 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { validate } from "../middleware/validate.js";
 import { statusPageConfigSchema } from "@repo/shared-validation";
@@ -18,10 +16,18 @@ statusPageRoute.get("/:slug", async (c) => {
   const slug = c.req.param("slug");
 
   const pageResult = await query<{
-    id: string; tenant_id: string; page_title: string; company_name: string;
-    logo_url: string | null; primary_color: string;
-    show_uptime: boolean; show_incident_history: boolean; show_sla_percentage: boolean;
-    days_of_history: number; support_email: string | null; support_url: string | null;
+    id: string;
+    tenant_id: string;
+    page_title: string;
+    company_name: string;
+    logo_url: string | null;
+    primary_color: string;
+    show_uptime: boolean;
+    show_incident_history: boolean;
+    show_sla_percentage: boolean;
+    days_of_history: number;
+    support_email: string | null;
+    support_url: string | null;
   }>(
     `SELECT id, tenant_id, page_title, company_name, logo_url, primary_color,
        show_uptime, show_incident_history, show_sla_percentage, days_of_history,
@@ -32,7 +38,15 @@ statusPageRoute.get("/:slug", async (c) => {
 
   const page = pageResult.data?.rows[0];
   if (!page) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Página de status não encontrada" } }, 404);
+    return c.json(
+      {
+        error: {
+          code: "NOT_FOUND",
+          message: "Página de status não encontrada",
+        },
+      },
+      404,
+    );
   }
 
   const tenantId = page.tenant_id;
@@ -85,9 +99,17 @@ statusPageRoute.get("/:slug", async (c) => {
   const scheduledMaintenance = maintenanceResult.data?.rows ?? [];
 
   // Status geral
-  const hasDown = services.some((s: Record<string, unknown>) => s.status === "down");
-  const hasDegraded = services.some((s: Record<string, unknown>) => s.status === "degraded");
-  const overallStatus = hasDown ? "down" : hasDegraded ? "degraded" : "operational";
+  const hasDown = services.some(
+    (s: Record<string, unknown>) => s.status === "down",
+  );
+  const hasDegraded = services.some(
+    (s: Record<string, unknown>) => s.status === "degraded",
+  );
+  const overallStatus = hasDown
+    ? "down"
+    : hasDegraded
+      ? "degraded"
+      : "operational";
 
   return c.json({
     page: {
@@ -112,27 +134,61 @@ statusPageRoute.get("/:slug", async (c) => {
 // ========== Admin Config (auth required) ==========
 
 // GET /api/v1/status-page/admin/config — busca config do tenant
-statusPageRoute.get("/admin/config", jwtAuth, tenantContext, requirePermission("status_page:manage"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
+statusPageRoute.get(
+  "/admin/config",
+  requirePermission("status_page:manage"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
 
-  const result = await query(
-    "SELECT * FROM public.status_pages WHERE tenant_id = $1 LIMIT 1",
-    [tenantId],
-  );
+    const result = await query(
+      "SELECT * FROM public.status_pages WHERE tenant_id = $1 LIMIT 1",
+      [tenantId],
+    );
 
-  return c.json({ config: result.data?.rows[0] ?? null });
-});
+    return c.json({ config: result.data?.rows[0] ?? null });
+  },
+);
 
 // PUT /api/v1/status-page/admin/config — cria ou atualiza config (upsert)
-statusPageRoute.put("/admin/config", jwtAuth, tenantContext, requirePermission("status_page:manage"), validate({ schema: statusPageConfigSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { slug: string; page_title?: string; company_name: string; logo_url?: string; primary_color?: string; show_uptime?: boolean; show_incident_history?: boolean; show_sla_percentage?: boolean; days_of_history?: number; support_email?: string; support_url?: string; is_published?: boolean };
-  const { slug, page_title, company_name, logo_url, primary_color, show_uptime, show_incident_history, show_sla_percentage, days_of_history, support_email, support_url, is_published } = body;
+statusPageRoute.put(
+  "/admin/config",
+  requirePermission("status_page:manage"),
+  validate({ schema: statusPageConfigSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      slug: string;
+      page_title?: string;
+      company_name: string;
+      logo_url?: string;
+      primary_color?: string;
+      show_uptime?: boolean;
+      show_incident_history?: boolean;
+      show_sla_percentage?: boolean;
+      days_of_history?: number;
+      support_email?: string;
+      support_url?: string;
+      is_published?: boolean;
+    };
+    const {
+      slug,
+      page_title,
+      company_name,
+      logo_url,
+      primary_color,
+      show_uptime,
+      show_incident_history,
+      show_sla_percentage,
+      days_of_history,
+      support_email,
+      support_url,
+      is_published,
+    } = body;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.status_pages
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.status_pages
        (tenant_id, slug, page_title, company_name, logo_url, primary_color,
         show_uptime, show_incident_history, show_sla_percentage, days_of_history,
         support_email, support_url, is_published, created_by)
@@ -151,19 +207,32 @@ statusPageRoute.put("/admin/config", jwtAuth, tenantContext, requirePermission("
        support_url = EXCLUDED.support_url,
        is_published = EXCLUDED.is_published
      RETURNING id`,
-    [
-      tenantId, slug, page_title ?? "Status do Sistema", company_name,
-      logo_url ?? null, primary_color ?? "#0d9488",
-      show_uptime ?? true, show_incident_history ?? true, show_sla_percentage ?? false,
-      days_of_history ?? 90, support_email ?? null, support_url ?? null,
-      is_published ?? false, user.sub,
-    ],
-  );
+      [
+        tenantId,
+        slug,
+        page_title ?? "Status do Sistema",
+        company_name,
+        logo_url ?? null,
+        primary_color ?? "#0d9488",
+        show_uptime ?? true,
+        show_incident_history ?? true,
+        show_sla_percentage ?? false,
+        days_of_history ?? 90,
+        support_email ?? null,
+        support_url ?? null,
+        is_published ?? false,
+        user.sub,
+      ],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'status_page.config.update', 'status_pages', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, slug, is_published })],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'status_page.config.update', 'status_pages', NULL, $2, NULL, NULL)",
+      [
+        user.sub,
+        JSON.stringify({ id: result.data?.rows[0]?.id, slug, is_published }),
+      ],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, updated: true });
-});
+    return c.json({ id: result.data?.rows[0]?.id, updated: true });
+  },
+);

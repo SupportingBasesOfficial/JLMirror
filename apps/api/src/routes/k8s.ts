@@ -10,27 +10,37 @@ import {
   type CreateK8sClusterInput,
   type UpdateK8sClusterInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const k8sRoute = new Hono();
 
 // Executa kubectl e retorna JSON parseado
-function execKubectl(kubeconfigPath: string | null, context: string | null, command: string, timeoutMs: number = 30000): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+function execKubectl(
+  kubeconfigPath: string | null,
+  context: string | null,
+  command: string,
+  timeoutMs: number = 30000,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const kubeFlag = kubeconfigPath ? `--kubeconfig="${kubeconfigPath}"` : "";
   const contextFlag = context ? `--context="${context}"` : "";
   return new Promise((resolve) => {
-    // eslint-disable-next-line security/detect-child-process
-    exec(`kubectl ${kubeFlag} ${contextFlag} ${command}`, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      resolve({ stdout, stderr, exitCode: error ? (error.code as number ?? 1) : 0 });
-    });
+    exec(
+      `kubectl ${kubeFlag} ${contextFlag} ${command}`,
+      { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        resolve({
+          stdout,
+          stderr,
+          exitCode: error ? ((error.code as number) ?? 1) : 0,
+        });
+      },
+    );
   });
 }
 
 // GET /api/v1/k8s/clusters — lista clusters
-k8sRoute.get("/clusters", jwtAuth, tenantContext, requirePermission("k8s:read"), async (c) => {
+k8sRoute.get("/clusters", requirePermission("k8s:read"), async (c) => {
   const user = c.get("user");
 
   const result = await query(
@@ -39,19 +49,25 @@ k8sRoute.get("/clusters", jwtAuth, tenantContext, requirePermission("k8s:read"),
   );
 
   if (result.error) {
-    return c.json({ error: { code: "QUERY_ERROR", message: "Erro ao buscar clusters" } }, 500);
+    return c.json(
+      { error: { code: "QUERY_ERROR", message: "Erro ao buscar clusters" } },
+      500,
+    );
   }
 
   return c.json({ clusters: result.data?.rows ?? [] });
 });
 
 // POST /api/v1/k8s/clusters — registra cluster
-k8sRoute.post("/clusters", jwtAuth, tenantContext, requirePermission("k8s:write"), async (c) => {
+k8sRoute.post("/clusters", requirePermission("k8s:write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json<CreateK8sClusterInput>();
   const parsed = createK8sClusterSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -61,31 +77,46 @@ k8sRoute.post("/clusters", jwtAuth, tenantContext, requirePermission("k8s:write"
      ON CONFLICT (tenant_id, name) DO UPDATE SET api_server_url = $4, updated_at = timezone('utc'::text, now())
      RETURNING id`,
     [
-      user?.tenant_id ?? null, data.name, data.display_name ?? null,
-      data.api_server_url, data.context ?? null, data.namespace, data.kubeconfig_path ?? null,
+      user?.tenant_id ?? null,
+      data.name,
+      data.display_name ?? null,
+      data.api_server_url,
+      data.context ?? null,
+      data.namespace,
+      data.kubeconfig_path ?? null,
     ],
   );
 
   if (result.error || !result.data?.rows[0]) {
-    return c.json({ error: { code: "CREATE_ERROR", message: "Erro ao registrar cluster" } }, 500);
+    return c.json(
+      { error: { code: "CREATE_ERROR", message: "Erro ao registrar cluster" } },
+      500,
+    );
   }
 
   await query(
     "SELECT public.write_audit_log($1, NULL, 'k8s.cluster.register', 'k8s_cluster', $2, $3, NULL, NULL)",
-    [user.sub, result.data.rows[0].id, JSON.stringify({ name: data.name, api_server: data.api_server_url })],
+    [
+      user.sub,
+      result.data.rows[0].id,
+      JSON.stringify({ name: data.name, api_server: data.api_server_url }),
+    ],
   );
 
   return c.json({ id: result.data.rows[0].id }, 201);
 });
 
 // PUT /api/v1/k8s/clusters/:id — atualiza cluster
-k8sRoute.put("/clusters/:id", jwtAuth, tenantContext, requirePermission("k8s:write"), async (c) => {
+k8sRoute.put("/clusters/:id", requirePermission("k8s:write"), async (c) => {
   const clusterId = c.req.param("id");
   const user = c.get("user");
   const body = await c.req.json<UpdateK8sClusterInput>();
   const parsed = updateK8sClusterSchema.safeParse(body);
   if (!parsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } }, 400);
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
   }
 
   const data = parsed.data;
@@ -94,8 +125,12 @@ k8sRoute.put("/clusters/:id", jwtAuth, tenantContext, requirePermission("k8s:wri
   let paramIdx = 1;
 
   const fieldMap: Record<string, string> = {
-    name: "name", display_name: "display_name", api_server_url: "api_server_url",
-    context: "context", namespace: "namespace", kubeconfig_path: "kubeconfig_path",
+    name: "name",
+    display_name: "display_name",
+    api_server_url: "api_server_url",
+    context: "context",
+    namespace: "namespace",
+    kubeconfig_path: "kubeconfig_path",
     is_active: "is_active",
   };
 
@@ -121,7 +156,7 @@ k8sRoute.put("/clusters/:id", jwtAuth, tenantContext, requirePermission("k8s:wri
 });
 
 // DELETE /api/v1/k8s/clusters/:id — remove cluster
-k8sRoute.delete("/clusters/:id", jwtAuth, tenantContext, requirePermission("k8s:write"), async (c) => {
+k8sRoute.delete("/clusters/:id", requirePermission("k8s:write"), async (c) => {
   const clusterId = c.req.param("id");
   const user = c.get("user");
 
@@ -139,117 +174,184 @@ k8sRoute.delete("/clusters/:id", jwtAuth, tenantContext, requirePermission("k8s:
 });
 
 // GET /api/v1/k8s/:clusterId/resources/:resourceType — lista recursos do cache
-k8sRoute.get("/:clusterId/resources/:resourceType", jwtAuth, tenantContext, requirePermission("k8s:read"), async (c) => {
-  const clusterId = c.req.param("clusterId");
-  const resourceTypeRaw = c.req.param("resourceType");
-  const user = c.get("user");
-  const namespace = c.req.query("namespace");
+k8sRoute.get(
+  "/:clusterId/resources/:resourceType",
+  requirePermission("k8s:read"),
+  async (c) => {
+    const clusterId = c.req.param("clusterId");
+    const resourceTypeRaw = c.req.param("resourceType");
+    const user = c.get("user");
+    const namespace = c.req.query("namespace");
 
-  const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
-  if (!typeParsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Tipo de recurso inválido" } }, 400);
-  }
+    const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
+    if (!typeParsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Tipo de recurso inválido",
+          },
+        },
+        400,
+      );
+    }
 
-  const resourceType = typeParsed.data;
+    const resourceType = typeParsed.data;
 
-  const conditions: string[] = ["cluster_id = $1", "tenant_id = $2", "resource_type = $3"];
-  const params: unknown[] = [clusterId, user?.tenant_id ?? null, resourceType];
-  let paramIdx = 4;
+    const conditions: string[] = [
+      "cluster_id = $1",
+      "tenant_id = $2",
+      "resource_type = $3",
+    ];
+    const params: unknown[] = [
+      clusterId,
+      user?.tenant_id ?? null,
+      resourceType,
+    ];
+    let paramIdx = 4;
 
-  if (namespace && namespace !== "all") {
-    conditions.push(`namespace = $${paramIdx++}`);
-    params.push(namespace);
-  }
+    if (namespace && namespace !== "all") {
+      conditions.push(`namespace = $${paramIdx++}`);
+      params.push(namespace);
+    }
 
-  const result = await query(
-    `SELECT id, namespace, name, uid, status, spec, labels, annotations, ready, restarts, node_name, pod_ip, age_seconds, cached_at
+    const result = await query(
+      `SELECT id, namespace, name, uid, status, spec, labels, annotations, ready, restarts, node_name, pod_ip, age_seconds, cached_at
      FROM public.k8s_resources_cache
      WHERE ${conditions.join(" AND ")}
      ORDER BY namespace, name
      LIMIT 500`,
-    params,
-  );
+      params,
+    );
 
-  if (result.error) {
-    return c.json({ error: { code: "QUERY_ERROR", message: "Erro ao buscar recursos" } }, 500);
-  }
+    if (result.error) {
+      return c.json(
+        { error: { code: "QUERY_ERROR", message: "Erro ao buscar recursos" } },
+        500,
+      );
+    }
 
-  return c.json({
-    resource_type: resourceType,
-    cluster_id: clusterId,
-    items: result.data?.rows ?? [],
-  });
-});
+    return c.json({
+      resource_type: resourceType,
+      cluster_id: clusterId,
+      items: result.data?.rows ?? [],
+    });
+  },
+);
 
 // POST /api/v1/k8s/:clusterId/resources/:resourceType/sync — sincroniza recursos do cluster via kubectl
-k8sRoute.post("/:clusterId/resources/:resourceType/sync", jwtAuth, tenantContext, requirePermission("k8s:write"), async (c) => {
-  const clusterId = c.req.param("clusterId");
-  const resourceTypeRaw = c.req.param("resourceType");
-  const user = c.get("user");
+k8sRoute.post(
+  "/:clusterId/resources/:resourceType/sync",
+  requirePermission("k8s:write"),
+  async (c) => {
+    const clusterId = c.req.param("clusterId");
+    const resourceTypeRaw = c.req.param("resourceType");
+    const user = c.get("user");
 
-  const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
-  if (!typeParsed.success) {
-    return c.json({ error: { code: "VALIDATION_ERROR", message: "Tipo de recurso inválido" } }, 400);
-  }
+    const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
+    if (!typeParsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Tipo de recurso inválido",
+          },
+        },
+        400,
+      );
+    }
 
-  const resourceType = typeParsed.data;
+    const resourceType = typeParsed.data;
 
-  // Busca configuracao do cluster
-  const clusterResult = await query<{ id: string; kubeconfig_path: string | null; context: string | null; namespace: string | null }>(
-    "SELECT id, kubeconfig_path, context, namespace FROM public.k8s_clusters WHERE id = $1 AND tenant_id = $2",
-    [clusterId, user?.tenant_id ?? null],
-  );
+    // Busca configuracao do cluster
+    const clusterResult = await query<{
+      id: string;
+      kubeconfig_path: string | null;
+      context: string | null;
+      namespace: string | null;
+    }>(
+      "SELECT id, kubeconfig_path, context, namespace FROM public.k8s_clusters WHERE id = $1 AND tenant_id = $2",
+      [clusterId, user?.tenant_id ?? null],
+    );
 
-  if (clusterResult.error || !clusterResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Cluster não encontrado" } }, 404);
-  }
+    if (clusterResult.error || !clusterResult.data?.rows[0]) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Cluster não encontrado" } },
+        404,
+      );
+    }
 
-  const cluster = clusterResult.data.rows[0];
-  const nsFlag = cluster.namespace ? `-n "${cluster.namespace}"` : "--all-namespaces";
+    const cluster = clusterResult.data.rows[0];
+    const nsFlag = cluster.namespace
+      ? `-n "${cluster.namespace}"`
+      : "--all-namespaces";
 
-  // Executa kubectl get real
-  const kubectlResult = await execKubectl(
-    cluster.kubeconfig_path,
-    cluster.context,
-    `get ${resourceType} ${nsFlag} -o json`,
-  );
+    // Executa kubectl get real
+    const kubectlResult = await execKubectl(
+      cluster.kubeconfig_path,
+      cluster.context,
+      `get ${resourceType} ${nsFlag} -o json`,
+    );
 
-  if (kubectlResult.exitCode !== 0) {
+    if (kubectlResult.exitCode !== 0) {
+      await query(
+        "SELECT public.write_audit_log($1, NULL, 'k8s.resources.sync', 'k8s_cluster', $2, $3, NULL, NULL)",
+        [
+          user.sub,
+          clusterId,
+          JSON.stringify({
+            resource_type: resourceType,
+            error: kubectlResult.stderr,
+          }),
+        ],
+      );
+      return c.json(
+        {
+          error: {
+            code: "KUBECTL_ERROR",
+            message: `Erro kubectl: ${kubectlResult.stderr}`,
+          },
+        },
+        500,
+      );
+    }
+
+    // Limpa cache antigo
+    await query("SELECT public.cleanup_k8s_cache($1, 1)", [clusterId]);
+
+    // Parse do resultado JSON do kubectl
+    let resourceCount = 0;
+    try {
+      const kubectlData = JSON.parse(kubectlResult.stdout);
+      resourceCount = kubectlData.items?.length ?? 0;
+    } catch {
+      // Se nao for JSON valido, continua com 0
+    }
+
     await query(
       "SELECT public.write_audit_log($1, NULL, 'k8s.resources.sync', 'k8s_cluster', $2, $3, NULL, NULL)",
-      [user.sub, clusterId, JSON.stringify({ resource_type: resourceType, error: kubectlResult.stderr })],
+      [
+        user.sub,
+        clusterId,
+        JSON.stringify({
+          resource_type: resourceType,
+          resources_synced: resourceCount,
+        }),
+      ],
     );
-    return c.json({ error: { code: "KUBECTL_ERROR", message: `Erro kubectl: ${kubectlResult.stderr}` } }, 500);
-  }
 
-  // Limpa cache antigo
-  await query("SELECT public.cleanup_k8s_cache($1, 1)", [clusterId]);
-
-  // Parse do resultado JSON do kubectl
-  let resourceCount = 0;
-  try {
-    const kubectlData = JSON.parse(kubectlResult.stdout);
-    resourceCount = kubectlData.items?.length ?? 0;
-  } catch {
-    // Se nao for JSON valido, continua com 0
-  }
-
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'k8s.resources.sync', 'k8s_cluster', $2, $3, NULL, NULL)",
-    [user.sub, clusterId, JSON.stringify({ resource_type: resourceType, resources_synced: resourceCount })],
-  );
-
-  return c.json({
-    cluster_id: clusterId,
-    resource_type: resourceType,
-    synced: true,
-    resources_count: resourceCount,
-    message: `Sincronizado: ${resourceCount} recurso(s) do tipo ${resourceType}`,
-  });
-});
+    return c.json({
+      cluster_id: clusterId,
+      resource_type: resourceType,
+      synced: true,
+      resources_count: resourceCount,
+      message: `Sincronizado: ${resourceCount} recurso(s) do tipo ${resourceType}`,
+    });
+  },
+);
 
 // GET /api/v1/k8s/:clusterId/events — lista eventos do cluster
-k8sRoute.get("/:clusterId/events", jwtAuth, tenantContext, requirePermission("k8s:read"), async (c) => {
+k8sRoute.get("/:clusterId/events", requirePermission("k8s:read"), async (c) => {
   const clusterId = c.req.param("clusterId");
   const user = c.get("user");
   const namespace = c.req.query("namespace");
@@ -290,43 +392,50 @@ k8sRoute.get("/:clusterId/events", jwtAuth, tenantContext, requirePermission("k8
 });
 
 // GET /api/v1/k8s/:clusterId/overview — resumo do cluster
-k8sRoute.get("/:clusterId/overview", jwtAuth, tenantContext, requirePermission("k8s:read"), async (c) => {
-  const clusterId = c.req.param("clusterId");
-  const user = c.get("user");
+k8sRoute.get(
+  "/:clusterId/overview",
+  requirePermission("k8s:read"),
+  async (c) => {
+    const clusterId = c.req.param("clusterId");
+    const user = c.get("user");
 
-  const clusterResult = await query(
-    "SELECT * FROM public.k8s_clusters WHERE id = $1 AND tenant_id = $2",
-    [clusterId, user?.tenant_id ?? null],
-  );
+    const clusterResult = await query(
+      "SELECT * FROM public.k8s_clusters WHERE id = $1 AND tenant_id = $2",
+      [clusterId, user?.tenant_id ?? null],
+    );
 
-  if (clusterResult.error || !clusterResult.data?.rows[0]) {
-    return c.json({ error: { code: "NOT_FOUND", message: "Cluster não encontrado" } }, 404);
-  }
+    if (clusterResult.error || !clusterResult.data?.rows[0]) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Cluster não encontrado" } },
+        404,
+      );
+    }
 
-  // Conta recursos por tipo
-  const countsResult = await query(
-    `SELECT resource_type, COUNT(*) as count,
+    // Conta recursos por tipo
+    const countsResult = await query(
+      `SELECT resource_type, COUNT(*) as count,
             COUNT(*) FILTER (WHERE ready = 'Running' OR ready = 'Active' OR ready = 'Ready') as healthy,
             COUNT(*) FILTER (WHERE ready IS NOT NULL AND ready != 'Running' AND ready != 'Active' AND ready != 'Ready') as unhealthy
      FROM public.k8s_resources_cache
      WHERE cluster_id = $1 AND tenant_id = $2
      GROUP BY resource_type`,
-    [clusterId, user?.tenant_id ?? null],
-  );
+      [clusterId, user?.tenant_id ?? null],
+    );
 
-  // Conta eventos por tipo
-  const eventsResult = await query(
-    `SELECT type, COUNT(*) as count
+    // Conta eventos por tipo
+    const eventsResult = await query(
+      `SELECT type, COUNT(*) as count
      FROM public.k8s_events
      WHERE cluster_id = $1 AND tenant_id = $2
        AND last_timestamp > timezone('utc'::text, now()) - INTERVAL '24 hours'
      GROUP BY type`,
-    [clusterId, user?.tenant_id ?? null],
-  );
+      [clusterId, user?.tenant_id ?? null],
+    );
 
-  return c.json({
-    cluster: clusterResult.data.rows[0],
-    resource_counts: countsResult.data?.rows ?? [],
-    event_counts_24h: eventsResult.data?.rows ?? [],
-  });
-});
+    return c.json({
+      cluster: clusterResult.data.rows[0],
+      resource_counts: countsResult.data?.rows ?? [],
+      event_counts_24h: eventsResult.data?.rows ?? [],
+    });
+  },
+);

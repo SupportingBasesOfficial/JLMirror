@@ -2,8 +2,6 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { validate } from "../middleware/validate.js";
 import { chatopsConfigSchema } from "@repo/shared-validation";
@@ -27,11 +25,17 @@ chatopsRoute.post("/webhook/slack", async (c) => {
   const tenantIdHeader = c.req.header("x-tenant-id") ?? "";
 
   if (!tenantIdHeader) {
-    return c.json({ text: "Tenant não identificado no header X-Tenant-Id" }, 400);
+    return c.json(
+      { text: "Tenant não identificado no header X-Tenant-Id" },
+      400,
+    );
   }
 
   // Verifica configuracao do tenant
-  const configResult = await query<{ slack_verification_token: string; is_active: boolean }>(
+  const configResult = await query<{
+    slack_verification_token: string;
+    is_active: boolean;
+  }>(
     "SELECT slack_verification_token, is_active FROM public.chatops_config WHERE tenant_id = $1 AND platform = 'slack' AND is_active = true LIMIT 1",
     [tenantIdHeader],
   );
@@ -41,7 +45,10 @@ chatopsRoute.post("/webhook/slack", async (c) => {
     return c.json({ text: "ChatOps não configurado para este tenant" }, 403);
   }
 
-  if (config.slack_verification_token && token !== config.slack_verification_token) {
+  if (
+    config.slack_verification_token &&
+    token !== config.slack_verification_token
+  ) {
     return c.json({ text: "Token de verificação inválido" }, 401);
   }
 
@@ -49,7 +56,11 @@ chatopsRoute.post("/webhook/slack", async (c) => {
   const args = text.trim().split(/\s+/).filter(Boolean);
   const startTime = Date.now();
 
-  const result = await processChatOpsCommand(tenantIdHeader, { command, args, rawText: text });
+  const result = await processChatOpsCommand(tenantIdHeader, {
+    command,
+    args,
+    rawText: text,
+  });
 
   const responseTime = Date.now() - startTime;
 
@@ -58,10 +69,17 @@ chatopsRoute.post("/webhook/slack", async (c) => {
     `INSERT INTO public.chatops_commands (tenant_id, source, chat_user_id, chat_user_name, chat_channel_id, chat_channel_name, command, arguments, response_text, status, error_message, response_time_ms)
      VALUES ($1, 'slack', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
-      tenantIdHeader, userId, userName, channelId, channelName,
-      command, text, result.text,
+      tenantIdHeader,
+      userId,
+      userName,
+      channelId,
+      channelName,
+      command,
+      text,
+      result.text,
       result.success ? "executed" : "failed",
-      result.error ?? null, responseTime,
+      result.error ?? null,
+      responseTime,
     ],
   );
 
@@ -91,7 +109,11 @@ chatopsRoute.post("/webhook/teams", async (c) => {
   const command = args.shift() ?? "";
 
   const startTime = Date.now();
-  const result = await processChatOpsCommand(tenantIdHeader, { command, args, rawText: commandText });
+  const result = await processChatOpsCommand(tenantIdHeader, {
+    command,
+    args,
+    rawText: commandText,
+  });
   const responseTime = Date.now() - startTime;
 
   await query(
@@ -99,11 +121,16 @@ chatopsRoute.post("/webhook/teams", async (c) => {
      VALUES ($1, 'teams', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       tenantIdHeader,
-      body.from?.id ?? null, body.from?.name ?? null,
-      body.conversation?.id ?? null, body.conversation?.name ?? null,
-      command, commandText, result.text,
+      body.from?.id ?? null,
+      body.from?.name ?? null,
+      body.conversation?.id ?? null,
+      body.conversation?.name ?? null,
+      command,
+      commandText,
+      result.text,
       result.success ? "executed" : "failed",
-      result.error ?? null, responseTime,
+      result.error ?? null,
+      responseTime,
     ],
   );
 
@@ -113,7 +140,7 @@ chatopsRoute.post("/webhook/teams", async (c) => {
 // ========== Config (Admin) ==========
 
 // GET /api/v1/chatops/config — lista configs do tenant
-chatopsRoute.get("/config", jwtAuth, tenantContext, requirePermission("chatops:manage"), async (c) => {
+chatopsRoute.get("/config", requirePermission("chatops:manage"), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
 
@@ -126,15 +153,37 @@ chatopsRoute.get("/config", jwtAuth, tenantContext, requirePermission("chatops:m
 });
 
 // PUT /api/v1/chatops/config — cria ou atualiza config (upsert)
-chatopsRoute.put("/config", jwtAuth, tenantContext, requirePermission("chatops:manage"), validate({ schema: chatopsConfigSchema }), async (c) => {
-  const user = c.get("user");
-  const tenantId = user.tenant_id;
-  const body = c.get("validatedData") as { platform: string; slack_verification_token?: string; slack_signing_secret?: string; slack_bot_token?: string; teams_app_id?: string; teams_app_password?: string; enabled_commands?: string[]; is_active?: boolean };
+chatopsRoute.put(
+  "/config",
+  requirePermission("chatops:manage"),
+  validate({ schema: chatopsConfigSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const body = c.get("validatedData") as {
+      platform: string;
+      slack_verification_token?: string;
+      slack_signing_secret?: string;
+      slack_bot_token?: string;
+      teams_app_id?: string;
+      teams_app_password?: string;
+      enabled_commands?: string[];
+      is_active?: boolean;
+    };
 
-  const { platform, slack_verification_token, slack_signing_secret, slack_bot_token, teams_app_id, teams_app_password, enabled_commands, is_active } = body;
+    const {
+      platform,
+      slack_verification_token,
+      slack_signing_secret,
+      slack_bot_token,
+      teams_app_id,
+      teams_app_password,
+      enabled_commands,
+      is_active,
+    } = body;
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.chatops_config
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.chatops_config
        (tenant_id, platform, slack_verification_token, slack_signing_secret, slack_bot_token,
         teams_app_id, teams_app_password, enabled_commands, is_active, configured_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -147,27 +196,40 @@ chatopsRoute.put("/config", jwtAuth, tenantContext, requirePermission("chatops:m
        enabled_commands = EXCLUDED.enabled_commands,
        is_active = EXCLUDED.is_active
      RETURNING id`,
-    [
-      tenantId, platform,
-      slack_verification_token ?? null, slack_signing_secret ?? null, slack_bot_token ?? null,
-      teams_app_id ?? null, teams_app_password ?? null,
-      enabled_commands ?? ["status", "ack", "resolve", "incidents", "services", "silence"],
-      is_active ?? true, user.sub,
-    ],
-  );
+      [
+        tenantId,
+        platform,
+        slack_verification_token ?? null,
+        slack_signing_secret ?? null,
+        slack_bot_token ?? null,
+        teams_app_id ?? null,
+        teams_app_password ?? null,
+        enabled_commands ?? [
+          "status",
+          "ack",
+          "resolve",
+          "incidents",
+          "services",
+          "silence",
+        ],
+        is_active ?? true,
+        user.sub,
+      ],
+    );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'chatops.config.update', 'chatops_config', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, platform })],
-  );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'chatops.config.update', 'chatops_config', NULL, $2, NULL, NULL)",
+      [user.sub, JSON.stringify({ id: result.data?.rows[0]?.id, platform })],
+    );
 
-  return c.json({ id: result.data?.rows[0]?.id, updated: true });
-});
+    return c.json({ id: result.data?.rows[0]?.id, updated: true });
+  },
+);
 
 // ========== Command History ==========
 
 // GET /api/v1/chatops/history — historico de comandos
-chatopsRoute.get("/history", jwtAuth, tenantContext, requirePermission("chatops:read"), async (c) => {
+chatopsRoute.get("/history", requirePermission("chatops:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
@@ -191,13 +253,22 @@ chatopsRoute.get("/history", jwtAuth, tenantContext, requirePermission("chatops:
 });
 
 // GET /api/v1/chatops/stats — estatisticas
-chatopsRoute.get("/stats", jwtAuth, tenantContext, requirePermission("chatops:read"), async (c) => {
+chatopsRoute.get("/stats", requirePermission("chatops:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
 
-  const totalResult = await query("SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1", [tenantId]);
-  const successResult = await query("SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1 AND status = 'executed'", [tenantId]);
-  const failedResult = await query("SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1 AND status = 'failed'", [tenantId]);
+  const totalResult = await query(
+    "SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const successResult = await query(
+    "SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1 AND status = 'executed'",
+    [tenantId],
+  );
+  const failedResult = await query(
+    "SELECT COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1 AND status = 'failed'",
+    [tenantId],
+  );
   const byCommandResult = await query(
     `SELECT command, COUNT(*) as count FROM public.chatops_commands WHERE tenant_id = $1 GROUP BY command ORDER BY count DESC LIMIT 10`,
     [tenantId],
@@ -207,7 +278,9 @@ chatopsRoute.get("/stats", jwtAuth, tenantContext, requirePermission("chatops:re
     [tenantId],
   );
 
-  const getCount = (r: { data?: { rows?: Array<Record<string, unknown>> } | null }): number => {
+  const getCount = (r: {
+    data?: { rows?: Array<Record<string, unknown>> } | null;
+  }): number => {
     const row = r.data?.rows?.[0];
     return row ? parseInt((row.count as string) ?? "0", 10) : 0;
   };

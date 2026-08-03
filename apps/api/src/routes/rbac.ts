@@ -8,15 +8,13 @@ import {
   type CreateRoleInput,
   type AssignRolePermissionsInput,
 } from "@repo/shared-validation";
-import { jwtAuth } from "../middleware/jwt-auth.js";
-import { tenantContext } from "../middleware/tenant-context.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
 export const rbacRoute = new Hono();
 
 // GET /api/v1/rbac/permissions — lista todas as permissões
-rbacRoute.get("/permissions", jwtAuth, tenantContext, async (c) => {
+rbacRoute.get("/permissions", async (c) => {
   const result = await query(
     "SELECT id, key, description, category, created_at FROM public.permissions ORDER BY category, key",
   );
@@ -32,7 +30,7 @@ rbacRoute.get("/permissions", jwtAuth, tenantContext, async (c) => {
 });
 
 // GET /api/v1/rbac/roles — lista todas as roles
-rbacRoute.get("/roles", jwtAuth, tenantContext, async (c) => {
+rbacRoute.get("/roles", async (c) => {
   const result = await query(
     "SELECT id, key, description, is_system, created_at FROM public.roles ORDER BY key",
   );
@@ -48,7 +46,7 @@ rbacRoute.get("/roles", jwtAuth, tenantContext, async (c) => {
 });
 
 // GET /api/v1/rbac/roles/:id/permissions — permissões de uma role
-rbacRoute.get("/roles/:id/permissions", jwtAuth, tenantContext, async (c) => {
+rbacRoute.get("/roles/:id/permissions", async (c) => {
   const roleId = c.req.param("id");
 
   const result = await query(
@@ -62,7 +60,12 @@ rbacRoute.get("/roles/:id/permissions", jwtAuth, tenantContext, async (c) => {
 
   if (result.error) {
     return c.json(
-      { error: { code: "QUERY_ERROR", message: "Erro ao buscar permissões da role" } },
+      {
+        error: {
+          code: "QUERY_ERROR",
+          message: "Erro ao buscar permissões da role",
+        },
+      },
       500,
     );
   }
@@ -71,88 +74,110 @@ rbacRoute.get("/roles/:id/permissions", jwtAuth, tenantContext, async (c) => {
 });
 
 // POST /api/v1/rbac/roles — cria nova role customizada
-rbacRoute.post("/roles", jwtAuth, tenantContext, requirePermission("tenant:settings:write"), async (c) => {
-  const body = await c.req.json<CreateRoleInput>();
-  const parsed = createRoleSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-      400,
+rbacRoute.post(
+  "/roles",
+  requirePermission("tenant:settings:write"),
+  async (c) => {
+    const body = await c.req.json<CreateRoleInput>();
+    const parsed = createRoleSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
+
+    const { key, description, permissions } = parsed.data;
+
+    // Cria role
+    const roleResult = await query<{ id: string }>(
+      "INSERT INTO public.roles (key, description, is_system) VALUES ($1, $2, false) RETURNING id",
+      [key, description ?? null],
     );
-  }
 
-  const { key, description, permissions } = parsed.data;
+    if (roleResult.error || !roleResult.data?.rows[0]) {
+      return c.json(
+        { error: { code: "CREATE_ERROR", message: "Erro ao criar role" } },
+        500,
+      );
+    }
 
-  // Cria role
-  const roleResult = await query<{ id: string }>(
-    "INSERT INTO public.roles (key, description, is_system) VALUES ($1, $2, false) RETURNING id",
-    [key, description ?? null],
-  );
+    const roleId = roleResult.data.rows[0].id;
 
-  if (roleResult.error || !roleResult.data?.rows[0]) {
-    return c.json(
-      { error: { code: "CREATE_ERROR", message: "Erro ao criar role" } },
-      500,
-    );
-  }
+    // Atribui permissões
+    if (permissions.length > 0) {
+      const values = permissions.map((_, i) => `($1, $${i + 2})`).join(", ");
+      await query(
+        `INSERT INTO public.role_permissions (role_id, permission_id) VALUES ${values}`,
+        [roleId, ...permissions],
+      );
+    }
 
-  const roleId = roleResult.data.rows[0].id;
-
-  // Atribui permissões
-  if (permissions.length > 0) {
-    const values = permissions.map((_, i) => `($1, $${i + 2})`).join(", ");
+    // Auditoria
+    const user = c.get("user");
     await query(
-      `INSERT INTO public.role_permissions (role_id, permission_id) VALUES ${values}`,
-      [roleId, ...permissions],
+      "SELECT public.write_audit_log($1, NULL, 'rbac.role.create', 'role', $2, $3, NULL, NULL)",
+      [user.sub, roleId, JSON.stringify({ key, permissions })],
     );
-  }
 
-  // Auditoria
-  const user = c.get("user");
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'rbac.role.create', 'role', $2, $3, NULL, NULL)",
-    [user.sub, roleId, JSON.stringify({ key, permissions })],
-  );
-
-  return c.json({ id: roleId, key, description: description ?? null, is_system: false }, 201);
-});
+    return c.json(
+      { id: roleId, key, description: description ?? null, is_system: false },
+      201,
+    );
+  },
+);
 
 // PUT /api/v1/rbac/roles/:id/permissions — atribui permissões a uma role
-rbacRoute.put("/roles/:id/permissions", jwtAuth, tenantContext, requirePermission("tenant:settings:write"), async (c) => {
-  const roleId = c.req.param("id");
-  const body = await c.req.json<AssignRolePermissionsInput>();
-  const parsed = assignRolePermissionsSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-      400,
-    );
-  }
+rbacRoute.put(
+  "/roles/:id/permissions",
+  requirePermission("tenant:settings:write"),
+  async (c) => {
+    const roleId = c.req.param("id");
+    const body = await c.req.json<AssignRolePermissionsInput>();
+    const parsed = assignRolePermissionsSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
 
-  // Remove permissões existentes
-  await query("DELETE FROM public.role_permissions WHERE role_id = $1", [roleId]);
+    // Remove permissões existentes
+    await query("DELETE FROM public.role_permissions WHERE role_id = $1", [
+      roleId,
+    ]);
 
-  // Insere novas
-  if (parsed.data.permission_ids.length > 0) {
-    const values = parsed.data.permission_ids.map((_, i) => `($1, $${i + 2})`).join(", ");
+    // Insere novas
+    if (parsed.data.permission_ids.length > 0) {
+      const values = parsed.data.permission_ids
+        .map((_, i) => `($1, $${i + 2})`)
+        .join(", ");
+      await query(
+        `INSERT INTO public.role_permissions (role_id, permission_id) VALUES ${values}`,
+        [roleId, ...parsed.data.permission_ids],
+      );
+    }
+
+    // Auditoria
+    const user = c.get("user");
     await query(
-      `INSERT INTO public.role_permissions (role_id, permission_id) VALUES ${values}`,
-      [roleId, ...parsed.data.permission_ids],
+      "SELECT public.write_audit_log($1, NULL, 'rbac.role.permissions.update', 'role', $2, $3, NULL, NULL)",
+      [
+        user.sub,
+        roleId,
+        JSON.stringify({ permission_ids: parsed.data.permission_ids }),
+      ],
     );
-  }
 
-  // Auditoria
-  const user = c.get("user");
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'rbac.role.permissions.update', 'role', $2, $3, NULL, NULL)",
-    [user.sub, roleId, JSON.stringify({ permission_ids: parsed.data.permission_ids })],
-  );
-
-  return c.json({ role_id: roleId, permission_ids: parsed.data.permission_ids });
-});
+    return c.json({
+      role_id: roleId,
+      permission_ids: parsed.data.permission_ids,
+    });
+  },
+);
 
 // GET /api/v1/rbac/me/permissions — permissões do usuário atual
-rbacRoute.get("/me/permissions", jwtAuth, tenantContext, async (c) => {
+rbacRoute.get("/me/permissions", async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json(
