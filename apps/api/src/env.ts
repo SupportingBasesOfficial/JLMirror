@@ -30,4 +30,19 @@ function loadEnv(): Env {
   return parsed.data;
 }
 
-export const env = loadEnv();
+let _env: Env | null = null;
+
+// Lazy getter — so valida apos dotenv carregar .env
+export function getEnv(): Env {
+  if (!_env) {
+    _env = loadEnv();
+  }
+  return _env;
+}
+
+// Mantem compatibilidade: env é acessado via getEnv() apos dotenv
+export const env = new Proxy({} as Env, {
+  get(_, prop) {
+    return Reflect.get(getEnv(), prop);
+  },
+});

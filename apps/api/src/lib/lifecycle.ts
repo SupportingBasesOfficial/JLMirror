@@ -3,6 +3,7 @@
 import { closePool, query } from "@repo/db";
 import { closeCache } from "@repo/cache";
 import { logger } from "@repo/logger";
+import { env } from "../env.js";
 import { stopTaskScheduler } from "./task-scheduler.js";
 import { stopAlertingEngine } from "./alerting-engine.js";
 import { stopDeviceSync } from "./device-sync.js";
@@ -11,50 +12,37 @@ import { stopCorrelationEngine } from "./correlation-engine.js";
 import { stopAllQueues } from "./queue.js";
 import * as Sentry from "@sentry/node";
 
-// Variáveis de ambiente obrigatórias em produção
-const REQUIRED_ENV_VARS = [
-  "DATABASE_URL",
-  "JWT_PRIVATE_KEY",
-  "JWT_PUBLIC_KEY",
-  "JWT_ISSUER",
-  "JWT_AUDIENCE",
-];
+// Variaveis de ambiente adicionais obrigatorias em producao (alem das validadas por env.ts)
+const REQUIRED_ENV_VARS_PRODUCTION = ["REDIS_URL", "CORS_ALLOWED_ORIGINS"];
 
-const REQUIRED_ENV_VARS_PRODUCTION = [
-  "REDIS_URL",
-  "CORS_ALLOWED_ORIGINS",
-];
-
-// Valida ambiente na inicialização — falha fast se variáveis críticas faltam
+// Valida ambiente na inicialização via Zod schema (env.ts) + validacao adicional de producao
 export function validateEnv(): void {
-  const missing: string[] = [];
-
-  for (const envVar of REQUIRED_ENV_VARS) {
-     
-    if (!process.env[envVar]) {
-      missing.push(envVar);
-    }
-  }
+  // env.ts ja valida DATABASE_URL, REDIS_URL, JWT_*, ZABBIX_ENCRYPTION_KEY_HEX, API_PORT via Zod
+  // Se chegou aqui, env.ts ja foi carregado com sucesso
 
   if (process.env.NODE_ENV === "production") {
+    const missing: string[] = [];
     for (const envVar of REQUIRED_ENV_VARS_PRODUCTION) {
-       
       if (!process.env[envVar]) {
         missing.push(envVar);
       }
     }
+    if (missing.length > 0) {
+      logger.error("Variaveis de ambiente obrigatorias em producao faltando", {
+        missing,
+      });
+      process.exit(1);
+    }
   }
 
-  if (missing.length > 0) {
-    logger.error("Variaveis de ambiente obrigatorias faltando", { missing });
-    process.exit(1);
-  }
-
-  logger.info("Validacao de env: OK");
+  logger.info("Validacao de env: OK", { port: env.API_PORT });
 }
 
 // Retry de conexao com DB com backoff exponencial
-export async function waitForDatabase(maxRetries: number = 5, baseDelayMs: number = 1000): Promise<void> {
+export async function waitForDatabase(
+  maxRetries: number = 5,
+  baseDelayMs: number = 1000,
+): Promise<void> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const result = await query("SELECT 1 as ok");
     if (!result.error) {
@@ -64,14 +52,18 @@ export async function waitForDatabase(maxRetries: number = 5, baseDelayMs: numbe
     }
 
     const delay = baseDelayMs * Math.pow(2, attempt - 1);
-    logger.warn("DB indisponivel, tentando novamente", { attempt, maxRetries, delayMs: delay });
+    logger.warn("DB indisponivel, tentando novamente", {
+      attempt,
+      maxRetries,
+      delayMs: delay,
+    });
 
     if (attempt === maxRetries) {
       logger.error("Nao foi possivel conectar ao DB", { maxRetries });
       process.exit(1);
     }
 
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
 }
 
@@ -83,7 +75,10 @@ async function runMigrations(): Promise<void> {
   try {
     client = await pool().connect();
     // Tenta adquirir lock advisory — ID fixo e arbitrario para migrations
-    const lockResult = await client.query("SELECT pg_try_advisory_lock($1) as acquired", [42_001]);
+    const lockResult = await client.query(
+      "SELECT pg_try_advisory_lock($1) as acquired",
+      [42_001],
+    );
     if (!lockResult.rows[0]?.acquired) {
       logger.warn("Migrations: outra replica ja esta migrando, pulando");
       return;
@@ -93,11 +88,15 @@ async function runMigrations(): Promise<void> {
     await migrate();
     logger.info("Migrations aplicadas com sucesso");
   } catch (err) {
-    logger.error("Erro ao aplicar migrations", { error: err instanceof Error ? err.message : String(err) });
+    logger.error("Erro ao aplicar migrations", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     // Nao aborta — migrations podem ja estar aplicadas
   } finally {
     if (client) {
-      try { await client.query("SELECT pg_advisory_unlock($1)", [42_001]); } catch {}
+      try {
+        await client.query("SELECT pg_advisory_unlock($1)", [42_001]);
+      } catch {}
       client.release();
     }
   }
@@ -169,7 +168,9 @@ export function setupGracefulShutdown(): void {
 
   // Previne crash em unhandled rejection — loga e continua
   process.on("unhandledRejection", (reason) => {
-    logger.error("Unhandled rejection", { reason: reason instanceof Error ? reason.message : String(reason) });
+    logger.error("Unhandled rejection", {
+      reason: reason instanceof Error ? reason.message : String(reason),
+    });
   });
 
   // Captura exceptions nao tratadas — loga mas nao crasha
