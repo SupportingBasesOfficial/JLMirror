@@ -55,42 +55,51 @@ usersRoute.get(
 );
 
 // GET /api/v1/users/all — lista todos os usuários (apenas JL staff com scope=global)
-usersRoute.get("/all", jwtAuth, tenantContext, async (c) => {
-  const user = c.get("user");
+usersRoute.get(
+  "/all",
+  jwtAuth,
+  tenantContext,
+  requirePermission("global:users:read"),
+  async (c) => {
+    const user = c.get("user");
 
-  if (user.scope !== "global") {
-    return c.json(
-      {
-        error: { code: "FORBIDDEN", message: "Acesso restrito a usuários JL" },
-      },
-      403,
-    );
-  }
+    if (user.scope !== "global") {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "Acesso restrito a usuários JL",
+          },
+        },
+        403,
+      );
+    }
 
-  const result = await query<{
-    id: string;
-    email: string;
-    full_name: string | null;
-    is_active: boolean;
-    tenant_id: string;
-    role: string;
-    scope: string;
-  }>(
-    `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id, tu.role, tu.scope
+    const result = await query<{
+      id: string;
+      email: string;
+      full_name: string | null;
+      is_active: boolean;
+      tenant_id: string;
+      role: string;
+      scope: string;
+    }>(
+      `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id, tu.role, tu.scope
      FROM public.tenant_users tu
      JOIN public.users u ON u.id = tu.user_id
      ORDER BY u.email`,
-  );
-
-  if (result.error) {
-    return c.json(
-      { error: { code: "QUERY_ERROR", message: "Erro ao buscar usuários" } },
-      500,
     );
-  }
 
-  return c.json({ users: result.data?.rows ?? [] });
-});
+    if (result.error) {
+      return c.json(
+        { error: { code: "QUERY_ERROR", message: "Erro ao buscar usuários" } },
+        500,
+      );
+    }
+
+    return c.json({ users: result.data?.rows ?? [] });
+  },
+);
 
 // POST /api/v1/users — cria novo usuário no tenant atual
 usersRoute.post(

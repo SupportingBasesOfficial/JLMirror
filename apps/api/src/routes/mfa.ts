@@ -76,7 +76,7 @@ mfaRoute.post(
     const setup = generateTotpSetup(email);
 
     // Armazena secret temporariamente (não habilitado até verificação)
-    const recoveryHashed = hashRecoveryCodes(setup.recovery_codes);
+    const recoveryHashed = await hashRecoveryCodes(setup.recovery_codes);
 
     await query(
       `INSERT INTO public.user_mfa_totp (user_id, secret, recovery_codes, is_enabled)
@@ -149,7 +149,7 @@ mfaRoute.post(
     }
 
     // Verifica o código TOTP
-    const valid = verifyTotpCode(parsed.data.code, record.secret);
+    const valid = verifyTotpCode(record.secret, parsed.data.code);
     if (!valid) {
       return c.json(
         { error: { code: "INVALID_CODE", message: "Código TOTP inválido" } },
@@ -245,7 +245,7 @@ mfaRoute.post("/verify", async (c) => {
   }
 
   const totp = totpResult.data.rows[0];
-  const valid = verifyTotpCode(parsed.data.code, totp.secret);
+  const valid = verifyTotpCode(totp.secret, parsed.data.code);
 
   if (!valid) {
     // Verifica se é recovery code

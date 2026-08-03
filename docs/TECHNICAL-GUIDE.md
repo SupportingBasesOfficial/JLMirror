@@ -2756,7 +2756,25 @@ Todas as 16 discrepâncias identificadas na análise profunda foram corrigidas n
 - **Causa raiz**: Após a migration corrigir `get_tenant_user_auth` para retornar `scope`, os fallbacks `?? "tenant"` nas rotas eram redundantes e mascaravam erros.
 - **Solução**: Removidos fallbacks em login, OAuth e LDAP. MFA verify agora retorna 403 se scope estiver ausente. O fallback permanece apenas em `jwtAuth` (última linha de defesa) e no refresh token (compatibilidade retroativa com tokens emitidos antes da correção).
 
+### D6 — `GET /users/all` sem `requirePermission` → CORRIGIDO
+
+- **Arquivo**: `apps/api/src/routes/users.ts`
+- **Causa raiz**: Rota `GET /users/all` tinha apenas `jwtAuth` + `tenantContext` com check manual de scope, mas sem `requirePermission("global:users:read")`, tornando-a inconsistente com as demais rotas.
+- **Solução**: Adicionado `requirePermission("global:users:read")` ao middleware da rota.
+
 ## Correções Adicionais
+
+### `hashRecoveryCodes` chamado sem `await` → CORRIGIDO
+
+- **Arquivo**: `apps/api/src/routes/mfa.ts`
+- **Causa raiz**: `hashRecoveryCodes` é `async` (retorna `Promise<string[]>`) mas era chamado sem `await`, resultando em `JSON.stringify(Promise)` em vez dos hashes reais. Os recovery codes nunca eram armazenados corretamente.
+- **Solução**: Adicionado `await` na chamada.
+
+### `verifyTotpCode` — Parâmetros invertidos em 2 call sites → CORRIGIDO
+
+- **Arquivo**: `apps/api/src/routes/mfa.ts` (linhas 152 e 248)
+- **Causa raiz**: Função recebe `(secret, code)` mas era chamada como `(code, secret)` em ambos os call sites (setup/verify e login/verify). O `authenticator.verify` recebia `token: secret` e `secret: code`, fazendo a verificação sempre falhar (ou aceitar códigos errados em casos extremos).
+- **Solução**: Corrigida ordem dos parâmetros em ambos os call sites para `verifyTotpCode(secret, code)`.
 
 ### `generateTotpSetup` — Return type incorreto → CORRIGIDO
 
@@ -2772,14 +2790,16 @@ Todas as 16 discrepâncias identificadas na análise profunda foram corrigidas n
 
 ## Commits (em ordem cronológica)
 
-| Commit    | Descrição                                                            |
-| --------- | -------------------------------------------------------------------- |
-| `b346848` | `fix(auth): add token helper, fix totp setup and recovery code`      |
-| `4efc7f4` | `fix(auth): use token helper, hash refresh in oauth/ldap, add scope` |
-| `4ec70b3` | `fix(bff): return scope in login and mfa-verify responses`           |
-| `edb763e` | `fix(users): use zod schemas and enforce tenant isolation`           |
-| `9319677` | `fix(validation): expand profile schemas to match route fields`      |
-| `769c063` | `fix(tests): update preferences schema tests for new flat structure` |
-| `c152c6c` | `fix(api): global auth middleware and requireModule root coverage`   |
-| `873bfac` | `fix(security): enforce tenant_id and explicit bypass flag`          |
-| `1d370f3` | `fix(auth): remove redundant scope fallbacks`                        |
+| Commit    | Descrição                                                                   |
+| --------- | --------------------------------------------------------------------------- |
+| `b346848` | `fix(auth): add token helper, fix totp setup and recovery code`             |
+| `4efc7f4` | `fix(auth): use token helper, hash refresh in oauth/ldap, add scope`        |
+| `4ec70b3` | `fix(bff): return scope in login and mfa-verify responses`                  |
+| `edb763e` | `fix(users): use zod schemas and enforce tenant isolation`                  |
+| `9319677` | `fix(validation): expand profile schemas to match route fields`             |
+| `769c063` | `fix(tests): update preferences schema tests for new flat structure`        |
+| `c152c6c` | `fix(api): global auth middleware and requireModule root coverage`          |
+| `873bfac` | `fix(security): enforce tenant_id and explicit bypass flag`                 |
+| `1d370f3` | `fix(auth): remove redundant scope fallbacks`                               |
+| `pending` | `fix(users): add requirePermission to GET /all route`                       |
+| `pending` | `fix(mfa): add await to hashRecoveryCodes + fix verifyTotpCode param order` |
