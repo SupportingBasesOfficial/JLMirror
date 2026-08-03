@@ -147,14 +147,46 @@ export async function isRefreshJtiValid(jti: string): Promise<boolean> {
   return exists === "1";
 }
 
+// Geracao de tokens JWT + persistencia no Redis — elimina duplicacao entre login, MFA, OAuth e LDAP
+export interface TokenResult {
+  accessToken: string;
+  refreshToken: string;
+  refreshTokenHash: string;
+  refreshJti: string;
+}
+
+export async function generateAndStoreTokens(
+  opts: SignOptions,
+): Promise<TokenResult> {
+  const accessToken = signAccessToken(opts);
+  const refreshToken = signRefreshToken(opts);
+  const refreshPayload = verifyToken(refreshToken);
+  await storeRefreshJti(refreshPayload.jti);
+  const refreshTokenHash = crypto
+    .createHash("sha256")
+    .update(refreshToken)
+    .digest("hex");
+  return {
+    accessToken,
+    refreshToken,
+    refreshTokenHash,
+    refreshJti: refreshPayload.jti,
+  };
+}
+
 // TOTP — setup e verificacao
 export function generateTotpSetup(email: string): {
   secret: string;
-  otpauthUrl: string;
+  qr_code_uri: string;
+  recovery_codes: string[];
 } {
   const secret = authenticator.generateSecret();
-  const otpauthUrl = authenticator.keyuri(email, "JLMIRROR", secret);
-  return { secret, otpauthUrl };
+  const qr_code_uri = authenticator.keyuri(email, "JLMIRROR", secret);
+  // Gera 10 codigos de recuperacao alfanumericos de 16 caracteres
+  const recovery_codes = Array.from({ length: 10 }, () =>
+    crypto.randomBytes(8).toString("hex"),
+  );
+  return { secret, qr_code_uri, recovery_codes };
 }
 
 export function verifyTotpCode(secret: string, code: string): boolean {
@@ -175,12 +207,12 @@ export async function hashRecoveryCodes(codes: string[]): Promise<string[]> {
   );
 }
 
-export async function verifyRecoveryCode(
-  hashedCode: string,
+export function verifyRecoveryCode(
   inputCode: string,
-): Promise<boolean> {
+  hashedCodes: string[],
+): boolean {
   const inputHash = crypto.createHash("sha256").update(inputCode).digest("hex");
-  return inputHash === hashedCode;
+  return hashedCodes.includes(inputHash);
 }
 
 // Checker de permissoes com cache em memoria
