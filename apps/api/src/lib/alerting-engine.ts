@@ -2,7 +2,11 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
 import { logger } from "@repo/logger";
-import { BlindedZabbixClient, decryptTokenParts, type ZabbixProblem } from "@repo/zabbix";
+import {
+  BlindedZabbixClient,
+  decryptTokenParts,
+  type ZabbixProblem,
+} from "@repo/zabbix";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { deliverNotification } from "./notification-delivery.js";
 import { registerRepeatableJob, startWorker } from "./queue.js";
@@ -42,17 +46,17 @@ const QUEUE_NAME = "alerting-engine";
 const POLL_INTERVAL_MS = 60_000;
 
 export async function startAlertingEngine(): Promise<void> {
-  await registerRepeatableJob(
-    QUEUE_NAME,
-    "poll-zabbix-alerts",
-    { every: POLL_INTERVAL_MS },
-  );
+  await registerRepeatableJob(QUEUE_NAME, "poll-zabbix-alerts", {
+    every: POLL_INTERVAL_MS,
+  });
 
   startWorker(QUEUE_NAME, async () => {
     try {
       await pollZabbixAndAlert();
     } catch (err) {
-      logger.error("Erro no poll de alertas", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no poll de alertas", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 }
@@ -81,7 +85,10 @@ async function pollZabbixAndAlert(): Promise<void> {
     try {
       await processTenantAlerts(tenant);
     } catch (err) {
-      logger.error("Erro no tenant (alerting)", { tenantId: tenant.tenant_id, error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no tenant (alerting)", {
+        tenantId: tenant.tenant_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }
@@ -119,7 +126,9 @@ async function processTenantAlerts(tenant: TenantConfig): Promise<void> {
        AND payload->>'fingerprint' IS NOT NULL`,
     [tenant.tenant_id],
   );
-  const processed = new Set(processedResult.data?.rows.map((r) => r.fingerprint) ?? []);
+  const processed = new Set(
+    processedResult.data?.rows.map((r) => r.fingerprint) ?? [],
+  );
 
   // Busca rules ativas que matchem monitoring events
   const rulesResult = await query<NotificationRule>(
@@ -202,10 +211,19 @@ async function processTenantAlerts(tenant: TenantConfig): Promise<void> {
           `INSERT INTO public.notification_log (tenant_id, rule_id, channel_id, event_source, event_category, severity, subject, body, payload, status, sent_at, duration_ms)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, timezone('utc'::text, now()), 0)`,
           [
-            tenant.tenant_id, rule.id, channelId,
-            eventSource, "monitoring", severity,
-            finalSubject, finalBody,
-            JSON.stringify({ fingerprint, zabbix_event_id: problem.eventid, problem_name: problem.name }),
+            tenant.tenant_id,
+            rule.id,
+            channelId,
+            eventSource,
+            "monitoring",
+            severity,
+            finalSubject,
+            finalBody,
+            JSON.stringify({
+              fingerprint,
+              zabbix_event_id: problem.eventid,
+              problem_name: problem.name,
+            }),
             deliveryResult.success ? "sent" : "failed",
           ],
         );
@@ -229,7 +247,9 @@ async function processTenantAlerts(tenant: TenantConfig): Promise<void> {
   }
 }
 
-function mapZabbixSeverity(zabbixSeverity: string): "info" | "warning" | "critical" {
+function mapZabbixSeverity(
+  zabbixSeverity: number | string,
+): "info" | "warning" | "critical" {
   const sev = Number(zabbixSeverity);
   if (sev >= 4) return "critical";
   if (sev >= 2) return "warning";

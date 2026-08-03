@@ -3,7 +3,12 @@
 import Redis from "ioredis";
 import { query } from "@repo/db";
 
-export { circuitCanCall, circuitOnSuccess, circuitOnFailure, circuitGetState } from "./circuit-breaker.js";
+export {
+  circuitCanCall,
+  circuitOnSuccess,
+  circuitOnFailure,
+  circuitGetState,
+} from "./circuit-breaker.js";
 
 // Cliente Redis singleton para cache geral
 let cacheClient: Redis | null = null;
@@ -37,10 +42,18 @@ export function createBullMQConnection(): Redis {
 export async function closeCache(): Promise<void> {
   const promises: Promise<void>[] = [];
   if (cacheClient) {
-    promises.push(cacheClient.quit().then(() => { cacheClient = null; }));
+    promises.push(
+      cacheClient.quit().then(() => {
+        cacheClient = null;
+      }),
+    );
   }
   if (bullmqConnection) {
-    promises.push(bullmqConnection.quit().then(() => { bullmqConnection = null; }));
+    promises.push(
+      bullmqConnection.quit().then(() => {
+        bullmqConnection = null;
+      }),
+    );
   }
   await Promise.all(promises);
 }
@@ -144,8 +157,12 @@ export async function cachedQuery<T>(
       }
       return data;
     } catch (err) {
-      console.error("[cachedQuery] Erro na fn:", cacheKey, err instanceof Error ? err.message : String(err));
-      return null as T;
+      console.error(
+        "[cachedQuery] Erro na fn:",
+        cacheKey,
+        err instanceof Error ? err.message : String(err),
+      );
+      return null as unknown as T;
     }
   }
 
@@ -159,7 +176,9 @@ export async function cachedQuery<T>(
     return { data: cached, error: null } as unknown as T;
   }
 
-  const result = await query<T>(sql, params);
+  const result = await query<
+    T extends Record<string, unknown> ? T : Record<string, unknown>
+  >(sql, params);
   if (result.error || !result.data) {
     return { data: null, error: result.error } as unknown as T;
   }

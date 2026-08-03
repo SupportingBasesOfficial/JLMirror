@@ -11,7 +11,9 @@ export interface TraceContext {
 }
 
 // Extrai contexto de trace dos headers W3C Trace Context
-export function extractTraceContext(headers: Record<string, string | undefined>): TraceContext | null {
+export function extractTraceContext(
+  headers: Record<string, string | undefined>,
+): TraceContext | null {
   const traceparent = headers["traceparent"];
   if (!traceparent) return null;
 
@@ -38,7 +40,19 @@ export function createRootTraceContext(): TraceContext {
 }
 
 // Registra inicio de span
-export function recordSpanStart(name: string, parent?: TraceContext): { name: string; spanId: string; startTime: number; parent?: TraceContext } {
+export function recordSpanStart(
+  nameOrCtx: string | TraceContext,
+  parentOrName?: TraceContext | string,
+  _serviceName?: string,
+  _options?: Record<string, unknown>,
+): { name: string; spanId: string; startTime: number; parent?: TraceContext } {
+  const name =
+    typeof nameOrCtx === "string"
+      ? nameOrCtx
+      : typeof parentOrName === "string"
+        ? parentOrName
+        : "span";
+  const parent = typeof parentOrName === "object" ? parentOrName : undefined;
   return {
     name,
     spanId: crypto.randomUUID().replace(/-/g, "").slice(0, 16),
@@ -48,7 +62,12 @@ export function recordSpanStart(name: string, parent?: TraceContext): { name: st
 }
 
 // Registra fim de span e retorna duracao
-export function recordSpanEnd(span: { name: string; startTime: number }): number {
+export function recordSpanEnd(
+  span: { name: string; startTime: number },
+  _status?: string,
+  _message?: string | null,
+  _events?: unknown[],
+): number {
   return Date.now() - span.startTime;
 }
 

@@ -451,7 +451,7 @@ firewallRoute.post("/apply", requirePermission("firewall:write"), async (c) => {
             );
           },
         )
-      : await execSshCommand(host, cmd);
+      : await execSshCommand(host ?? "localhost", cmd);
 
     if (result.stdout) stdoutLines.push(result.stdout.trim());
     if (result.stderr) stderrLines.push(result.stderr.trim());

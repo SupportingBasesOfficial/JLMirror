@@ -321,6 +321,9 @@ importers:
 
   packages/cache:
     dependencies:
+      '@repo/db':
+        specifier: workspace:*
+        version: link:../db
       ioredis:
         specifier: ^5.4.2
         version: 5.11.1

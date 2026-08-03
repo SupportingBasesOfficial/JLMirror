@@ -2,7 +2,11 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { query } from "@repo/db";
 import { logger } from "@repo/logger";
-import { BlindedZabbixClient, decryptTokenParts, type ZabbixProblem } from "@repo/zabbix";
+import {
+  BlindedZabbixClient,
+  decryptTokenParts,
+  type ZabbixProblem,
+} from "@repo/zabbix";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { deliverNotification } from "./notification-delivery.js";
 import { registerRepeatableJob, startWorker } from "./queue.js";
@@ -25,7 +29,12 @@ interface CorrelationRule {
   tenant_id: string;
   name: string;
   time_window_seconds: number;
-  grouping_strategy: "same_device" | "same_host_group" | "same_tag" | "same_severity" | "cross_device";
+  grouping_strategy:
+    | "same_device"
+    | "same_host_group"
+    | "same_tag"
+    | "same_severity"
+    | "cross_device";
   tag_key: string | null;
   min_severity: "info" | "warning" | "critical";
   escalation_threshold: number;
@@ -46,7 +55,11 @@ interface NotificationChannel {
 const QUEUE_NAME = "correlation-engine";
 const POLL_INTERVAL_MS = 30_000;
 
-const SEVERITY_ORDER: Record<string, number> = { info: 1, warning: 2, critical: 3 };
+const SEVERITY_ORDER: Record<string, number> = {
+  info: 1,
+  warning: 2,
+  critical: 3,
+};
 const ZABBIX_SEVERITY_MAP: Record<number, "info" | "warning" | "critical"> = {
   0: "info",
   1: "info",
@@ -57,17 +70,17 @@ const ZABBIX_SEVERITY_MAP: Record<number, "info" | "warning" | "critical"> = {
 };
 
 export async function startCorrelationEngine(): Promise<void> {
-  await registerRepeatableJob(
-    QUEUE_NAME,
-    "poll-and-correlate",
-    { every: POLL_INTERVAL_MS },
-  );
+  await registerRepeatableJob(QUEUE_NAME, "poll-and-correlate", {
+    every: POLL_INTERVAL_MS,
+  });
 
   startWorker(QUEUE_NAME, async () => {
     try {
       await pollAndCorrelate();
     } catch (err) {
-      logger.error("Erro no poll de correlacao", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no poll de correlacao", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 
@@ -96,7 +109,10 @@ async function pollAndCorrelate(): Promise<void> {
     try {
       await processTenantCorrelation(tenant);
     } catch (err) {
-      logger.error("Erro no tenant (correlacao)", { tenantId: tenant.tenant_id, error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no tenant (correlacao)", {
+        tenantId: tenant.tenant_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }
@@ -156,10 +172,14 @@ async function processTenantCorrelation(tenant: TenantConfig): Promise<void> {
      WHERE tenant_id = $1 AND created_at >= timezone('utc'::text, now()) - INTERVAL '24 hours'`,
     [tenant.tenant_id],
   );
-  const processedEventIds = new Set(processedResult.data?.rows.map((r) => r.zabbix_event_id) ?? []);
+  const processedEventIds = new Set(
+    processedResult.data?.rows.map((r) => r.zabbix_event_id) ?? [],
+  );
 
   // Filtra apenas eventos não processados
-  const newProblems = candidateProblems.filter((p) => !processedEventIds.has(p.eventid));
+  const newProblems = candidateProblems.filter(
+    (p) => !processedEventIds.has(p.eventid),
+  );
 
   if (!newProblems.length) return;
 
@@ -182,7 +202,9 @@ async function processRule(
   // Filtra problems por severidade mínima da regra
   const ruleProblems = problems.filter((p) => {
     const sev = ZABBIX_SEVERITY_MAP[Number(p.severity)] ?? "warning";
-    return (SEVERITY_ORDER[sev] ?? 2) >= (SEVERITY_ORDER[rule.min_severity] ?? 2);
+    return (
+      (SEVERITY_ORDER[sev] ?? 2) >= (SEVERITY_ORDER[rule.min_severity] ?? 2)
+    );
   });
 
   if (!ruleProblems.length) return;
@@ -223,7 +245,10 @@ function groupProblems(
   return groups;
 }
 
-function computeGroupKey(problem: ZabbixProblem, rule: CorrelationRule): string {
+function computeGroupKey(
+  problem: ZabbixProblem,
+  rule: CorrelationRule,
+): string {
   switch (rule.grouping_strategy) {
     case "same_device":
       return `device:${problem.hosts?.[0]?.hostid ?? "unknown"}`;
@@ -260,7 +285,11 @@ function computeGroupKey(problem: ZabbixProblem, rule: CorrelationRule): string 
   }
 }
 
-function computeGroupFingerprint(tenantId: string, ruleId: string, groupKey: string): string {
+function computeGroupFingerprint(
+  tenantId: string,
+  ruleId: string,
+  groupKey: string,
+): string {
   return createHash("sha256")
     .update(`${tenantId}:${ruleId}:${groupKey}`)
     .digest("hex")
@@ -279,7 +308,11 @@ async function processSingleEvent(
   // O alerting engine tradicional cuidará disso se suppress_individual = false
   if (rule.suppress_individual) {
     // Registra como membro de grupo singleton para dedup
-    const singletonFingerprint = computeGroupFingerprint(tenantId, rule.id, `single:${problem.eventid}`);
+    const singletonFingerprint = computeGroupFingerprint(
+      tenantId,
+      rule.id,
+      `single:${problem.eventid}`,
+    );
     const groupId = await findOrCreateGroup(
       tenantId,
       rule.id,
@@ -311,7 +344,11 @@ async function processSingleEvent(
   }
 
   // Se não suprime, registra o evento para dedup mas permite notificação individual
-  const singletonFingerprint = computeGroupFingerprint(tenantId, rule.id, `single:${problem.eventid}`);
+  const singletonFingerprint = computeGroupFingerprint(
+    tenantId,
+    rule.id,
+    `single:${problem.eventid}`,
+  );
   const groupId = await findOrCreateGroup(
     tenantId,
     rule.id,
@@ -350,28 +387,40 @@ async function processGroup(
   const fingerprint = computeGroupFingerprint(tenantId, rule.id, groupKey);
 
   // Calcula severidade agregada
-  const severities = groupProblems.map((p) => ZABBIX_SEVERITY_MAP[Number(p.severity)] ?? "warning");
-  const maxSeverity = severities.reduce((max, s) =>
-    (SEVERITY_ORDER[s] ?? 2) > (SEVERITY_ORDER[max] ?? 2) ? s : max,
-  "info" as "info" | "warning" | "critical");
+  const severities = groupProblems.map(
+    (p) => ZABBIX_SEVERITY_MAP[Number(p.severity)] ?? "warning",
+  );
+  const maxSeverity = severities.reduce(
+    (max, s) =>
+      (SEVERITY_ORDER[s] ?? 2) > (SEVERITY_ORDER[max] ?? 2) ? s : max,
+    "info" as "info" | "warning" | "critical",
+  );
 
   // Escala severidade se atingiu threshold
-  const finalSeverity = groupProblems.length >= rule.escalation_threshold
-    ? rule.escalated_severity
-    : maxSeverity;
+  const finalSeverity =
+    groupProblems.length >= rule.escalation_threshold
+      ? rule.escalated_severity
+      : maxSeverity;
 
   // Coleta dispositivos e tags
-  const devices = [...new Set(groupProblems.map((p) => p.hosts?.[0]?.name ?? "Desconhecido"))];
+  const devices = [
+    ...new Set(groupProblems.map((p) => p.hosts?.[0]?.name ?? "Desconhecido")),
+  ];
   const allTags = groupProblems.flatMap((p) => p.tags ?? []);
   const commonTags = findCommonTags(allTags);
 
   // Título do grupo
-  const title = groupProblems.length === 1
-    ? groupProblems[0].name
-    : `${groupProblems.length} eventos correlacionados: ${devices.slice(0, 3).join(", ")}${devices.length > 3 ? ` (+${devices.length - 3})` : ""}`;
+  const title =
+    groupProblems.length === 1
+      ? groupProblems[0].name
+      : `${groupProblems.length} eventos correlacionados: ${devices.slice(0, 3).join(", ")}${devices.length > 3 ? ` (+${devices.length - 3})` : ""}`;
 
-  const firstEventAt = Math.min(...groupProblems.map((p) => Number(p.clock) * 1000));
-  const lastEventAt = Math.max(...groupProblems.map((p) => Number(p.clock) * 1000));
+  const firstEventAt = Math.min(
+    ...groupProblems.map((p) => Number(p.clock) * 1000),
+  );
+  const lastEventAt = Math.max(
+    ...groupProblems.map((p) => Number(p.clock) * 1000),
+  );
 
   // Busca ou cria o grupo
   const groupId = await findOrCreateGroup(
@@ -404,7 +453,7 @@ async function processGroup(
       sev,
       problem.tags ?? [],
       Number(problem.clock) * 1000,
-      problem.acknowledged === "1",
+      problem.acknowledged === 1,
       rule.suppress_individual,
     );
   }
@@ -419,7 +468,14 @@ async function processGroup(
          affected_devices = $5,
          common_tags = $6
      WHERE id = $1`,
-    [groupId, finalSeverity, lastEventAt, title, devices, JSON.stringify(commonTags)],
+    [
+      groupId,
+      finalSeverity,
+      lastEventAt,
+      title,
+      devices,
+      JSON.stringify(commonTags),
+    ],
   );
 
   // Verifica se precisa escalar e enviar notificação consolidada
@@ -438,13 +494,32 @@ async function processGroup(
   const currentCount = parseInt(group.event_count ?? "0", 10);
 
   // Envia notificação consolidada se configurado e ainda não enviada
-  if (rule.send_group_notification && !group.notification_sent && currentCount >= 2) {
-    await sendGroupNotification(rule, tenantId, groupId, title, finalSeverity, devices, currentCount);
-    await query("UPDATE public.event_groups SET notification_sent = true WHERE id = $1", [groupId]);
+  if (
+    rule.send_group_notification &&
+    !group.notification_sent &&
+    currentCount >= 2
+  ) {
+    await sendGroupNotification(
+      rule,
+      tenantId,
+      groupId,
+      title,
+      finalSeverity,
+      devices,
+      currentCount,
+    );
+    await query(
+      "UPDATE public.event_groups SET notification_sent = true WHERE id = $1",
+      [groupId],
+    );
   }
 
   // Cria incidente automaticamente se configurado e ainda não criado
-  if (rule.auto_create_incident && !group.incident_id && currentCount >= rule.escalation_threshold) {
+  if (
+    rule.auto_create_incident &&
+    !group.incident_id &&
+    currentCount >= rule.escalation_threshold
+  ) {
     const incidentId = await createIncidentFromGroup(
       tenantId,
       rule.id,
@@ -455,7 +530,10 @@ async function processGroup(
       currentCount,
     );
     if (incidentId) {
-      await query("UPDATE public.event_groups SET incident_id = $1 WHERE id = $2", [incidentId, groupId]);
+      await query(
+        "UPDATE public.event_groups SET incident_id = $1 WHERE id = $2",
+        [incidentId, groupId],
+      );
     }
   }
 
@@ -508,9 +586,16 @@ async function findOrCreateGroup(
        SET status = 'open', updated_at = timezone('utc'::text, now())
      RETURNING id`,
     [
-      tenantId, ruleId, fingerprint, severity, title,
-      devices, hostGroups, JSON.stringify(commonTags),
-      firstEventAt, lastEventAt ?? firstEventAt,
+      tenantId,
+      ruleId,
+      fingerprint,
+      severity,
+      title,
+      devices,
+      hostGroups,
+      JSON.stringify(commonTags),
+      firstEventAt,
+      lastEventAt ?? firstEventAt,
     ],
   );
 
@@ -538,14 +623,24 @@ async function addGroupMember(
              timezone('utc'::text, to_timestamp($9 / 1000.0)), $10, $11)
      ON CONFLICT (group_id, zabbix_event_id) DO NOTHING`,
     [
-      groupId, tenantId, zabbixEventId, hostname, zabbixHostId,
-      problemName, severity, JSON.stringify(tags),
-      eventAt, acknowledged, notificationSuppressed,
+      groupId,
+      tenantId,
+      zabbixEventId,
+      hostname,
+      zabbixHostId,
+      problemName,
+      severity,
+      JSON.stringify(tags),
+      eventAt,
+      acknowledged,
+      notificationSuppressed,
     ],
   );
 }
 
-function findCommonTags(tags: { tag: string; value: string }[]): { tag: string; value: string }[] {
+function findCommonTags(
+  tags: { tag: string; value: string }[],
+): { tag: string; value: string }[] {
   if (!tags.length) return [];
 
   // Conta frequência de cada tag
@@ -617,9 +712,12 @@ async function sendGroupNotification(
       `INSERT INTO public.notification_log (tenant_id, rule_id, channel_id, event_source, event_category, severity, subject, body, payload, status, sent_at, duration_ms)
        VALUES ($1, NULL, $2, $3, 'correlation', $4, $5, $6, $7, $8, timezone('utc'::text, now()), 0)`,
       [
-        tenantId, channel.id,
-        "correlation.group", severity,
-        subject, body,
+        tenantId,
+        channel.id,
+        "correlation.group",
+        severity,
+        subject,
+        body,
         JSON.stringify({ group_id: groupId, event_count: eventCount, devices }),
         deliveryResult.success ? "sent" : "failed",
       ],
@@ -637,7 +735,12 @@ async function createIncidentFromGroup(
   eventCount: number,
 ): Promise<string | null> {
   // Mapeia severity do sistema para severity do incidente
-  const incidentSeverity = severity === "critical" ? "critical" : severity === "warning" ? "major" : "info";
+  const incidentSeverity =
+    severity === "critical"
+      ? "critical"
+      : severity === "warning"
+        ? "major"
+        : "info";
 
   // Gera número do incidente
   const numResult = await query<{ generate_incident_number: string }>(
@@ -664,7 +767,10 @@ async function createIncidentFromGroup(
      VALUES ($1, $2, $3, $4, $5, 'investigating', $6, $7, timezone('utc'::text, now()))
      RETURNING id`,
     [
-      tenantId, incidentNumber, title, description,
+      tenantId,
+      incidentNumber,
+      title,
+      description,
       incidentSeverity,
       JSON.stringify(devices),
       severity === "critical" ? "severe" : "moderate",
@@ -678,7 +784,12 @@ async function createIncidentFromGroup(
       "SELECT public.write_audit_log(NULL, $1, 'incident.auto_create', 'system_incidents', NULL, $2, NULL, NULL)",
       [
         tenantId,
-        JSON.stringify({ incident_id: incidentId, group_id: groupId, rule_id: ruleId, event_count: eventCount }),
+        JSON.stringify({
+          incident_id: incidentId,
+          group_id: groupId,
+          rule_id: ruleId,
+          event_count: eventCount,
+        }),
       ],
     );
   }

@@ -150,7 +150,7 @@ rbacRoute.put(
     // Insere novas
     if (parsed.data.permission_ids.length > 0) {
       const values = parsed.data.permission_ids
-        .map((_, i) => `($1, $${i + 2})`)
+        .map((_: string, i: number) => `($1, $${i + 2})`)
         .join(", ");
       await query(
         `INSERT INTO public.role_permissions (role_id, permission_id) VALUES ${values}`,

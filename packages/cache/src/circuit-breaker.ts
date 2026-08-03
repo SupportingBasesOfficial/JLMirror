@@ -5,7 +5,7 @@
 // Estados: CLOSED (normal) -> OPEN (falhas, rejeita) -> HALF_OPEN (teste) -> CLOSED
 // Usa Redis para compartilhar estado entre replicas
 
-import { cacheGet, cacheSet } from "@repo/cache";
+import { cacheGet, cacheSet } from "./index.js";
 
 type CircuitState = "closed" | "open" | "half_open";
 
@@ -22,17 +22,38 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
 };
 
 // Cache in-memory para evitar round-trip Redis a cada chamada
-const localState = new Map<string, { state: CircuitState; failures: number; lastFailureAt: number; halfOpenCalls: number }>();
+const localState = new Map<
+  string,
+  {
+    state: CircuitState;
+    failures: number;
+    lastFailureAt: number;
+    halfOpenCalls: number;
+  }
+>();
 
-function getLocalState(key: string): { state: CircuitState; failures: number; lastFailureAt: number; halfOpenCalls: number } {
+function getLocalState(key: string): {
+  state: CircuitState;
+  failures: number;
+  lastFailureAt: number;
+  halfOpenCalls: number;
+} {
   if (!localState.has(key)) {
-    localState.set(key, { state: "closed", failures: 0, lastFailureAt: 0, halfOpenCalls: 0 });
+    localState.set(key, {
+      state: "closed",
+      failures: 0,
+      lastFailureAt: 0,
+      halfOpenCalls: 0,
+    });
   }
   return localState.get(key)!;
 }
 
 // Verifica se o circuito permite a chamada
-export async function circuitCanCall(circuitKey: string, config: Partial<CircuitBreakerConfig> = {}): Promise<boolean> {
+export async function circuitCanCall(
+  circuitKey: string,
+  config: Partial<CircuitBreakerConfig> = {},
+): Promise<boolean> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const redisKey = `circuit:${circuitKey}`;
   const state = getLocalState(circuitKey);
@@ -41,7 +62,11 @@ export async function circuitCanCall(circuitKey: string, config: Partial<Circuit
   try {
     const remote = await cacheGet(redisKey);
     if (remote) {
-      const parsed = JSON.parse(remote) as { state: CircuitState; failures: number; lastFailureAt: number };
+      const parsed = JSON.parse(remote) as {
+        state: CircuitState;
+        failures: number;
+        lastFailureAt: number;
+      };
       // Redis tem estado mais recente
       if (parsed.lastFailureAt > state.lastFailureAt) {
         state.state = parsed.state;
@@ -91,7 +116,11 @@ export async function circuitOnSuccess(circuitKey: string): Promise<void> {
   if (wasNotClosed) {
     console.warn(`[circuit] ${circuitKey}: -> CLOSED (sucesso)`);
     try {
-      await cacheSet(`circuit:${circuitKey}`, JSON.stringify({ state: "closed", failures: 0, lastFailureAt: 0 }), 300);
+      await cacheSet(
+        `circuit:${circuitKey}`,
+        JSON.stringify({ state: "closed", failures: 0, lastFailureAt: 0 }),
+        300,
+      );
     } catch {
       // Silencioso
     }
@@ -99,7 +128,10 @@ export async function circuitOnSuccess(circuitKey: string): Promise<void> {
 }
 
 // Registra falha — incrementa contador e abre circuito se passar do threshold
-export async function circuitOnFailure(circuitKey: string, config: Partial<CircuitBreakerConfig> = {}): Promise<void> {
+export async function circuitOnFailure(
+  circuitKey: string,
+  config: Partial<CircuitBreakerConfig> = {},
+): Promise<void> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const state = getLocalState(circuitKey);
 
@@ -112,14 +144,20 @@ export async function circuitOnFailure(circuitKey: string, config: Partial<Circu
     console.warn(`[circuit] ${circuitKey}: HALF_OPEN -> OPEN (falha no teste)`);
   } else if (state.failures >= cfg.failureThreshold) {
     state.state = "open";
-    console.warn(`[circuit] ${circuitKey}: CLOSED -> OPEN (${state.failures} falhas)`);
+    console.warn(
+      `[circuit] ${circuitKey}: CLOSED -> OPEN (${state.failures} falhas)`,
+    );
   }
 
   // Sincroniza com Redis
   try {
     await cacheSet(
       `circuit:${circuitKey}`,
-      JSON.stringify({ state: state.state, failures: state.failures, lastFailureAt: state.lastFailureAt }),
+      JSON.stringify({
+        state: state.state,
+        failures: state.failures,
+        lastFailureAt: state.lastFailureAt,
+      }),
       300,
     );
   } catch {

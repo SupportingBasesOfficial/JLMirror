@@ -153,8 +153,8 @@ reportsRoute.post("/", requirePermission("reports:write"), async (c) => {
 
   // Calcula next_run_at (simulado: agora + 24h para daily, +7d para weekly)
   const nextRun = new Date();
-  const cron = data.schedule_cron;
-  if (cron.includes("* * *")) {
+  const cron = data.schedule_cron ?? data.cron;
+  if (cron && cron.includes("* * *")) {
     nextRun.setHours(nextRun.getHours() + 24);
   } else {
     nextRun.setDate(nextRun.getDate() + 7);

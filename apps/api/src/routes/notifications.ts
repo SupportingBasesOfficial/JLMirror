@@ -337,7 +337,7 @@ notificationRoute.post(
         JSON.stringify({
           name: data.name,
           source: data.event_source,
-          channels: data.channel_ids.length,
+          channels: data.channel_ids?.length ?? 0,
         }),
       ],
     );

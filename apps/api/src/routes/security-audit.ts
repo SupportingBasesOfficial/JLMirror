@@ -235,7 +235,16 @@ securityAuditRoute.post(
 
     try {
       // Busca regras ativas
-      const rulesResult = await query(
+      const rulesResult = await query<{
+        id: string;
+        check_type: string;
+        check_query: string | null;
+        expected_result: string | null;
+        severity: string;
+        rule_id: string;
+        title: string;
+        description: string | null;
+      }>(
         "SELECT * FROM public.security_audit_rules WHERE (tenant_id = $1 OR tenant_id IS NULL) AND is_active = true",
         [tenantId],
       );

@@ -38,6 +38,7 @@ export const createRoleSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   permissions: z.array(z.string()).default([]),
+  key: z.string().min(1),
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 
@@ -60,6 +61,7 @@ export type CreateCustomRoleInput = z.infer<typeof createCustomRoleSchema>;
 export const assignRolePermissionsSchema = z.object({
   role_id: z.string().uuid(),
   permissions: z.array(z.string()),
+  permission_ids: z.array(z.string()).default([]),
 });
 export type AssignRolePermissionsInput = z.infer<
   typeof assignRolePermissionsSchema
@@ -108,6 +110,9 @@ export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 // ========== Settings Schemas ==========
 export const updateTenantSettingsSchema = z.object({
   settings: z.record(z.unknown()),
+  smtp_password_encrypted: z.string().optional(),
+  telegram_bot_token: z.string().optional(),
+  ip_whitelist: z.array(z.string()).optional(),
 });
 export type UpdateTenantSettingsInput = z.infer<
   typeof updateTenantSettingsSchema
@@ -120,6 +125,12 @@ export const testSmtpSchema = z.object({
   smtp_pass: z.string().optional(),
   smtp_from: z.string().email(),
   smtp_to: z.string().email(),
+  smtp_use_ssl: z.boolean().optional(),
+  smtp_use_tls: z.boolean().optional(),
+  smtp_username: z.string().optional(),
+  smtp_password_encrypted: z.string().optional(),
+  smtp_from_email: z.string().email().optional(),
+  test_email: z.string().email().optional(),
 });
 export type TestSmtpInput = z.infer<typeof testSmtpSchema>;
 
@@ -369,34 +380,58 @@ export type MonitoringMetricsQueryInput = z.infer<
 export const createServiceSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  sla_target: z.number().min(0).max(100),
+  service_type: z.string().min(1),
+  status: z.string().min(1),
+  device_ids: z.array(z.string()).default([]),
+  sla_target_percentage: z.number().min(0).max(100),
+  coverage_hours: z.string().default("24x7"),
+  coverage_timezone: z.string().default("UTC"),
+  coverage_days: z.array(z.string()).default([]),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   zabbix_service_id: z.string().optional(),
+  metadata: z.record(z.unknown()).default({}),
+  is_active: z.boolean().default(true),
 });
 export type CreateServiceInput = z.infer<typeof createServiceSchema>;
 
 export const updateServiceSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
-  sla_target: z.number().min(0).max(100).optional(),
+  service_type: z.string().optional(),
+  status: z.string().optional(),
+  device_ids: z.array(z.string()).optional(),
+  sla_target_percentage: z.number().min(0).max(100).optional(),
+  coverage_hours: z.string().optional(),
+  coverage_timezone: z.string().optional(),
+  coverage_days: z.array(z.string()).optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   zabbix_service_id: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 
 export const createMaintenanceWindowSchema = z.object({
-  service_id: z.string().uuid(),
-  start_time: z.string(),
-  end_time: z.string(),
-  reason: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  device_ids: z.array(z.string()).default([]),
+  start_at: z.string(),
+  end_at: z.string(),
+  maintenance_type: z.string().default("scheduled"),
+  metadata: z.record(z.unknown()).default({}),
 });
 export type CreateMaintenanceWindowInput = z.infer<
   typeof createMaintenanceWindowSchema
 >;
 
 export const updateMaintenanceWindowSchema = z.object({
-  start_time: z.string().optional(),
-  end_time: z.string().optional(),
-  reason: z.string().optional(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  device_ids: z.array(z.string()).optional(),
+  start_at: z.string().optional(),
+  end_at: z.string().optional(),
+  status: z.string().optional(),
+  maintenance_type: z.string().optional(),
 });
 export type UpdateMaintenanceWindowInput = z.infer<
   typeof updateMaintenanceWindowSchema
@@ -407,6 +442,14 @@ export const createServiceIncidentSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   severity: z.number().int().min(0).max(5),
+  status: z.string().default("open"),
+  started_at: z.string().optional(),
+  resolved_at: z.string().optional(),
+  root_cause: z.string().optional(),
+  resolution_notes: z.string().optional(),
+  affected_device_ids: z.array(z.string()).default([]),
+  ticket_id: z.string().optional(),
+  zabbix_event_id: z.string().optional(),
 });
 export type CreateServiceIncidentInput = z.infer<
   typeof createServiceIncidentSchema
@@ -418,6 +461,10 @@ export const updateServiceIncidentSchema = z.object({
   severity: z.number().int().min(0).max(5).optional(),
   status: z.string().optional(),
   resolved_at: z.string().optional(),
+  root_cause: z.string().optional(),
+  resolution_notes: z.string().optional(),
+  affected_device_ids: z.array(z.string()).optional(),
+  ticket_id: z.string().optional(),
 });
 export type UpdateServiceIncidentInput = z.infer<
   typeof updateServiceIncidentSchema
@@ -434,6 +481,11 @@ export type SlaReportQueryInput = z.infer<typeof slaReportQuerySchema>;
 export const createCategorySchema = z.object({
   name: z.string().min(1),
   parent_id: z.string().uuid().optional(),
+  description: z.string().optional(),
+  color: z.string().optional(),
+  sla_response_hours: z.number().optional(),
+  sla_resolution_hours: z.number().optional(),
+  is_active: z.boolean().default(true),
 });
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 
@@ -447,6 +499,13 @@ export const createTicketSchema = z.object({
   subject: z.string().min(1),
   description: z.string().min(1),
   priority: z.number().int().min(0).max(4).default(2),
+  source: z.string().optional(),
+  requester_name: z.string().optional(),
+  requester_email: z.string().optional(),
+  requester_phone: z.string().optional(),
+  assigned_to: z.string().uuid().optional(),
+  tags: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 
@@ -456,6 +515,8 @@ export const updateTicketSchema = z.object({
   priority: z.number().int().min(0).max(4).optional(),
   status: z.string().optional(),
   assignee_id: z.string().uuid().optional(),
+  tags: z.array(z.string()).optional(),
+  category_id: z.string().uuid().optional(),
 });
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
 
@@ -463,6 +524,7 @@ export const createCommentSchema = z.object({
   ticket_id: z.string().uuid(),
   content: z.string().min(1),
   is_internal: z.boolean().default(false),
+  body: z.string().min(1),
 });
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 
@@ -471,6 +533,8 @@ export const createChannelSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["email", "slack", "teams", "webhook", "telegram"]),
   config: z.record(z.unknown()),
+  channel_type: z.string().optional(),
+  is_active: z.boolean().default(true),
 });
 export type CreateChannelInput = z.infer<typeof createChannelSchema>;
 
@@ -478,6 +542,7 @@ export const updateChannelSchema = z.object({
   name: z.string().optional(),
   config: z.record(z.unknown()).optional(),
   is_active: z.boolean().optional(),
+  is_verified: z.boolean().optional(),
 });
 export type UpdateChannelInput = z.infer<typeof updateChannelSchema>;
 
@@ -486,6 +551,14 @@ export const createRuleSchema = z.object({
   channel_id: z.string().uuid(),
   conditions: z.record(z.unknown()),
   is_active: z.boolean().default(true),
+  description: z.string().optional(),
+  event_source: z.string().optional(),
+  event_category: z.string().optional(),
+  severity_filter: z.array(z.string()).optional(),
+  channel_ids: z.array(z.string().uuid()).optional(),
+  template_subject: z.string().optional(),
+  template_body: z.string().optional(),
+  cooldown_minutes: z.number().int().min(0).optional(),
 });
 export type CreateRuleInput = z.infer<typeof createRuleSchema>;
 
@@ -501,6 +574,10 @@ export const sendNotificationSchema = z.object({
   to: z.string().optional(),
   subject: z.string().min(1),
   body: z.string().min(1),
+  event_source: z.string().optional(),
+  event_category: z.string().optional(),
+  severity: z.string().optional(),
+  payload: z.record(z.unknown()).optional(),
 });
 export type SendNotificationInput = z.infer<typeof sendNotificationSchema>;
 
@@ -510,6 +587,12 @@ export const logIngestSchema = z.object({
   message: z.string().min(1),
   source: z.string().min(1),
   meta: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+  tags: z.array(z.string()).optional(),
+  span_id: z.string().optional(),
+  host: z.string().optional(),
+  service: z.string().optional(),
+  trace_id: z.string().optional(),
 });
 export type LogIngestInput = z.infer<typeof logIngestSchema>;
 
@@ -526,6 +609,10 @@ export const logSearchSchema = z.object({
   to: z.string().optional(),
   limit: z.number().int().min(1).max(1000).default(100),
   offset: z.number().int().min(0).default(0),
+  service: z.string().optional(),
+  message_pattern: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  trace_id: z.string().optional(),
 });
 export type LogSearchInput = z.infer<typeof logSearchSchema>;
 
@@ -536,6 +623,11 @@ export const createScriptSchema = z.object({
   language: z.enum(["bash", "python", "powershell"]),
   content: z.string().min(1),
   timeout: z.number().int().min(1).max(3600).default(30),
+  timeout_seconds: z.number().int().min(1).max(3600).optional(),
+  requires_approval: z.boolean().default(false),
+  max_concurrent_executions: z.number().int().min(1).default(1),
+  allowed_hosts: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
 });
 export type CreateScriptInput = z.infer<typeof createScriptSchema>;
 
@@ -544,6 +636,13 @@ export const updateScriptSchema = z.object({
   description: z.string().optional(),
   content: z.string().optional(),
   timeout: z.number().int().min(1).max(3600).optional(),
+  language: z.enum(["bash", "python", "powershell"]).optional(),
+  timeout_seconds: z.number().int().min(1).max(3600).optional(),
+  requires_approval: z.boolean().optional(),
+  max_concurrent_executions: z.number().int().min(1).optional(),
+  allowed_hosts: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+  is_active: z.boolean().optional(),
 });
 export type UpdateScriptInput = z.infer<typeof updateScriptSchema>;
 
@@ -551,6 +650,7 @@ export const executeScriptSchema = z.object({
   script_id: z.string().uuid(),
   target_device_id: z.string().optional(),
   args: z.record(z.string()).optional(),
+  target_host: z.string().optional(),
 });
 export type ExecuteScriptInput = z.infer<typeof executeScriptSchema>;
 
@@ -561,6 +661,13 @@ export const createWebhookSchema = z.object({
   events: z.array(z.string()).min(1),
   secret: z.string().optional(),
   is_active: z.boolean().default(true),
+  description: z.string().optional(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH"]).default("POST"),
+  headers: z.record(z.string()).optional(),
+  max_retries: z.number().int().min(0).max(10).default(3),
+  retry_delay_seconds: z.number().int().min(1).default(60),
+  timeout_seconds: z.number().int().min(1).max(300).default(30),
+  expected_status_code: z.number().int().min(100).max(599).default(200),
 });
 export type CreateWebhookInput = z.infer<typeof createWebhookSchema>;
 
@@ -569,12 +676,16 @@ export const updateWebhookSchema = z.object({
   url: z.string().url().optional(),
   events: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),
+  headers: z.record(z.string()).optional(),
 });
 export type UpdateWebhookInput = z.infer<typeof updateWebhookSchema>;
 
 export const triggerWebhookSchema = z.object({
   event: z.string().min(1),
   payload: z.record(z.unknown()),
+  event_name: z.string().optional(),
+  source_type: z.string().optional(),
+  source_id: z.string().optional(),
 });
 export type TriggerWebhookInput = z.infer<typeof triggerWebhookSchema>;
 
@@ -585,6 +696,17 @@ export const createScheduledTaskSchema = z.object({
   script_id: z.string().uuid().optional(),
   command: z.string().optional(),
   is_active: z.boolean().default(true),
+  description: z.string().optional(),
+  task_type: z.string().default("script"),
+  cron_expression: z.string().optional(),
+  config: z.record(z.unknown()).optional(),
+  timezone: z.string().default("UTC"),
+  max_execution_seconds: z.number().int().min(1).default(300),
+  retry_on_failure: z.boolean().default(false),
+  max_retries: z.number().int().min(0).max(10).default(3),
+  retry_delay_seconds: z.number().int().min(1).default(60),
+  notify_on_failure: z.boolean().default(false),
+  notify_emails: z.array(z.string().email()).optional(),
 });
 export type CreateScheduledTaskInput = z.infer<
   typeof createScheduledTaskSchema
@@ -594,6 +716,15 @@ export const updateScheduledTaskSchema = z.object({
   name: z.string().optional(),
   cron: z.string().optional(),
   is_active: z.boolean().optional(),
+  config: z.record(z.unknown()).optional(),
+  notify_emails: z.array(z.string().email()).optional(),
+  cron_expression: z.string().optional(),
+  timezone: z.string().optional(),
+  max_execution_seconds: z.number().int().min(1).optional(),
+  retry_on_failure: z.boolean().optional(),
+  max_retries: z.number().int().min(0).max(10).optional(),
+  retry_delay_seconds: z.number().int().min(1).optional(),
+  notify_on_failure: z.boolean().optional(),
 });
 export type UpdateScheduledTaskInput = z.infer<
   typeof updateScheduledTaskSchema
@@ -605,6 +736,14 @@ export const createReportTemplateSchema = z.object({
   description: z.string().optional(),
   type: z.string().min(1),
   config: z.record(z.unknown()),
+  report_type: z.string().optional(),
+  data_sources: z.array(z.string()).optional(),
+  filters: z.record(z.unknown()).optional(),
+  columns: z.array(z.string()).optional(),
+  group_by: z.string().optional(),
+  chart_type: z.string().optional(),
+  format: z.enum(["pdf", "csv", "json"]).default("pdf"),
+  is_active: z.boolean().default(true),
 });
 export type CreateReportTemplateInput = z.infer<
   typeof createReportTemplateSchema
@@ -615,6 +754,12 @@ export const createScheduledReportSchema = z.object({
   cron: z.string().min(1),
   recipients: z.array(z.string().email()),
   format: z.enum(["pdf", "csv", "json"]).default("pdf"),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  schedule_cron: z.string().optional(),
+  schedule_description: z.string().optional(),
+  delivery_method: z.enum(["email", "webhook", "storage"]).default("email"),
+  is_active: z.boolean().default(true),
 });
 export type CreateScheduledReportInput = z.infer<
   typeof createScheduledReportSchema
@@ -637,6 +782,14 @@ export const createFeatureFlagSchema = z.object({
   description: z.string().optional(),
   type: z.enum(["boolean", "percentage", "variant"]),
   default_value: z.union([z.boolean(), z.number(), z.string()]),
+  flag_type: z.string().optional(),
+  is_active: z.boolean().default(true),
+  rollout_percentage: z.number().int().min(0).max(100).optional(),
+  variants: z.record(z.unknown()).optional(),
+  target_segments: z.array(z.string()).optional(),
+  excluded_tenant_ids: z.array(z.string().uuid()).optional(),
+  starts_at: z.string().optional(),
+  ends_at: z.string().optional(),
 });
 export type CreateFeatureFlagInput = z.infer<typeof createFeatureFlagSchema>;
 
@@ -645,12 +798,16 @@ export const updateFeatureFlagSchema = z.object({
   description: z.string().optional(),
   default_value: z.union([z.boolean(), z.number(), z.string()]).optional(),
   is_active: z.boolean().optional(),
+  variants: z.record(z.unknown()).optional(),
+  target_segments: z.array(z.string()).optional(),
+  excluded_tenant_ids: z.array(z.string().uuid()).optional(),
 });
 export type UpdateFeatureFlagInput = z.infer<typeof updateFeatureFlagSchema>;
 
 export const evaluateFlagSchema = z.object({
   key: z.string().min(1),
   context: z.record(z.unknown()).optional(),
+  user_id: z.string().optional(),
 });
 export type EvaluateFlagInput = z.infer<typeof evaluateFlagSchema>;
 
@@ -659,6 +816,7 @@ export const createOverrideSchema = z.object({
   target_type: z.enum(["user", "tenant", "device"]),
   target_id: z.string().min(1),
   value: z.union([z.boolean(), z.number(), z.string()]),
+  reason: z.string().optional(),
 });
 export type CreateOverrideInput = z.infer<typeof createOverrideSchema>;
 
@@ -670,6 +828,18 @@ export const createFirewallRuleSchema = z.object({
   source: z.string().optional(),
   destination: z.string().optional(),
   port: z.string().optional(),
+  host: z.string().min(1),
+  backend: z.string().min(1),
+  chain: z.enum(["INPUT", "OUTPUT", "FORWARD"]).default("INPUT"),
+  source_ip: z.string().optional(),
+  source_port: z.string().optional(),
+  destination_ip: z.string().optional(),
+  destination_port: z.string().optional(),
+  interface_in: z.string().optional(),
+  interface_out: z.string().optional(),
+  state: z.string().optional(),
+  priority: z.number().int().default(100),
+  description: z.string().optional(),
 });
 export type CreateFirewallRuleInput = z.infer<typeof createFirewallRuleSchema>;
 
@@ -681,12 +851,17 @@ export const updateFirewallRuleSchema = z.object({
   destination: z.string().optional(),
   port: z.string().optional(),
   is_active: z.boolean().optional(),
+  host: z.string().optional(),
+  chain: z.enum(["INPUT", "OUTPUT", "FORWARD"]).optional(),
+  description: z.string().optional(),
 });
 export type UpdateFirewallRuleInput = z.infer<typeof updateFirewallRuleSchema>;
 
 export const applyFirewallSchema = z.object({
   device_id: z.string().min(1),
   rule_ids: z.array(z.string()).min(1),
+  host: z.string().optional(),
+  dry_run: z.boolean().default(false),
 });
 export type ApplyFirewallInput = z.infer<typeof applyFirewallSchema>;
 
@@ -696,6 +871,11 @@ export const createK8sClusterSchema = z.object({
   api_server: z.string().url(),
   token: z.string().optional(),
   ca_cert: z.string().optional(),
+  display_name: z.string().optional(),
+  api_server_url: z.string().url().optional(),
+  context: z.string().optional(),
+  namespace: z.string().optional(),
+  kubeconfig_path: z.string().optional(),
 });
 export type CreateK8sClusterInput = z.infer<typeof createK8sClusterSchema>;
 
@@ -720,6 +900,10 @@ export type K8sResourceType = z.infer<typeof k8sResourceTypeSchema>;
 export const createKbCategorySchema = z.object({
   name: z.string().min(1),
   parent_id: z.string().uuid().optional(),
+  slug: z.string().optional(),
+  description: z.string().optional(),
+  sort_order: z.number().int().default(0),
+  is_active: z.boolean().default(true),
 });
 export type CreateKbCategoryInput = z.infer<typeof createKbCategorySchema>;
 
@@ -733,6 +917,11 @@ export const createKbArticleSchema = z.object({
   title: z.string().min(1),
   content: z.string().min(1),
   tags: z.array(z.string()).optional(),
+  status: z.string().default("draft"),
+  summary: z.string().optional(),
+  content_format: z.enum(["markdown", "html", "plaintext"]).default("markdown"),
+  visibility: z.enum(["public", "internal", "private"]).default("internal"),
+  is_pinned: z.boolean().default(false),
 });
 export type CreateKbArticleInput = z.infer<typeof createKbArticleSchema>;
 
@@ -741,6 +930,8 @@ export const updateKbArticleSchema = z.object({
   content: z.string().optional(),
   tags: z.array(z.string()).optional(),
   is_published: z.boolean().optional(),
+  summary: z.string().optional(),
+  status: z.string().optional(),
 });
 export type UpdateKbArticleInput = z.infer<typeof updateKbArticleSchema>;
 
@@ -750,6 +941,12 @@ export const createSslCertificateSchema = z.object({
   issuer: z.string().optional(),
   cert_pem: z.string().optional(),
   key_pem: z.string().optional(),
+  hostname: z.string().optional(),
+  port: z.number().int().min(1).max(65535).default(443),
+  protocol: z.string().optional(),
+  alert_days_before: z.number().int().min(1).default(30),
+  is_auto_renewed: z.boolean().default(false),
+  ca_provider: z.string().optional(),
 });
 export type CreateSslCertificateInput = z.infer<
   typeof createSslCertificateSchema
@@ -771,6 +968,13 @@ export const createHealthCheckSchema = z.object({
   type: z.string().min(1),
   target: z.string().min(1),
   interval: z.number().int().min(10).default(60),
+  service_type: z.string().optional(),
+  endpoint: z.string().optional(),
+  check_interval_seconds: z.number().int().min(10).optional(),
+  timeout_seconds: z.number().int().min(1).default(10),
+  expected_status_code: z.number().int().min(100).max(599).optional(),
+  is_active: z.boolean().default(true),
+  metadata: z.record(z.unknown()).optional(),
 });
 export type CreateHealthCheckInput = z.infer<typeof createHealthCheckSchema>;
 
@@ -778,6 +982,7 @@ export const updateHealthCheckSchema = z.object({
   name: z.string().optional(),
   interval: z.number().int().min(10).optional(),
   is_active: z.boolean().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 export type UpdateHealthCheckInput = z.infer<typeof updateHealthCheckSchema>;
 
@@ -786,6 +991,12 @@ export const createIncidentSchema = z.object({
   description: z.string().optional(),
   severity: z.number().int().min(0).max(5),
   health_check_id: z.string().uuid().optional(),
+  status: z.string().default("open"),
+  affected_services: z.array(z.string()).optional(),
+  impact: z.string().optional(),
+  is_scheduled: z.boolean().default(false),
+  scheduled_start: z.string().optional(),
+  scheduled_end: z.string().optional(),
 });
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 
@@ -795,6 +1006,7 @@ export const updateIncidentSchema = z.object({
   severity: z.number().int().min(0).max(5).optional(),
   status: z.string().optional(),
   resolved_at: z.string().optional(),
+  affected_services: z.array(z.string()).optional(),
 });
 export type UpdateIncidentInput = z.infer<typeof updateIncidentSchema>;
 
@@ -802,6 +1014,11 @@ export const recordMetricSchema = z.object({
   health_check_id: z.string().uuid(),
   value: z.number(),
   unit: z.string().optional(),
+  threshold_critical: z.number().optional(),
+  threshold_warning: z.number().optional(),
+  metric_name: z.string().optional(),
+  metric_type: z.string().optional(),
+  labels: z.record(z.unknown()).optional(),
 });
 export type RecordMetricInput = z.infer<typeof recordMetricSchema>;
 
@@ -811,6 +1028,12 @@ export const createPolicySchema = z.object({
   description: z.string().optional(),
   framework: z.string().min(1),
   requirements: z.record(z.unknown()),
+  policy_category: z.string().optional(),
+  severity: z.string().optional(),
+  rule_type: z.string().optional(),
+  rule_config: z.record(z.unknown()).optional(),
+  check_interval_hours: z.number().int().min(1).default(24),
+  is_active: z.boolean().default(true),
 });
 export type CreatePolicyInput = z.infer<typeof createPolicySchema>;
 
@@ -819,6 +1042,7 @@ export const updatePolicySchema = z.object({
   description: z.string().optional(),
   requirements: z.record(z.unknown()).optional(),
   is_active: z.boolean().optional(),
+  rule_config: z.record(z.unknown()).optional(),
 });
 export type UpdatePolicyInput = z.infer<typeof updatePolicySchema>;
 
@@ -829,6 +1053,15 @@ export const createChangeRequestSchema = z.object({
   priority: z.number().int().min(0).max(4).default(2),
   impact: z.string().min(1),
   rollback_plan: z.string().optional(),
+  change_type: z.string().optional(),
+  risk_level: z.string().optional(),
+  planned_start_at: z.string().optional(),
+  planned_end_at: z.string().optional(),
+  affected_systems: z.array(z.string()).optional(),
+  affected_services: z.array(z.string()).optional(),
+  impact_assessment: z.string().optional(),
+  approval_required: z.boolean().default(true),
+  related_ticket_id: z.string().uuid().optional(),
 });
 export type CreateChangeRequestInput = z.infer<
   typeof createChangeRequestSchema
@@ -839,6 +1072,8 @@ export const updateChangeRequestSchema = z.object({
   description: z.string().optional(),
   priority: z.number().int().min(0).max(4).optional(),
   status: z.string().optional(),
+  affected_systems: z.array(z.string()).optional(),
+  affected_services: z.array(z.string()).optional(),
 });
 export type UpdateChangeRequestInput = z.infer<
   typeof updateChangeRequestSchema
@@ -849,6 +1084,9 @@ export const createChangeTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   assignee_id: z.string().uuid().optional(),
+  task_order: z.number().int().default(0),
+  task_type: z.string().default("manual"),
+  assigned_to: z.string().uuid().optional(),
 });
 export type CreateChangeTaskInput = z.infer<typeof createChangeTaskSchema>;
 
@@ -856,14 +1094,22 @@ export const approveChangeSchema = z.object({
   change_request_id: z.string().uuid(),
   approved: z.boolean(),
   comment: z.string().optional(),
+  approver_role: z.string().optional(),
 });
 export type ApproveChangeInput = z.infer<typeof approveChangeSchema>;
 
 // ========== Data Transfer Schemas ==========
 export const createExportTemplateSchema = z.object({
   name: z.string().min(1),
-  type: z.string().min(1),
-  config: z.record(z.unknown()),
+  description: z.string().optional(),
+  source_table: z.string().min(1),
+  format: z.enum(["csv", "json", "sql"]).default("csv"),
+  columns: z.array(z.string()).default([]),
+  filters: z.record(z.unknown()).default({}),
+  include_headers: z.boolean().default(true),
+  delimiter: z.string().default(","),
+  encoding: z.string().default("utf-8"),
+  is_active: z.boolean().default(true),
 });
 export type CreateExportTemplateInput = z.infer<
   typeof createExportTemplateSchema
@@ -871,7 +1117,15 @@ export type CreateExportTemplateInput = z.infer<
 
 export const updateExportTemplateSchema = z.object({
   name: z.string().optional(),
-  config: z.record(z.unknown()).optional(),
+  description: z.string().optional(),
+  source_table: z.string().optional(),
+  format: z.enum(["csv", "json", "sql"]).optional(),
+  columns: z.array(z.string()).optional(),
+  filters: z.record(z.unknown()).optional(),
+  include_headers: z.boolean().optional(),
+  delimiter: z.string().optional(),
+  encoding: z.string().optional(),
+  is_active: z.boolean().optional(),
 });
 export type UpdateExportTemplateInput = z.infer<
   typeof updateExportTemplateSchema
@@ -879,8 +1133,11 @@ export type UpdateExportTemplateInput = z.infer<
 
 export const createDataExportSchema = z.object({
   template_id: z.string().uuid().optional(),
-  format: z.enum(["csv", "json", "xml"]),
-  tables: z.array(z.string()).min(1),
+  name: z.string().min(1),
+  source_table: z.string().min(1),
+  format: z.enum(["csv", "json", "sql"]).default("csv"),
+  columns: z.array(z.string()).default([]),
+  filters: z.record(z.unknown()).default({}),
 });
 export type CreateDataExportInput = z.infer<typeof createDataExportSchema>;
 
@@ -888,6 +1145,11 @@ export const createDataImportSchema = z.object({
   format: z.enum(["csv", "json", "xml"]),
   data: z.string().min(1),
   merge: z.boolean().default(false),
+  target_table: z.string().min(1),
+  name: z.string().optional(),
+  file_path: z.string().optional(),
+  column_mapping: z.record(z.unknown()).optional(),
+  options: z.record(z.unknown()).optional(),
 });
 export type CreateDataImportInput = z.infer<typeof createDataImportSchema>;
 
@@ -896,6 +1158,7 @@ export const approveExecutionSchema = z.object({
   execution_id: z.string().uuid(),
   approved: z.boolean(),
   comment: z.string().optional(),
+  decision: z.string().optional(),
 });
 export type ApproveExecutionInput = z.infer<typeof approveExecutionSchema>;
 
@@ -906,6 +1169,10 @@ export const adminCreateUserSchema = z.object({
   password: z.string().min(8),
   tenant_id: z.string().uuid(),
   role: z.string().min(1),
+  company_id: z.string().uuid().optional(),
+  provisional_password: z.string().optional(),
+  phone: z.string().optional(),
+  must_change_password: z.boolean().default(true),
 });
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
 
@@ -921,6 +1188,11 @@ export const createApiKeySchema = z.object({
   name: z.string().min(1),
   scopes: z.array(z.string()).default([]),
   expires_at: z.string().optional(),
+  description: z.string().optional(),
+  allowed_ips: z.array(z.string()).optional(),
+  rate_limit_per_min: z.number().int().min(0).optional(),
+  rate_limit_per_hour: z.number().int().min(0).optional(),
+  rate_limit_per_day: z.number().int().min(0).optional(),
 });
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 
@@ -928,6 +1200,7 @@ export const updateApiKeySchema = z.object({
   name: z.string().optional(),
   scopes: z.array(z.string()).optional(),
   is_active: z.boolean().optional(),
+  allowed_ips: z.array(z.string()).optional(),
 });
 export type UpdateApiKeyInput = z.infer<typeof updateApiKeySchema>;
 
@@ -972,6 +1245,9 @@ export const createRestoreSchema = z.object({
   job_id: z.string().uuid(),
   snapshot_id: z.string().optional(),
   restore_path: z.string().optional(),
+  target_host: z.string().optional(),
+  target_path: z.string().optional(),
+  overwrite_existing: z.boolean().default(false),
 });
 export type CreateRestoreInput = z.infer<typeof createRestoreSchema>;
 
@@ -985,6 +1261,28 @@ export const createAssetSchema = z.object({
   owner: z.string().optional(),
   criticality: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   metadata: z.record(z.unknown()).optional(),
+  rack_position: z.string().optional(),
+  purchase_date: z.string().optional(),
+  purchase_cost: z.number().optional(),
+  warranty_expiry: z.string().optional(),
+  vendor: z.string().optional(),
+  assigned_to: z.string().optional(),
+  department: z.string().optional(),
+  notes: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  custom_fields: z.record(z.unknown()).optional(),
+  parent_asset_id: z.string().uuid().optional(),
+  asset_tag: z.string().optional(),
+  asset_type: z.string().optional(),
+  category: z.string().optional(),
+  status: z.string().optional(),
+  mac_address: z.string().optional(),
+  serial_number: z.string().optional(),
+  manufacturer: z.string().optional(),
+  model: z.string().optional(),
+  os_type: z.string().optional(),
+  os_version: z.string().optional(),
+  rack: z.string().optional(),
 });
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 
@@ -998,34 +1296,44 @@ export const updateAssetSchema = z.object({
   criticality: z.enum(["low", "medium", "high", "critical"]).optional(),
   metadata: z.record(z.unknown()).optional(),
   is_active: z.boolean().optional(),
+  tags: z.array(z.string()).optional(),
+  custom_fields: z.record(z.unknown()).optional(),
+  status: z.string().optional(),
 });
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;
 
 // ========== License Schemas ==========
 export const createLicenseSchema = z.object({
-  asset_id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  vendor: z.string().optional(),
   license_key: z.string().optional(),
-  type: z.enum(["perpetual", "subscription", "oem", "volume"]),
-  seats: z.number().int().min(1).optional(),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
+  software_name: z.string().min(1),
+  vendor: z.string().optional(),
+  license_type: z.enum(["perpetual", "subscription", "oem", "volume"]),
+  seats_total: z.number().int().min(1).default(1),
+  seats_used: z.number().int().min(0).default(0),
+  purchase_date: z.string().optional(),
+  expiry_date: z.string().optional(),
+  renewal_date: z.string().optional(),
   cost: z.number().optional(),
-  currency: z.string().default("BRL"),
+  is_active: z.boolean().default(true),
+  notes: z.string().optional(),
 });
 export type CreateLicenseInput = z.infer<typeof createLicenseSchema>;
 
 export const updateLicenseSchema = z.object({
-  name: z.string().optional(),
-  vendor: z.string().optional(),
   license_key: z.string().optional(),
-  seats: z.number().int().min(1).optional(),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
+  software_name: z.string().optional(),
+  vendor: z.string().optional(),
+  license_type: z
+    .enum(["perpetual", "subscription", "oem", "volume"])
+    .optional(),
+  seats_total: z.number().int().min(1).optional(),
+  seats_used: z.number().int().min(0).optional(),
+  purchase_date: z.string().optional(),
+  expiry_date: z.string().optional(),
+  renewal_date: z.string().optional(),
   cost: z.number().optional(),
-  currency: z.string().optional(),
   is_active: z.boolean().optional(),
+  notes: z.string().optional(),
 });
 export type UpdateLicenseInput = z.infer<typeof updateLicenseSchema>;
 
@@ -1035,6 +1343,10 @@ export const createClientUserSchema = z.object({
   full_name: z.string().min(1),
   password: z.string().min(8),
   company_id: z.string().uuid().optional(),
+  provisional_password: z.string().optional(),
+  phone: z.string().optional(),
+  must_change_password: z.boolean().default(true),
+  role: z.string().optional(),
 });
 export type CreateClientUserInput = z.infer<typeof createClientUserSchema>;
 
@@ -1085,40 +1397,50 @@ export const createReportSchema = z.object({
   type: z.string().min(1),
   format: z.enum(["pdf", "csv", "json"]).default("pdf"),
   parameters: z.record(z.unknown()).optional(),
+  report_type: z.string().optional(),
+  date_range_start: z.string().optional(),
+  date_range_end: z.string().optional(),
+  is_scheduled: z.boolean().default(false),
+  cron_expression: z.string().optional(),
 });
 export type CreateReportInput = z.infer<typeof createReportSchema>;
 
 // ========== Threshold Schemas ==========
 export const createThresholdSchema = z.object({
-  metric: z.string().min(1),
-  warning: z.number(),
-  critical: z.number(),
-  operator: z.enum(["gt", "lt", "gte", "lte", "eq"]).default("gt"),
-  device_id: z.string().optional(),
+  resource_type: z.string().min(1),
+  resource_name: z.string().min(1),
+  warning_pct: z.number(),
+  critical_pct: z.number(),
+  is_active: z.boolean().default(true),
 });
 export type CreateThresholdInput = z.infer<typeof createThresholdSchema>;
 
 export const updateThresholdSchema = z.object({
-  warning: z.number().optional(),
-  critical: z.number().optional(),
-  operator: z.enum(["gt", "lt", "gte", "lte", "eq"]).optional(),
+  warning_pct: z.number().optional(),
+  critical_pct: z.number().optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateThresholdInput = z.infer<typeof updateThresholdSchema>;
 
 // ========== Metrics Ingestion Schemas ==========
 export const ingestMetricSchema = z.object({
-  metric: z.string().min(1),
-  value: z.number(),
-  unit: z.string().optional(),
-  tags: z.record(z.string()).optional(),
+  resource_type: z.string().min(1),
+  resource_id: z.string().optional(),
+  resource_name: z.string().min(1),
+  metric_name: z.string().min(1),
+  metric_value: z.number(),
+  metric_unit: z.string().optional(),
+  max_capacity: z.number().optional(),
+  utilization_pct: z.number().optional(),
+  metadata: z.record(z.unknown()).optional(),
   timestamp: z.string().optional(),
 });
 export type IngestMetricInput = z.infer<typeof ingestMetricSchema>;
 
-export const ingestMetricsBatchSchema = z.object({
-  metrics: z.array(ingestMetricSchema).min(1).max(10000),
-});
+export const ingestMetricsBatchSchema = z
+  .array(ingestMetricSchema)
+  .min(1)
+  .max(10000);
 export type IngestMetricsBatchInput = z.infer<typeof ingestMetricsBatchSchema>;
 
 // ========== Push Schemas ==========

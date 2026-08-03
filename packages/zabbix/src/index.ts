@@ -84,6 +84,11 @@ export interface ZabbixTrigger {
   lastEvent?: ZabbixEvent;
 }
 
+export interface ZabbixProblemTag {
+  tag: string;
+  value: string;
+}
+
 export interface ZabbixProblem {
   eventid: string;
   objectid: string;
@@ -97,6 +102,7 @@ export interface ZabbixProblem {
   hosts?: ZabbixHost[];
   relatedObject?: ZabbixTrigger;
   suppressed?: boolean;
+  tags?: ZabbixProblemTag[];
 }
 
 export interface ZabbixEvent {
@@ -212,7 +218,18 @@ export interface ZabbixAction {
   status: string;
   eventsource: number;
   r_eventid?: string;
-  operations?: Array<{ operationid: string; actionid: string; operationtype: number; esc_period: string; esc_step_from: number; esc_step_to: number; evaltype: number; opmessage?: unknown; opconditions?: unknown[]; opcommand?: unknown }>;
+  operations?: Array<{
+    operationid: string;
+    actionid: string;
+    operationtype: number;
+    esc_period: string;
+    esc_step_from: number;
+    esc_step_to: number;
+    evaltype: number;
+    opmessage?: unknown;
+    opconditions?: unknown[];
+    opcommand?: unknown;
+  }>;
 }
 
 export interface ZabbixDiscoveryRule {
@@ -223,7 +240,14 @@ export interface ZabbixDiscoveryRule {
   hostid: string;
   status: string;
   iprange?: string;
-  dchecks?: Array<{ dcheckid: string; druleid: string; type: number; key_: string; ports: string; uniq: number }>;
+  dchecks?: Array<{
+    dcheckid: string;
+    druleid: string;
+    type: number;
+    key_: string;
+    ports: string;
+    uniq: number;
+  }>;
 }
 
 export interface ZabbixReport {
@@ -247,8 +271,15 @@ export function encryptTokenParts(
   if (!key) throw new Error("ENCRYPTION_KEY não configurado");
 
   const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(key, "hex"), iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const cipher = crypto.createCipheriv(
+    "aes-256-gcm",
+    Buffer.from(key, "hex"),
+    iv,
+  );
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
   const tag = cipher.getAuthTag();
 
   return {
@@ -310,9 +341,14 @@ export class BlindedZabbixClient {
 
   // RPC generico para a API Zabbix — params aceita objeto ou array (para delete operations)
   // Circuit breaker protege contra cascata de falhas quando Zabbix esta indisponivel
-  async rpc<T = unknown>(method: string, params?: Record<string, unknown> | unknown[], skipAuth = false): Promise<T> {
+  async rpc<T = unknown>(
+    method: string,
+    params?: Record<string, unknown> | unknown[],
+    skipAuth = false,
+  ): Promise<T> {
     // Verifica circuit breaker (import dinamico para evitar dependencia circular)
-    const { circuitCanCall, circuitOnSuccess, circuitOnFailure } = await import("@repo/cache");
+    const { circuitCanCall, circuitOnSuccess, circuitOnFailure } =
+      await import("@repo/cache");
     const canCall = await circuitCanCall(this.circuitKey);
     if (!canCall) {
       throw new Error("Zabbix API indisponivel (circuit breaker aberto)");
@@ -348,7 +384,10 @@ export class BlindedZabbixClient {
         throw new Error(`Zabbix API HTTP ${res.status}`);
       }
 
-      const json = (await res.json()) as { result?: T; error?: { message: string; code?: number } };
+      const json = (await res.json()) as {
+        result?: T;
+        error?: { message: string; code?: number };
+      };
 
       if (json.error) {
         // Erro de negocio (parametros invalidos, etc) — nao conta como falha de circuito
@@ -397,37 +436,56 @@ export class BlindedZabbixClient {
   }
 
   // createHost — transforma groupids/templateids do schema para formato esperado pela API Zabbix 7.x
-  async createHost(data: Record<string, unknown>): Promise<{ hostids: string[] }> {
+  async createHost(
+    data: Record<string, unknown>,
+  ): Promise<{ hostids: string[] }> {
     const apiData: Record<string, unknown> = { ...data };
     // Zabbix 7.x espera groups: [{groupid: "1"}] em vez de groupids: ["1"]
     if (Array.isArray(data.groupids)) {
-      apiData.groups = (data.groupids as string[]).map((id) => ({ groupid: id }));
+      apiData.groups = (data.groupids as string[]).map((id) => ({
+        groupid: id,
+      }));
       delete apiData.groupids;
     }
     // Zabbix 7.x espera templates: [{templateid: "1"}] em vez de templateids: ["1"]
     if (Array.isArray(data.templateids)) {
-      apiData.templates = (data.templateids as string[]).map((id) => ({ templateid: id }));
+      apiData.templates = (data.templateids as string[]).map((id) => ({
+        templateid: id,
+      }));
       delete apiData.templateids;
     }
     return this.rpc<{ hostids: string[] }>("host.create", apiData);
   }
 
   // updateHost — transforma groupids/templateids se presentes
-  async updateHost(hostId: string, data: Record<string, unknown>): Promise<{ hostids: string[] }> {
+  async updateHost(
+    hostId: string,
+    data: Record<string, unknown>,
+  ): Promise<{ hostids: string[] }> {
     const apiData: Record<string, unknown> = { ...data };
     if (Array.isArray(data.groupids)) {
-      apiData.groups = (data.groupids as string[]).map((id) => ({ groupid: id }));
+      apiData.groups = (data.groupids as string[]).map((id) => ({
+        groupid: id,
+      }));
       delete apiData.groupids;
     }
     if (Array.isArray(data.templateids)) {
-      apiData.templates = (data.templateids as string[]).map((id) => ({ templateid: id }));
+      apiData.templates = (data.templateids as string[]).map((id) => ({
+        templateid: id,
+      }));
       delete apiData.templateids;
     }
-    return this.rpc<{ hostids: string[] }>("host.update", { hostid: hostId, ...apiData });
+    return this.rpc<{ hostids: string[] }>("host.update", {
+      hostid: hostId,
+      ...apiData,
+    });
   }
 
   async deleteHost(hostIds: string[]): Promise<{ hostids: string[] }> {
-    return this.rpc<{ hostids: string[] }>("host.delete", hostIds as unknown as Record<string, unknown>);
+    return this.rpc<{ hostids: string[] }>(
+      "host.delete",
+      hostIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Host Groups
@@ -450,12 +508,21 @@ export class BlindedZabbixClient {
     return this.rpc<{ groupids: string[] }>("hostgroup.create", { name });
   }
 
-  async updateHostGroup(groupId: string, name: string): Promise<{ groupids: string[] }> {
-    return this.rpc<{ groupids: string[] }>("hostgroup.update", { groupid: groupId, name });
+  async updateHostGroup(
+    groupId: string,
+    name: string,
+  ): Promise<{ groupids: string[] }> {
+    return this.rpc<{ groupids: string[] }>("hostgroup.update", {
+      groupid: groupId,
+      name,
+    });
   }
 
   async deleteHostGroup(groupIds: string[]): Promise<{ groupids: string[] }> {
-    return this.rpc<{ groupids: string[] }>("hostgroup.delete", groupIds as unknown as Record<string, unknown>);
+    return this.rpc<{ groupids: string[] }>(
+      "hostgroup.delete",
+      groupIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Items
@@ -463,21 +530,46 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixItem[]>("item.get", {
       hostids: hostId,
       output: [
-        "itemid", "hostid", "name", "key_", "value_type",
-        "type", "units", "history", "trends", "lastvalue",
-        "lastclock", "delay", "state", "status",
+        "itemid",
+        "hostid",
+        "name",
+        "key_",
+        "value_type",
+        "type",
+        "units",
+        "history",
+        "trends",
+        "lastvalue",
+        "lastclock",
+        "delay",
+        "state",
+        "status",
       ],
       sortfield: "name",
     });
   }
 
-  async getKeyItems(hostIds: string[], keySearch?: string): Promise<ZabbixItem[]> {
+  async getKeyItems(
+    hostIds: string[],
+    keySearch?: string,
+  ): Promise<ZabbixItem[]> {
     const params: Record<string, unknown> = {
       hostids: hostIds,
       output: [
-        "itemid", "hostid", "name", "key_", "value_type",
-        "type", "units", "history", "trends", "lastvalue",
-        "lastclock", "delay", "state", "status",
+        "itemid",
+        "hostid",
+        "name",
+        "key_",
+        "value_type",
+        "type",
+        "units",
+        "history",
+        "trends",
+        "lastvalue",
+        "lastclock",
+        "delay",
+        "state",
+        "status",
       ],
       sortfield: "name",
     };
@@ -488,16 +580,27 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixItem[]>("item.get", params);
   }
 
-  async createItem(data: Record<string, unknown>): Promise<{ itemids: string[] }> {
+  async createItem(
+    data: Record<string, unknown>,
+  ): Promise<{ itemids: string[] }> {
     return this.rpc<{ itemids: string[] }>("item.create", data);
   }
 
-  async updateItem(itemId: string, data: Record<string, unknown>): Promise<{ itemids: string[] }> {
-    return this.rpc<{ itemids: string[] }>("item.update", { itemid: itemId, ...data });
+  async updateItem(
+    itemId: string,
+    data: Record<string, unknown>,
+  ): Promise<{ itemids: string[] }> {
+    return this.rpc<{ itemids: string[] }>("item.update", {
+      itemid: itemId,
+      ...data,
+    });
   }
 
   async deleteItem(itemIds: string[]): Promise<{ itemids: string[] }> {
-    return this.rpc<{ itemids: string[] }>("item.delete", itemIds as unknown as Record<string, unknown>);
+    return this.rpc<{ itemids: string[] }>(
+      "item.delete",
+      itemIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Triggers — expandDescription removido (deprecated no Zabbix 7.x, descriptions sempre expandidas)
@@ -512,7 +615,9 @@ export class BlindedZabbixClient {
   }
 
   // createTrigger — Zabbix 7.x espera expression como string e hostid no formato correto
-  async createTrigger(data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
+  async createTrigger(
+    data: Record<string, unknown>,
+  ): Promise<{ triggerids: string[] }> {
     const apiData: Record<string, unknown> = { ...data };
     // Zabbix 7.x usa description em vez de comments para triggers
     if (data.description && !data.comments) {
@@ -521,16 +626,32 @@ export class BlindedZabbixClient {
     return this.rpc<{ triggerids: string[] }>("trigger.create", apiData);
   }
 
-  async updateTrigger(triggerId: string, data: Record<string, unknown>): Promise<{ triggerids: string[] }> {
-    return this.rpc<{ triggerids: string[] }>("trigger.update", { triggerid: triggerId, ...data });
+  async updateTrigger(
+    triggerId: string,
+    data: Record<string, unknown>,
+  ): Promise<{ triggerids: string[] }> {
+    return this.rpc<{ triggerids: string[] }>("trigger.update", {
+      triggerid: triggerId,
+      ...data,
+    });
   }
 
   async deleteTrigger(triggerIds: string[]): Promise<{ triggerids: string[] }> {
-    return this.rpc<{ triggerids: string[] }>("trigger.delete", triggerIds as unknown as Record<string, unknown>);
+    return this.rpc<{ triggerids: string[] }>(
+      "trigger.delete",
+      triggerIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Problems — Zabbix 7.4 nao suporta selectHosts em problem.get
-  async getProblems(hostIds?: string[], options?: { acknowledged?: boolean; recent?: boolean; suppressed?: boolean }): Promise<ZabbixProblem[]> {
+  async getProblems(
+    hostIds?: string[],
+    options?: {
+      acknowledged?: boolean;
+      recent?: boolean;
+      suppressed?: boolean;
+    },
+  ): Promise<ZabbixProblem[]> {
     const params: Record<string, unknown> = {
       output: "extend",
       recent: options?.recent ?? false,
@@ -538,13 +659,24 @@ export class BlindedZabbixClient {
       sortorder: "DESC",
     };
     if (hostIds) params.hostids = hostIds;
-    if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
-    if (options?.suppressed !== undefined) params.suppressed = options.suppressed;
+    if (options?.acknowledged !== undefined)
+      params.acknowledged = options.acknowledged;
+    if (options?.suppressed !== undefined)
+      params.suppressed = options.suppressed;
     return this.rpc<ZabbixProblem[]>("problem.get", params);
   }
 
   // Events — adicionado acknowledged, limit e selectHosts
-  async getEvents(hostIds: string[], options?: { from?: number; to?: number; value?: number; acknowledged?: boolean; limit?: number }): Promise<ZabbixEvent[]> {
+  async getEvents(
+    hostIds: string[],
+    options?: {
+      from?: number;
+      to?: number;
+      value?: number;
+      acknowledged?: boolean;
+      limit?: number;
+    },
+  ): Promise<ZabbixEvent[]> {
     const params: Record<string, unknown> = {
       output: "extend",
       sortfield: ["clock", "eventid"],
@@ -556,12 +688,18 @@ export class BlindedZabbixClient {
     if (options?.from) params.time_from = options.from;
     if (options?.to) params.time_till = options.to;
     if (options?.value !== undefined) params.value = options.value;
-    if (options?.acknowledged !== undefined) params.acknowledged = options.acknowledged;
+    if (options?.acknowledged !== undefined)
+      params.acknowledged = options.acknowledged;
     return this.rpc<ZabbixEvent[]>("event.get", params);
   }
 
   // History — valueType opcional (quando undefined, Zabbix busca em todas as tabelas)
-  async getHistory(itemId: string, from: number, to: number, valueType?: number): Promise<ZabbixHistoryEntry[]> {
+  async getHistory(
+    itemId: string,
+    from: number,
+    to: number,
+    valueType?: number,
+  ): Promise<ZabbixHistoryEntry[]> {
     const params: Record<string, unknown> = {
       itemids: itemId,
       time_from: from,
@@ -575,7 +713,12 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
   }
 
-  async getHistoryBatch(itemIds: string[], from: number, to: number, valueType?: number): Promise<ZabbixHistoryEntry[]> {
+  async getHistoryBatch(
+    itemIds: string[],
+    from: number,
+    to: number,
+    valueType?: number,
+  ): Promise<ZabbixHistoryEntry[]> {
     const params: Record<string, unknown> = {
       itemids: itemIds,
       time_from: from,
@@ -592,8 +735,24 @@ export class BlindedZabbixClient {
   // Graphs — hostId opcional (quando undefined, retorna todos os grafos)
   async getGraphs(hostId?: string): Promise<ZabbixGraph[]> {
     const params: Record<string, unknown> = {
-      output: ["graphid", "name", "width", "height", "graphtype", "yaxismin", "yaxismax"],
-      selectGraphItems: ["itemid", "color", "drawtype", "sortorder", "yaxisside", "calc_fnc", "type"],
+      output: [
+        "graphid",
+        "name",
+        "width",
+        "height",
+        "graphtype",
+        "yaxismin",
+        "yaxismax",
+      ],
+      selectGraphItems: [
+        "itemid",
+        "color",
+        "drawtype",
+        "sortorder",
+        "yaxisside",
+        "calc_fnc",
+        "type",
+      ],
       selectHosts: ["hostid", "host", "name"],
       sortfield: "name",
     };
@@ -630,21 +789,35 @@ export class BlindedZabbixClient {
   }
 
   // createMaintenance — transforma hostids para hosts: [{hostid: "1"}] (formato Zabbix 7.x)
-  async createMaintenance(data: Record<string, unknown>): Promise<{ maintenanceids: string[] }> {
+  async createMaintenance(
+    data: Record<string, unknown>,
+  ): Promise<{ maintenanceids: string[] }> {
     const apiData: Record<string, unknown> = { ...data };
     if (Array.isArray(data.hostids)) {
       apiData.hosts = (data.hostids as string[]).map((id) => ({ hostid: id }));
       delete apiData.hostids;
     }
-    return this.rpc<{ maintenanceids: string[] }>("maintenance.create", apiData);
+    return this.rpc<{ maintenanceids: string[] }>(
+      "maintenance.create",
+      apiData,
+    );
   }
 
-  async deleteMaintenance(maintenanceIds: string[]): Promise<{ maintenanceids: string[] }> {
-    return this.rpc<{ maintenanceids: string[] }>("maintenance.delete", maintenanceIds as unknown as Record<string, unknown>);
+  async deleteMaintenance(
+    maintenanceIds: string[],
+  ): Promise<{ maintenanceids: string[] }> {
+    return this.rpc<{ maintenanceids: string[] }>(
+      "maintenance.delete",
+      maintenanceIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Acknowledge events
-  async acknowledgeEvents(eventIds: string[], message: string, action: number): Promise<{ eventids: string[] }> {
+  async acknowledgeEvents(
+    eventIds: string[],
+    message: string,
+    action: number,
+  ): Promise<{ eventids: string[] }> {
     return this.rpc<{ eventids: string[] }>("event.acknowledge", {
       eventids: eventIds,
       message,
@@ -687,30 +860,38 @@ export class BlindedZabbixClient {
     if (data.name) params.name = data.name;
     if (data.surname) params.surname = data.surname;
     if (data.passwd) params.passwd = data.passwd;
-    if (data.usrgrps) params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
+    if (data.usrgrps)
+      params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
     return this.rpc<{ userids: string[] }>("user.create", params);
   }
 
-  async updateUser(userId: string, data: {
-    username?: string;
-    name?: string;
-    surname?: string;
-    roleid?: string;
-    passwd?: string;
-    usrgrps?: string[];
-  }): Promise<{ userids: string[] }> {
+  async updateUser(
+    userId: string,
+    data: {
+      username?: string;
+      name?: string;
+      surname?: string;
+      roleid?: string;
+      passwd?: string;
+      usrgrps?: string[];
+    },
+  ): Promise<{ userids: string[] }> {
     const params: Record<string, unknown> = { userid: userId };
     if (data.username !== undefined) params.username = data.username;
     if (data.name !== undefined) params.name = data.name;
     if (data.surname !== undefined) params.surname = data.surname;
     if (data.roleid !== undefined) params.roleid = data.roleid;
     if (data.passwd !== undefined) params.passwd = data.passwd;
-    if (data.usrgrps !== undefined) params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
+    if (data.usrgrps !== undefined)
+      params.usrgrps = data.usrgrps.map((id) => ({ usrgrpid: id }));
     return this.rpc<{ userids: string[] }>("user.update", params);
   }
 
   async deleteUser(userIds: string[]): Promise<{ userids: string[] }> {
-    return this.rpc<{ userids: string[] }>("user.delete", userIds as unknown as Record<string, unknown>);
+    return this.rpc<{ userids: string[] }>(
+      "user.delete",
+      userIds as unknown as Record<string, unknown>,
+    );
   }
 
   // User Groups
@@ -721,15 +902,23 @@ export class BlindedZabbixClient {
     });
   }
 
-  async createUserGroup(name: string, permission?: { id: string; permission: number }): Promise<{ usrgrpids: string[] }> {
+  async createUserGroup(
+    name: string,
+    permission?: { id: string; permission: number },
+  ): Promise<{ usrgrpids: string[] }> {
     const params: Record<string, unknown> = { name };
     if (permission) {
-      params.rights = [{ id: permission.id, permission: permission.permission }];
+      params.rights = [
+        { id: permission.id, permission: permission.permission },
+      ];
     }
     return this.rpc<{ usrgrpids: string[] }>("usergroup.create", params);
   }
 
-  async updateUserGroup(groupId: string, data: { name?: string; rights?: Array<{ id: string; permission: number }> }): Promise<{ usrgrpids: string[] }> {
+  async updateUserGroup(
+    groupId: string,
+    data: { name?: string; rights?: Array<{ id: string; permission: number }> },
+  ): Promise<{ usrgrpids: string[] }> {
     const params: Record<string, unknown> = { usrgrpid: groupId };
     if (data.name !== undefined) params.name = data.name;
     if (data.rights !== undefined) params.rights = data.rights;
@@ -737,7 +926,10 @@ export class BlindedZabbixClient {
   }
 
   async deleteUserGroup(groupIds: string[]): Promise<{ usrgrpids: string[] }> {
-    return this.rpc<{ usrgrpids: string[] }>("usergroup.delete", groupIds as unknown as Record<string, unknown>);
+    return this.rpc<{ usrgrpids: string[] }>(
+      "usergroup.delete",
+      groupIds as unknown as Record<string, unknown>,
+    );
   }
 
   // Actions

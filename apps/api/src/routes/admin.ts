@@ -543,7 +543,9 @@ adminRoute.post(
       }
     } else {
       // Cria novo usuário com senha provisória hasheada
-      const passwordHash = await argon2.hash(data.provisional_password);
+      const passwordHash = await argon2.hash(
+        data.provisional_password ?? data.password,
+      );
 
       const newUserResult = await query<{ id: string }>(
         `INSERT INTO public.users (email, password_hash, full_name, phone, is_active, must_change_password)

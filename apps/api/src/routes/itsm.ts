@@ -243,7 +243,7 @@ itsmRoute.post(
     const startTime = Date.now();
     const result = await createTicket(config, {
       title: body.title,
-      description: body.description,
+      description: body.description ?? "",
       severity: body.severity ?? "warning",
       source_id: body.source_id ?? "",
       source_type: body.source_type ?? "manual",

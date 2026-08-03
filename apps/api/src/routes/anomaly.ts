@@ -102,11 +102,7 @@ anomalyRoute.post(
     // Usa apenas os ultimos N valores (window_size)
     const windowedValues = values.slice(-config.windowSize);
 
-    const result = detectAnomaly(
-      windowedValues,
-      parseFloat(observed_value),
-      config,
-    );
+    const result = detectAnomaly(windowedValues, observed_value, config);
 
     // Se anomalia detectada, registra no banco
     if (result.isAnomaly) {

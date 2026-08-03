@@ -42,7 +42,7 @@ executionsRoute.get("/", requirePermission("scripts:read"), async (c) => {
 
   const whereClause = conditions.join(" AND ");
 
-  const countResult = await query(
+  const countResult = await query<{ total: number }>(
     `SELECT COUNT(*)::int as total FROM public.script_executions WHERE ${whereClause}`,
     params,
   );

@@ -44,7 +44,7 @@ taskRoute.get("/", requirePermission("tasks:read"), async (c) => {
 
   const whereClause = conditions.join(" AND ");
 
-  const countResult = await query(
+  const countResult = await query<{ total: number }>(
     `SELECT COUNT(*)::int as total FROM public.scheduled_tasks WHERE ${whereClause}`,
     params,
   );

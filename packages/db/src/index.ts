@@ -1,6 +1,6 @@
 // @ai-context: .zero-error/architecture-map.md#state-store
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import { Pool, type PoolClient, type QueryResult } from "pg";
+import { Pool, type QueryResult, type QueryResultRow } from "pg";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 // Pool global — singleton lazy, inicializado apos loadEnv()
@@ -27,13 +27,15 @@ function getPool(): Pool {
 // AsyncLocalStorage para propagar tenant_id via SET LOCAL app.current_tenant_id
 const tenantStorage = new AsyncLocalStorage<string>();
 
-export interface QueryResultTyped<T> {
+export interface QueryResultTyped<
+  T extends QueryResultRow = Record<string, unknown>,
+> {
   data: QueryResult<T> | null;
   error: Error | null;
 }
 
 // Query generica com tipagem — sempre retorna { data, error } para tratamento consistente
-export async function query<T = Record<string, unknown>>(
+export async function query<T extends QueryResultRow = Record<string, unknown>>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResultTyped<T>> {
@@ -43,7 +45,9 @@ export async function query<T = Record<string, unknown>>(
     if (tenantId) {
       // SET LOCAL requer transacao explicita e nao aceita parametros $1
       await client.query("BEGIN");
-      await client.query(`SET LOCAL app.current_tenant_id = '${tenantId.replace(/'/g, "''")}'`);
+      await client.query(
+        `SET LOCAL app.current_tenant_id = '${tenantId.replace(/'/g, "''")}'`,
+      );
       const data = await client.query<T>(text, params as never[]);
       await client.query("COMMIT");
       return { data, error: null };
@@ -53,7 +57,9 @@ export async function query<T = Record<string, unknown>>(
   } catch (error) {
     // ROLLBACK se havia tenant (transacao aberta)
     if (tenantStorage.getStore()) {
-      try { await client.query("ROLLBACK"); } catch {}
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
     }
     return { data: null, error: error as Error };
   } finally {
@@ -62,7 +68,9 @@ export async function query<T = Record<string, unknown>>(
 }
 
 // Query no schema do tenant — prefixa o schema name nas queries
-export async function tenantQuery<T = Record<string, unknown>>(
+export async function tenantQuery<
+  T extends QueryResultRow = Record<string, unknown>,
+>(
   tenantId: string,
   text: string,
   params?: unknown[],
@@ -80,7 +88,10 @@ export async function getTenantSchema(
       [tenantId],
     );
     if (result.error || !result.data?.rows[0]) {
-      return { data: null, error: result.error ?? new Error("Tenant not found") };
+      return {
+        data: null,
+        error: result.error ?? new Error("Tenant not found"),
+      };
     }
     return { data: result.data.rows[0].schema_name, error: null };
   } catch (error) {

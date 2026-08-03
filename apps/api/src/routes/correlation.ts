@@ -320,7 +320,7 @@ correlationRoute.post(
       type: "event_group",
       event: "correlation.group_acknowledged",
       title: "Grupo acknowledged",
-      message: result.data.rows[0].title,
+      message: result.data.rows[0].title as string,
       severity: "info",
       timestamp: new Date().toISOString(),
     });
@@ -440,7 +440,13 @@ correlationRoute.get(
       [user?.tenant_id ?? null],
     );
 
-    const reduction = reductionResult.data?.rows[0];
+    const reduction = reductionResult.data?.rows[0] as
+      | {
+          total_events: string;
+          total_groups: string;
+          group_notifications: string;
+        }
+      | undefined;
     const totalEvents = parseInt(reduction?.total_events ?? "0", 10);
     const groupNotifications = parseInt(
       reduction?.group_notifications ?? "0",
