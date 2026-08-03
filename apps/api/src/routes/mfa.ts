@@ -292,8 +292,19 @@ mfaRoute.post("/verify", async (c) => {
 
   const roles = tenantsResult.data?.rows.map((r) => r.role) ?? [];
   const primaryTenantId = tenantsResult.data?.rows[0]?.tenant_id ?? "";
-  const userScope =
-    (tenantsResult.data?.rows[0]?.scope as "global" | "tenant") ?? "tenant";
+  const userScope = tenantsResult.data?.rows[0]?.scope as
+    "global" | "tenant" | undefined;
+  if (!userScope) {
+    return c.json(
+      {
+        error: {
+          code: "NO_TENANT_ACCESS",
+          message: "Usuário não possui acesso a nenhum tenant",
+        },
+      },
+      403,
+    );
+  }
   const tenantIds = tenantsResult.data?.rows.map((r) => r.tenant_id) ?? [];
 
   // Gera tokens JWT
