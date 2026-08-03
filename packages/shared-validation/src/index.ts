@@ -69,16 +69,39 @@ export type AssignRolePermissionsInput = z.infer<
 export const updateProfileSchema = z.object({
   full_name: z.string().min(1).optional(),
   email: z.string().email().optional(),
+  display_name: z.string().optional(),
+  bio: z.string().optional(),
+  phone: z.string().optional(),
+  location: z.string().optional(),
+  timezone: z.string().optional(),
+  locale: z.string().optional(),
+  job_title: z.string().optional(),
+  department: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  social_links: z.record(z.string()).optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const updatePreferencesSchema = z.object({
-  preferences: z.record(z.unknown()),
+  notification_email: z.boolean().optional(),
+  notification_push: z.boolean().optional(),
+  notification_sms: z.boolean().optional(),
+  notification_digest_frequency: z
+    .enum(["instant", "hourly", "daily", "weekly"])
+    .optional(),
+  quiet_hours_start: z.string().optional(),
+  quiet_hours_end: z.string().optional(),
+  theme: z.enum(["light", "dark", "system"]).optional(),
+  density: z.enum(["compact", "comfortable"]).optional(),
+  sidebar_collapsed: z.boolean().optional(),
+  dashboard_layout: z.record(z.unknown()).optional(),
 });
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 
 export const updateAvatarSchema = z.object({
-  avatar_url: z.string().url(),
+  avatar_url: z.string().url().optional(),
+  avatar_initials: z.string().optional(),
+  avatar_color: z.string().optional(),
 });
 export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 
