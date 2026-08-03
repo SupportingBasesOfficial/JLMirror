@@ -2790,16 +2790,18 @@ Todas as 16 discrepâncias identificadas na análise profunda foram corrigidas n
 
 ## Commits (em ordem cronológica)
 
-| Commit    | Descrição                                                                   |
-| --------- | --------------------------------------------------------------------------- |
-| `b346848` | `fix(auth): add token helper, fix totp setup and recovery code`             |
-| `4efc7f4` | `fix(auth): use token helper, hash refresh in oauth/ldap, add scope`        |
-| `4ec70b3` | `fix(bff): return scope in login and mfa-verify responses`                  |
-| `edb763e` | `fix(users): use zod schemas and enforce tenant isolation`                  |
-| `9319677` | `fix(validation): expand profile schemas to match route fields`             |
-| `769c063` | `fix(tests): update preferences schema tests for new flat structure`        |
-| `c152c6c` | `fix(api): global auth middleware and requireModule root coverage`          |
-| `873bfac` | `fix(security): enforce tenant_id and explicit bypass flag`                 |
-| `1d370f3` | `fix(auth): remove redundant scope fallbacks`                               |
-| `pending` | `fix(users): add requirePermission to GET /all route`                       |
-| `pending` | `fix(mfa): add await to hashRecoveryCodes + fix verifyTotpCode param order` |
+| Commit    | Descrição                                                                 |
+| --------- | ------------------------------------------------------------------------- |
+| `b346848` | `fix(auth): add token helper, fix totp setup and recovery code`           |
+| `4efc7f4` | `fix(auth): use token helper, hash refresh in oauth/ldap, add scope`      |
+| `4ec70b3` | `fix(bff): return scope in login and mfa-verify responses`                |
+| `edb763e` | `fix(users): use zod schemas and enforce tenant isolation`                |
+| `9319677` | `fix(validation): expand profile schemas to match route fields`           |
+| `769c063` | `fix(tests): update preferences schema tests for new flat structure`      |
+| `c152c6c` | `fix(api): global auth middleware and requireModule root coverage`        |
+| `873bfac` | `fix(security): enforce tenant_id and explicit bypass flag`               |
+| `1d370f3` | `fix(auth): remove redundant scope fallbacks`                             |
+| `543c76e` | `docs: add corrections appendix to technical guide`                       |
+| `ea4858b` | `fix: add requirePermission to /users/all, fix mfa await and totp params` |
+| `75a5907` | `fix(users): add requirePermission to GET /roles route`                   |
+| `56c4663` | `refactor: remove redundant jwtAuth+tenantContext from routes, fix lint`  |
