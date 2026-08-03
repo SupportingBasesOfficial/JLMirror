@@ -41,6 +41,22 @@ export const createRoleSchema = z.object({
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 
+export const createTenantUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  full_name: z.string().optional(),
+  role: z.string().min(1),
+  scope: z.enum(["global", "tenant"]).default("tenant"),
+});
+export type CreateTenantUserInput = z.infer<typeof createTenantUserSchema>;
+
+export const createCustomRoleSchema = z.object({
+  key: z.string().min(1),
+  description: z.string().optional(),
+  permissions: z.array(z.string()).default([]),
+});
+export type CreateCustomRoleInput = z.infer<typeof createCustomRoleSchema>;
+
 export const assignRolePermissionsSchema = z.object({
   role_id: z.string().uuid(),
   permissions: z.array(z.string()),
