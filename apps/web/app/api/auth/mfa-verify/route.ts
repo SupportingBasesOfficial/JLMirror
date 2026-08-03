@@ -22,11 +22,17 @@ export async function POST(request: NextRequest) {
   }
 
   // Setar cookies httpOnly com os tokens recebidos
-  const typedData = data as Record<string, unknown> & { user?: { must_change_password?: boolean } };
+  const typedData = data as Record<string, unknown> & {
+    user?: { must_change_password?: boolean };
+  };
   const response = NextResponse.json({
     user: typedData.user,
     tenants: typedData.tenants,
-    must_change_password: typedData.must_change_password ?? typedData.user?.must_change_password ?? false,
+    scope: typedData.scope,
+    must_change_password:
+      typedData.must_change_password ??
+      typedData.user?.must_change_password ??
+      false,
   });
 
   const isProduction = process.env.NODE_ENV === "production";

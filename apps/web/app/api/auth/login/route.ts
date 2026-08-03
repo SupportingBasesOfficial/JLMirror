@@ -10,8 +10,13 @@ export async function POST(request: NextRequest) {
 
   let res: Response;
   try {
-    const forwardedHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "";
+    const forwardedHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "";
     const clientUa = request.headers.get("user-agent") || "";
     if (clientIp) forwardedHeaders["x-forwarded-for"] = clientIp;
     if (clientUa) forwardedHeaders["user-agent"] = clientUa;
@@ -24,7 +29,12 @@ export async function POST(request: NextRequest) {
     });
   } catch {
     return NextResponse.json(
-      { error: { code: "SERVER_ERROR", message: "Não foi possível conectar ao servidor de autenticação" } },
+      {
+        error: {
+          code: "SERVER_ERROR",
+          message: "Não foi possível conectar ao servidor de autenticação",
+        },
+      },
       { status: 502 },
     );
   }
@@ -36,7 +46,12 @@ export async function POST(request: NextRequest) {
     data = JSON.parse(responseText);
   } catch {
     return NextResponse.json(
-      { error: { code: "SERVER_ERROR", message: "Erro interno no servidor de autenticação" } },
+      {
+        error: {
+          code: "SERVER_ERROR",
+          message: "Erro interno no servidor de autenticação",
+        },
+      },
       { status: res.status || 500 },
     );
   }
@@ -46,11 +61,17 @@ export async function POST(request: NextRequest) {
   }
 
   // Extrai tokens e seta como cookies httpOnly
-  const typedData = data as Record<string, unknown> & { user?: { must_change_password?: boolean } };
+  const typedData = data as Record<string, unknown> & {
+    user?: { must_change_password?: boolean };
+  };
   const response = NextResponse.json({
     user: typedData.user,
     tenants: typedData.tenants,
-    must_change_password: typedData.must_change_password ?? typedData.user?.must_change_password ?? false,
+    scope: typedData.scope,
+    must_change_password:
+      typedData.must_change_password ??
+      typedData.user?.must_change_password ??
+      false,
   });
 
   const isProduction = process.env.NODE_ENV === "production";
