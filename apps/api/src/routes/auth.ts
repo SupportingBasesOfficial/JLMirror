@@ -6,13 +6,12 @@ import crypto from "node:crypto";
 import { query } from "@repo/db";
 import { logger } from "@repo/logger";
 import {
-  signAccessToken,
-  signRefreshToken,
   verifyToken,
+  generateAndStoreTokens,
   GoogleOAuthProvider,
   LdapAuthProvider,
 } from "@repo/auth";
-import { revokeToken, isTokenRevoked, storeRefreshJti } from "@repo/auth";
+import { revokeToken, isTokenRevoked } from "@repo/auth";
 import {
   loginInputSchema,
   refreshTokenSchema,
@@ -146,26 +145,15 @@ authRoute.post("/login", async (c) => {
     });
   }
 
-  // Gera tokens JWT
-  const accessToken = signAccessToken({
-    sub: user.id,
-    tenant_id: primaryTenantId,
-    roles,
-    scope: userScope,
-    tenant_ids: tenantIds,
-  });
-
-  const refreshToken = signRefreshToken({
-    sub: user.id,
-    tenant_id: primaryTenantId,
-    roles,
-    scope: userScope,
-    tenant_ids: tenantIds,
-  });
-
-  // Extrai jti do refresh token para armazenar no Redis
-  const refreshPayload = verifyToken(refreshToken);
-  await storeRefreshJti(refreshPayload.jti);
+  // Gera tokens JWT e armazena jti no Redis (helper centralizado)
+  const { accessToken, refreshToken, refreshTokenHash } =
+    await generateAndStoreTokens({
+      sub: user.id,
+      tenant_id: primaryTenantId,
+      roles,
+      scope: userScope,
+      tenant_ids: tenantIds,
+    });
 
   // Cria sessão em public.sessions com device fingerprint
   const clientFingerprint = body.device_fingerprint as string | undefined;
@@ -174,12 +162,6 @@ authRoute.post("/login", async (c) => {
     c.req.header("x-real-ip") ||
     null;
   const clientUserAgent = c.req.header("user-agent") || null;
-
-  // Hash do refresh token antes de armazenar — protege contra vazamento do banco
-  const refreshTokenHash = crypto
-    .createHash("sha256")
-    .update(refreshToken)
-    .digest("hex");
 
   const sessionResult = await query(
     `INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at, device_fingerprint, ip_address, user_agent)
@@ -276,24 +258,14 @@ authRoute.post("/refresh", async (c) => {
     await revokeToken(payload.jti, ttlSeconds);
 
     // Gera novos tokens
-    const accessToken = signAccessToken({
-      sub: payload.sub,
-      tenant_id: payload.tenant_id,
-      roles: payload.roles,
-      scope: payload.scope ?? "tenant",
-      tenant_ids: payload.tenant_ids,
-    });
-
-    const newRefreshToken = signRefreshToken({
-      sub: payload.sub,
-      tenant_id: payload.tenant_id,
-      roles: payload.roles,
-      scope: payload.scope ?? "tenant",
-      tenant_ids: payload.tenant_ids,
-    });
-
-    const newPayload = verifyToken(newRefreshToken);
-    await storeRefreshJti(newPayload.jti);
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateAndStoreTokens({
+        sub: payload.sub,
+        tenant_id: payload.tenant_id,
+        roles: payload.roles,
+        scope: payload.scope ?? "tenant",
+        tenant_ids: payload.tenant_ids,
+      });
 
     return c.json({
       access_token: accessToken,
@@ -726,28 +698,20 @@ authRoute.post("/oauth/callback", async (c) => {
       (tenantsResult.data.rows[0].scope as "global" | "tenant") ?? "tenant";
     const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
-    const accessToken = signAccessToken({
-      sub: userId,
-      tenant_id: primaryTenantId,
-      roles,
-      scope: userScope,
-      tenant_ids: tenantIds,
-    });
-    const refreshToken = signRefreshToken({
-      sub: userId,
-      tenant_id: primaryTenantId,
-      roles,
-      scope: userScope,
-      tenant_ids: tenantIds,
-    });
-    const refreshPayload = verifyToken(refreshToken);
-    await storeRefreshJti(refreshPayload.jti);
+    const { accessToken, refreshToken, refreshTokenHash } =
+      await generateAndStoreTokens({
+        sub: userId,
+        tenant_id: primaryTenantId,
+        roles,
+        scope: userScope,
+        tenant_ids: tenantIds,
+      });
 
     await query(
       "INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3)",
       [
         userId,
-        refreshToken,
+        refreshTokenHash,
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       ],
     );
@@ -761,9 +725,11 @@ authRoute.post("/oauth/callback", async (c) => {
         full_name: userInfo.name,
         is_active: true,
       },
+      scope: userScope,
       tenants: tenantsResult.data.rows.map((r) => ({
         tenant_id: r.tenant_id,
         role: r.role,
+        scope: r.scope,
       })),
     });
   } catch (err) {
@@ -870,28 +836,20 @@ authRoute.post("/ldap/bind", async (c) => {
       (tenantsResult.data.rows[0].scope as "global" | "tenant") ?? "tenant";
     const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
-    const accessToken = signAccessToken({
-      sub: userId,
-      tenant_id: primaryTenantId,
-      roles,
-      scope: userScope,
-      tenant_ids: tenantIds,
-    });
-    const refreshToken = signRefreshToken({
-      sub: userId,
-      tenant_id: primaryTenantId,
-      roles,
-      scope: userScope,
-      tenant_ids: tenantIds,
-    });
-    const refreshPayload = verifyToken(refreshToken);
-    await storeRefreshJti(refreshPayload.jti);
+    const { accessToken, refreshToken, refreshTokenHash } =
+      await generateAndStoreTokens({
+        sub: userId,
+        tenant_id: primaryTenantId,
+        roles,
+        scope: userScope,
+        tenant_ids: tenantIds,
+      });
 
     await query(
       "INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3)",
       [
         userId,
-        refreshToken,
+        refreshTokenHash,
         new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       ],
     );
@@ -905,9 +863,11 @@ authRoute.post("/ldap/bind", async (c) => {
         full_name: ldapUser.name,
         is_active: true,
       },
+      scope: userScope,
       tenants: tenantsResult.data.rows.map((r) => ({
         tenant_id: r.tenant_id,
         role: r.role,
+        scope: r.scope,
       })),
     });
   } catch (err) {
