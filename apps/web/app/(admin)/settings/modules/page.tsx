@@ -35,12 +35,89 @@ interface ModulesResponse {
 
 // Categorias para agrupar os modulos na UI
 const CATEGORIES: { title: string; prefixes: string[] }[] = [
-  { title: "Núcleo", prefixes: ["module_auth", "module_dashboard", "module_zabbix", "module_rbac", "module_mfa", "module_settings", "module_profile", "module_feature_flags"] },
-  { title: "Monitoramento & Infraestrutura", prefixes: ["module_devices", "module_monitoring", "module_system_health", "module_capacity", "module_assets", "module_backup", "module_k8s", "module_ssl", "module_firewall", "module_patches"] },
-  { title: "Operações", prefixes: ["module_tickets", "module_changes", "module_kb", "module_tasks", "module_scripts", "module_executions", "module_workflows", "module_notifications", "module_push", "module_chatops"] },
-  { title: "Segurança & Compliance", prefixes: ["module_compliance", "module_lgpd", "module_audit", "module_security_audit", "module_escalation", "module_correlation"] },
-  { title: "Inteligência & Analytics", prefixes: ["module_anomaly", "module_predictions", "module_apm", "module_logs", "module_traces", "module_executive_dashboard", "module_reports", "module_finops"] },
-  { title: "Integrações & Extensões", prefixes: ["module_api_keys", "module_webhooks", "module_itsm", "module_discovery", "module_drift", "module_marketplace", "module_data_transfer", "module_client_portal", "module_status_page", "module_admin", "module_sla"] },
+  {
+    title: "Núcleo",
+    prefixes: [
+      "module_auth",
+      "module_dashboard",
+      "module_zabbix",
+      "module_rbac",
+      "module_mfa",
+      "module_settings",
+      "module_profile",
+      "module_feature_flags",
+    ],
+  },
+  {
+    title: "Monitoramento & Infraestrutura",
+    prefixes: [
+      "module_devices",
+      "module_monitoring",
+      "module_system_health",
+      "module_capacity",
+      "module_assets",
+      "module_backup",
+      "module_k8s",
+      "module_ssl",
+      "module_firewall",
+      "module_patches",
+    ],
+  },
+  {
+    title: "Operações",
+    prefixes: [
+      "module_tickets",
+      "module_changes",
+      "module_kb",
+      "module_tasks",
+      "module_scripts",
+      "module_executions",
+      "module_workflows",
+      "module_notifications",
+      "module_push",
+      "module_chatops",
+    ],
+  },
+  {
+    title: "Segurança & Compliance",
+    prefixes: [
+      "module_compliance",
+      "module_lgpd",
+      "module_audit",
+      "module_security_audit",
+      "module_escalation",
+      "module_correlation",
+    ],
+  },
+  {
+    title: "Inteligência & Analytics",
+    prefixes: [
+      "module_anomaly",
+      "module_predictions",
+      "module_apm",
+      "module_logs",
+      "module_traces",
+      "module_executive_dashboard",
+      "module_reports",
+      "module_finops",
+    ],
+  },
+  {
+    title: "Integrações & Extensões",
+    prefixes: [
+      "module_api_keys",
+      "module_webhooks",
+      "module_itsm",
+      "module_discovery",
+      "module_drift",
+      "module_marketplace",
+      "module_data_transfer",
+      "module_client_portal",
+      "module_status_page",
+      "module_admin",
+      "module_sla",
+    ],
+  },
 ];
 
 function getCategory(key: string): string {
@@ -51,13 +128,14 @@ function getCategory(key: string): string {
 }
 
 export default function ModulesPage() {
-  const { data, isLoading, progress, mutate } = useApi<ModulesResponse>("/api/v1/settings/modules");
+  const { data, isLoading, progress, mutate } = useApi<ModulesResponse>(
+    "/api/v1/settings/modules",
+  );
   const [toggling, setToggling] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const modules = data?.modules ?? [];
-
   const groupedModules = useMemo(() => {
+    const modules = data?.modules ?? [];
     const groups: Record<string, ModuleFlag[]> = {};
     for (const mod of modules) {
       const cat = getCategory(mod.key);
@@ -65,8 +143,9 @@ export default function ModulesPage() {
       groups[cat].push(mod);
     }
     return groups;
-  }, [modules]);
+  }, [data]);
 
+  const modules = data?.modules ?? [];
   const activeCount = modules.filter((m) => m.enabled).length;
   const inactiveCount = modules.length - activeCount;
 
@@ -124,9 +203,12 @@ export default function ModulesPage() {
               <Puzzle size={22} style={{ color: COLORS.teal }} />
             </div>
             <div>
-              <h1 className="text-xl font-bold" style={{ color: COLORS.text }}>Módulos do Sistema</h1>
+              <h1 className="text-xl font-bold" style={{ color: COLORS.text }}>
+                Módulos do Sistema
+              </h1>
               <p className="text-xs" style={{ color: COLORS.muted }}>
-                {activeCount} ativos · {inactiveCount} inativos · {modules.length} total
+                {activeCount} ativos · {inactiveCount} inativos ·{" "}
+                {modules.length} total
               </p>
             </div>
           </div>
@@ -167,7 +249,12 @@ export default function ModulesPage() {
               >
                 {category}
               </h2>
-              <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+              <div
+                className="grid gap-3"
+                style={{
+                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                }}
+              >
                 {mods.map((mod) => (
                   <ModuleCard
                     key={mod.key}
@@ -216,7 +303,10 @@ function ModuleCard({
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold truncate" style={{ color: COLORS.text }}>
+            <h3
+              className="text-sm font-semibold truncate"
+              style={{ color: COLORS.text }}
+            >
               {mod.name}
             </h3>
             {isCore && (
@@ -231,7 +321,10 @@ function ModuleCard({
               </span>
             )}
           </div>
-          <p className="text-[11px] mt-0.5 line-clamp-2" style={{ color: COLORS.muted }}>
+          <p
+            className="text-[11px] mt-0.5 line-clamp-2"
+            style={{ color: COLORS.muted }}
+          >
             {mod.description}
           </p>
         </div>
@@ -246,15 +339,28 @@ function ModuleCard({
         {mod.enabled ? (
           <>
             <Check size={12} style={{ color: COLORS.green }} />
-            <span className="text-[10px] font-medium" style={{ color: COLORS.green }}>Ativo</span>
+            <span
+              className="text-[10px] font-medium"
+              style={{ color: COLORS.green }}
+            >
+              Ativo
+            </span>
           </>
         ) : (
           <>
             <X size={12} style={{ color: COLORS.muted }} />
-            <span className="text-[10px] font-medium" style={{ color: COLORS.muted }}>Inativo</span>
+            <span
+              className="text-[10px] font-medium"
+              style={{ color: COLORS.muted }}
+            >
+              Inativo
+            </span>
           </>
         )}
-        <span className="text-[10px] ml-auto font-mono" style={{ color: COLORS.muted, opacity: 0.5 }}>
+        <span
+          className="text-[10px] ml-auto font-mono"
+          style={{ color: COLORS.muted, opacity: 0.5 }}
+        >
           {mod.key}
         </span>
       </div>
@@ -287,7 +393,11 @@ function ToggleSwitch({
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled && !enabled ? 0.5 : 1,
       }}
-      title={disabled && isCoreModule(disabled, enabled) ? "Módulo de núcleo — sempre ativo" : undefined}
+      title={
+        disabled && isCoreModule(disabled, enabled)
+          ? "Módulo de núcleo — sempre ativo"
+          : undefined
+      }
     >
       {loading ? (
         <Loader2

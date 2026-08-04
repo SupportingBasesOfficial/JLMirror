@@ -12,9 +12,7 @@ import {
   MessageSquare,
   Webhook,
   CheckCircle2,
-  XCircle,
   RefreshCw,
-  Eye,
 } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 
@@ -88,8 +86,12 @@ const DELIVERY_METHODS = [
 ];
 
 export default function WhiteLabelPage() {
-  const { data: brandingData, mutate: mutateBranding } = useApi<{ branding: Branding | null }>("/api/v1/reports/branding");
-  const { data: configData, mutate: mutateConfig } = useApi<{ config: DeliveryConfig | null }>("/api/v1/reports/delivery-config");
+  const { data: brandingData, mutate: mutateBranding } = useApi<{
+    branding: Branding | null;
+  }>("/api/v1/reports/branding");
+  const { data: configData, mutate: mutateConfig } = useApi<{
+    config: DeliveryConfig | null;
+  }>("/api/v1/reports/delivery-config");
 
   const [savingBranding, setSavingBranding] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -233,7 +235,14 @@ export default function WhiteLabelPage() {
   };
 
   return (
-    <div className="min-h-screen p-6 space-y-6" style={{ background: COLORS.bg, fontFamily: "'JetBrains Mono','Consolas',monospace", color: COLORS.text }}>
+    <div
+      className="min-h-screen p-6 space-y-6"
+      style={{
+        background: COLORS.bg,
+        fontFamily: "'JetBrains Mono','Consolas',monospace",
+        color: COLORS.text,
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -245,41 +254,125 @@ export default function WhiteLabelPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={syncBranding} className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2" style={{ background: `${COLORS.muted}15`, border: `1px solid ${COLORS.muted}`, color: COLORS.muted, cursor: "pointer" }}>
+          <button
+            onClick={syncBranding}
+            className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2"
+            style={{
+              background: `${COLORS.muted}15`,
+              border: `1px solid ${COLORS.muted}`,
+              color: COLORS.muted,
+              cursor: "pointer",
+            }}
+          >
             <RefreshCw size={12} /> Sync Branding
           </button>
-          <button onClick={syncConfig} className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2" style={{ background: `${COLORS.muted}15`, border: `1px solid ${COLORS.muted}`, color: COLORS.muted, cursor: "pointer" }}>
+          <button
+            onClick={syncConfig}
+            className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2"
+            style={{
+              background: `${COLORS.muted}15`,
+              border: `1px solid ${COLORS.muted}`,
+              color: COLORS.muted,
+              cursor: "pointer",
+            }}
+          >
             <RefreshCw size={12} /> Sync Config
           </button>
         </div>
       </div>
 
-      {error && <div className="rounded-md p-3 text-sm" style={{ background: "var(--status-error-bg)", border: "1px solid var(--status-error-border)", color: COLORS.red }}>{error}</div>}
-      {success && <div className="rounded-md p-3 text-sm" style={{ background: "var(--status-ok-bg)", border: "1px solid var(--status-ok-border)", color: COLORS.green }}>{success}</div>}
+      {error && (
+        <div
+          className="rounded-md p-3 text-sm"
+          style={{
+            background: "var(--status-error-bg)",
+            border: "1px solid var(--status-error-border)",
+            color: COLORS.red,
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {success && (
+        <div
+          className="rounded-md p-3 text-sm"
+          style={{
+            background: "var(--status-ok-bg)",
+            border: "1px solid var(--status-ok-border)",
+            color: COLORS.green,
+          }}
+        >
+          {success}
+        </div>
+      )}
 
       {/* Branding Section */}
-      <div className="rounded-xl p-6 space-y-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+      <div
+        className="rounded-xl p-6 space-y-4"
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
+      >
         <div className="flex items-center gap-2">
           <Building2 size={14} style={{ color: COLORS.teal }} />
-          <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>Branding do Tenant</h2>
+          <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>
+            Branding do Tenant
+          </h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label style={labelStyle}>Nome da Empresa *</label>
-            <input style={inputStyle} value={brandingForm.company_name} onChange={(e) => setBrandingForm({ ...brandingForm, company_name: e.target.value })} placeholder="Ex: JL Informática" />
+            <input
+              style={inputStyle}
+              value={brandingForm.company_name}
+              onChange={(e) =>
+                setBrandingForm({
+                  ...brandingForm,
+                  company_name: e.target.value,
+                })
+              }
+              placeholder="Ex: JL Informática"
+            />
           </div>
           <div>
             <label style={labelStyle}>URL do Logo</label>
-            <input style={inputStyle} value={brandingForm.logo_url} onChange={(e) => setBrandingForm({ ...brandingForm, logo_url: e.target.value })} placeholder="https://..." />
+            <input
+              style={inputStyle}
+              value={brandingForm.logo_url}
+              onChange={(e) =>
+                setBrandingForm({ ...brandingForm, logo_url: e.target.value })
+              }
+              placeholder="https://..."
+            />
           </div>
           <div>
             <label style={labelStyle}>Largura do Logo (px)</label>
-            <input type="number" style={inputStyle} value={brandingForm.logo_width} onChange={(e) => setBrandingForm({ ...brandingForm, logo_width: parseInt(e.target.value, 10) || 180 })} />
+            <input
+              type="number"
+              style={inputStyle}
+              value={brandingForm.logo_width}
+              onChange={(e) =>
+                setBrandingForm({
+                  ...brandingForm,
+                  logo_width: parseInt(e.target.value, 10) || 180,
+                })
+              }
+            />
           </div>
           <div>
             <label style={labelStyle}>Fonte</label>
-            <select style={inputStyle} value={brandingForm.font_family} onChange={(e) => setBrandingForm({ ...brandingForm, font_family: e.target.value })}>
+            <select
+              style={inputStyle}
+              value={brandingForm.font_family}
+              onChange={(e) =>
+                setBrandingForm({
+                  ...brandingForm,
+                  font_family: e.target.value,
+                })
+              }
+            >
               <option value="Helvetica">Helvetica</option>
               <option value="Times-Roman">Times Roman</option>
               <option value="Courier">Courier</option>
@@ -289,36 +382,109 @@ export default function WhiteLabelPage() {
 
         {/* Color Pickers */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <ColorPicker label="Cor Primária" value={brandingForm.primary_color} onChange={(v) => setBrandingForm({ ...brandingForm, primary_color: v })} />
-          <ColorPicker label="Cor Secundária" value={brandingForm.secondary_color} onChange={(v) => setBrandingForm({ ...brandingForm, secondary_color: v })} />
-          <ColorPicker label="Cor de Destaque" value={brandingForm.accent_color} onChange={(v) => setBrandingForm({ ...brandingForm, accent_color: v })} />
-          <ColorPicker label="Fundo Header" value={brandingForm.header_bg_color} onChange={(v) => setBrandingForm({ ...brandingForm, header_bg_color: v })} />
-          <ColorPicker label="Texto Header" value={brandingForm.header_text_color} onChange={(v) => setBrandingForm({ ...brandingForm, header_text_color: v })} />
+          <ColorPicker
+            label="Cor Primária"
+            value={brandingForm.primary_color}
+            onChange={(v) =>
+              setBrandingForm({ ...brandingForm, primary_color: v })
+            }
+          />
+          <ColorPicker
+            label="Cor Secundária"
+            value={brandingForm.secondary_color}
+            onChange={(v) =>
+              setBrandingForm({ ...brandingForm, secondary_color: v })
+            }
+          />
+          <ColorPicker
+            label="Cor de Destaque"
+            value={brandingForm.accent_color}
+            onChange={(v) =>
+              setBrandingForm({ ...brandingForm, accent_color: v })
+            }
+          />
+          <ColorPicker
+            label="Fundo Header"
+            value={brandingForm.header_bg_color}
+            onChange={(v) =>
+              setBrandingForm({ ...brandingForm, header_bg_color: v })
+            }
+          />
+          <ColorPicker
+            label="Texto Header"
+            value={brandingForm.header_text_color}
+            onChange={(v) =>
+              setBrandingForm({ ...brandingForm, header_text_color: v })
+            }
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label style={labelStyle}>Texto do Rodapé</label>
-            <input style={inputStyle} value={brandingForm.footer_text} onChange={(e) => setBrandingForm({ ...brandingForm, footer_text: e.target.value })} placeholder="Ex: © 2025 JL Informática" />
+            <input
+              style={inputStyle}
+              value={brandingForm.footer_text}
+              onChange={(e) =>
+                setBrandingForm({
+                  ...brandingForm,
+                  footer_text: e.target.value,
+                })
+              }
+              placeholder="Ex: © 2025 JL Informática"
+            />
           </div>
           <div>
             <label style={labelStyle}>URL do Rodapé</label>
-            <input style={inputStyle} value={brandingForm.footer_url} onChange={(e) => setBrandingForm({ ...brandingForm, footer_url: e.target.value })} placeholder="https://..." />
+            <input
+              style={inputStyle}
+              value={brandingForm.footer_url}
+              onChange={(e) =>
+                setBrandingForm({ ...brandingForm, footer_url: e.target.value })
+              }
+              placeholder="https://..."
+            />
           </div>
         </div>
 
         {/* Preview */}
-        <div className="rounded-lg p-4" style={{ background: brandingForm.header_bg_color, border: `1px solid ${COLORS.border}` }}>
+        <div
+          className="rounded-lg p-4"
+          style={{
+            background: brandingForm.header_bg_color,
+            border: `1px solid ${COLORS.border}`,
+          }}
+        >
           <div className="flex items-center justify-between">
-            <div className="text-lg font-bold" style={{ color: brandingForm.primary_color, fontFamily: brandingForm.font_family }}>
+            <div
+              className="text-lg font-bold"
+              style={{
+                color: brandingForm.primary_color,
+                fontFamily: brandingForm.font_family,
+              }}
+            >
               {brandingForm.company_name || "Nome da Empresa"}
             </div>
-            <div className="text-[10px]" style={{ color: brandingForm.header_text_color }}>Preview do Cabeçalho</div>
+            <div
+              className="text-[10px]"
+              style={{ color: brandingForm.header_text_color }}
+            >
+              Preview do Cabeçalho
+            </div>
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-[12px]" style={{ color: COLORS.text }}>
-          <input type="checkbox" checked={brandingForm.is_active} onChange={(e) => setBrandingForm({ ...brandingForm, is_active: e.target.checked })} />
+        <label
+          className="flex items-center gap-2 text-[12px]"
+          style={{ color: COLORS.text }}
+        >
+          <input
+            type="checkbox"
+            checked={brandingForm.is_active}
+            onChange={(e) =>
+              setBrandingForm({ ...brandingForm, is_active: e.target.checked })
+            }
+          />
           Branding ativo
         </label>
 
@@ -326,28 +492,54 @@ export default function WhiteLabelPage() {
           onClick={handleSaveBranding}
           disabled={savingBranding || !brandingForm.company_name}
           className="px-4 py-1.5 rounded text-[12px] font-bold flex items-center gap-2"
-          style={{ background: COLORS.teal, color: "white", cursor: "pointer", opacity: (savingBranding || !brandingForm.company_name) ? 0.5 : 1 }}
+          style={{
+            background: COLORS.teal,
+            color: "white",
+            cursor: "pointer",
+            opacity: savingBranding || !brandingForm.company_name ? 0.5 : 1,
+          }}
         >
-          {savingBranding ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          {savingBranding ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Save size={12} />
+          )}
           Salvar Branding
         </button>
       </div>
 
       {/* Delivery Config Section */}
-      <div className="rounded-xl p-6 space-y-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+      <div
+        className="rounded-xl p-6 space-y-4"
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
+      >
         <div className="flex items-center gap-2">
           <Mail size={14} style={{ color: COLORS.teal }} />
-          <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>Controle de Entrega (Admin)</h2>
+          <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>
+            Controle de Entrega (Admin)
+          </h2>
         </div>
 
-        <label className="flex items-center gap-2 text-[12px]" style={{ color: COLORS.text }}>
+        <label
+          className="flex items-center gap-2 text-[12px]"
+          style={{ color: COLORS.text }}
+        >
           <input
             type="checkbox"
             checked={configForm.auto_reports_enabled}
-            onChange={(e) => setConfigForm({ ...configForm, auto_reports_enabled: e.target.checked })}
+            onChange={(e) =>
+              setConfigForm({
+                ...configForm,
+                auto_reports_enabled: e.target.checked,
+              })
+            }
             style={{ width: "16px", height: "16px" }}
           />
-          <strong>Relatórios automáticos ativados</strong> — Quando ativo, o tenant pode receber relatórios agendados automaticamente
+          <strong>Relatórios automáticos ativados</strong> — Quando ativo, o
+          tenant pode receber relatórios agendados automaticamente
         </label>
 
         {/* Allowed Delivery Methods */}
@@ -355,14 +547,18 @@ export default function WhiteLabelPage() {
           <label style={labelStyle}>Meios de Entrega Permitidos</label>
           <div className="flex items-center gap-2 flex-wrap">
             {DELIVERY_METHODS.map((m) => {
-              const active = configForm.allowed_delivery_methods.includes(m.key);
+              const active = configForm.allowed_delivery_methods.includes(
+                m.key,
+              );
               return (
                 <button
                   key={m.key}
                   onClick={() => toggleDeliveryMethod(m.key)}
                   className="px-3 py-1.5 rounded text-[11px] font-bold flex items-center gap-2"
                   style={{
-                    background: active ? `${COLORS.teal}15` : "var(--surface-1)",
+                    background: active
+                      ? `${COLORS.teal}15`
+                      : "var(--surface-1)",
                     border: `1px solid ${active ? COLORS.teal : COLORS.border}`,
                     color: active ? COLORS.teal : COLORS.muted,
                     cursor: "pointer",
@@ -379,51 +575,130 @@ export default function WhiteLabelPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label style={labelStyle}>Método Padrão</label>
-            <select style={inputStyle} value={configForm.default_delivery_method} onChange={(e) => setConfigForm({ ...configForm, default_delivery_method: e.target.value })}>
-              {DELIVERY_METHODS.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+            <select
+              style={inputStyle}
+              value={configForm.default_delivery_method}
+              onChange={(e) =>
+                setConfigForm({
+                  ...configForm,
+                  default_delivery_method: e.target.value,
+                })
+              }
+            >
+              {DELIVERY_METHODS.map((m) => (
+                <option key={m.key} value={m.key}>
+                  {m.label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
             <label style={labelStyle}>Limite Mensal (0 = ilimitado)</label>
-            <input type="number" style={inputStyle} value={configForm.monthly_report_limit} onChange={(e) => setConfigForm({ ...configForm, monthly_report_limit: parseInt(e.target.value, 10) || 0 })} min={0} />
+            <input
+              type="number"
+              style={inputStyle}
+              value={configForm.monthly_report_limit}
+              onChange={(e) =>
+                setConfigForm({
+                  ...configForm,
+                  monthly_report_limit: parseInt(e.target.value, 10) || 0,
+                })
+              }
+              min={0}
+            />
           </div>
         </div>
 
         {/* Email Config */}
         {configForm.allowed_delivery_methods.includes("email") && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 rounded-lg" style={{ background: "var(--surface-1)" }}>
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 rounded-lg"
+            style={{ background: "var(--surface-1)" }}
+          >
             <div>
               <label style={labelStyle}>Email Remetente</label>
-              <input style={inputStyle} value={configForm.email_from} onChange={(e) => setConfigForm({ ...configForm, email_from: e.target.value })} placeholder="reports@empresa.com" />
+              <input
+                style={inputStyle}
+                value={configForm.email_from}
+                onChange={(e) =>
+                  setConfigForm({ ...configForm, email_from: e.target.value })
+                }
+                placeholder="reports@empresa.com"
+              />
             </div>
             <div>
               <label style={labelStyle}>Prefixo do Assunto</label>
-              <input style={inputStyle} value={configForm.email_subject_prefix} onChange={(e) => setConfigForm({ ...configForm, email_subject_prefix: e.target.value })} />
+              <input
+                style={inputStyle}
+                value={configForm.email_subject_prefix}
+                onChange={(e) =>
+                  setConfigForm({
+                    ...configForm,
+                    email_subject_prefix: e.target.value,
+                  })
+                }
+              />
             </div>
           </div>
         )}
 
         {/* Slack Config */}
         {configForm.allowed_delivery_methods.includes("slack") && (
-          <div className="p-3 rounded-lg" style={{ background: "var(--surface-1)" }}>
+          <div
+            className="p-3 rounded-lg"
+            style={{ background: "var(--surface-1)" }}
+          >
             <label style={labelStyle}>Slack Webhook URL</label>
-            <input style={inputStyle} value={configForm.slack_webhook_url} onChange={(e) => setConfigForm({ ...configForm, slack_webhook_url: e.target.value })} placeholder="https://hooks.slack.com/..." />
+            <input
+              style={inputStyle}
+              value={configForm.slack_webhook_url}
+              onChange={(e) =>
+                setConfigForm({
+                  ...configForm,
+                  slack_webhook_url: e.target.value,
+                })
+              }
+              placeholder="https://hooks.slack.com/..."
+            />
           </div>
         )}
 
         {/* Teams Config */}
         {configForm.allowed_delivery_methods.includes("teams") && (
-          <div className="p-3 rounded-lg" style={{ background: "var(--surface-1)" }}>
+          <div
+            className="p-3 rounded-lg"
+            style={{ background: "var(--surface-1)" }}
+          >
             <label style={labelStyle}>Teams Webhook URL</label>
-            <input style={inputStyle} value={configForm.teams_webhook_url} onChange={(e) => setConfigForm({ ...configForm, teams_webhook_url: e.target.value })} placeholder="https://outlook.office.com/..." />
+            <input
+              style={inputStyle}
+              value={configForm.teams_webhook_url}
+              onChange={(e) =>
+                setConfigForm({
+                  ...configForm,
+                  teams_webhook_url: e.target.value,
+                })
+              }
+              placeholder="https://outlook.office.com/..."
+            />
           </div>
         )}
 
         {/* Webhook Config */}
         {configForm.allowed_delivery_methods.includes("webhook") && (
-          <div className="p-3 rounded-lg" style={{ background: "var(--surface-1)" }}>
+          <div
+            className="p-3 rounded-lg"
+            style={{ background: "var(--surface-1)" }}
+          >
             <label style={labelStyle}>Webhook URL Genérico</label>
-            <input style={inputStyle} value={configForm.webhook_url} onChange={(e) => setConfigForm({ ...configForm, webhook_url: e.target.value })} placeholder="https://..." />
+            <input
+              style={inputStyle}
+              value={configForm.webhook_url}
+              onChange={(e) =>
+                setConfigForm({ ...configForm, webhook_url: e.target.value })
+              }
+              placeholder="https://..."
+            />
           </div>
         )}
 
@@ -431,9 +706,18 @@ export default function WhiteLabelPage() {
           onClick={handleSaveConfig}
           disabled={savingConfig}
           className="px-4 py-1.5 rounded text-[12px] font-bold flex items-center gap-2"
-          style={{ background: COLORS.teal, color: "white", cursor: "pointer", opacity: savingConfig ? 0.5 : 1 }}
+          style={{
+            background: COLORS.teal,
+            color: "white",
+            cursor: "pointer",
+            opacity: savingConfig ? 0.5 : 1,
+          }}
         >
-          {savingConfig ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          {savingConfig ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Save size={12} />
+          )}
           Salvar Configuração
         </button>
       </div>
@@ -441,23 +725,42 @@ export default function WhiteLabelPage() {
   );
 }
 
-function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorPicker({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
   return (
     <div>
-      <label style={{
-        fontSize: "10px",
-        fontWeight: "bold",
-        textTransform: "uppercase",
-        color: "var(--text-muted)",
-        marginBottom: "4px",
-        display: "block",
-      }}>{label}</label>
+      <label
+        style={{
+          fontSize: "10px",
+          fontWeight: "bold",
+          textTransform: "uppercase",
+          color: "var(--text-muted)",
+          marginBottom: "4px",
+          display: "block",
+        }}
+      >
+        {label}
+      </label>
       <div className="flex items-center gap-2">
         <input
           type="color"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          style={{ width: "32px", height: "32px", border: "1px solid var(--border-default)", borderRadius: "6px", cursor: "pointer", padding: 0 }}
+          style={{
+            width: "32px",
+            height: "32px",
+            border: "1px solid var(--border-default)",
+            borderRadius: "6px",
+            cursor: "pointer",
+            padding: 0,
+          }}
         />
         <input
           style={{

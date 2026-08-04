@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Clock,
   Trash2,
-  ExternalLink,
 } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 
@@ -48,7 +47,12 @@ interface PortalUser {
 }
 
 interface PortalOverview {
-  services: { total: string; operational: string; degraded: string; down: string };
+  services: {
+    total: string;
+    operational: string;
+    degraded: string;
+    down: string;
+  };
   incidents: { total_30d: string; open: string; critical_open: string };
   sla: { avg_percentage: string };
   recent_incidents: Array<{
@@ -82,8 +86,12 @@ const labelStyle = {
 };
 
 export default function ClientPortalPage() {
-  const { data: usersData, mutate: mutateUsers } = useApi<{ users: PortalUser[] }>("/api/v1/client-portal/users");
-  const { data: overviewData, mutate: mutateOverview } = useApi<{ data: PortalOverview }>("/api/v1/client-portal/overview");
+  const { data: usersData, mutate: mutateUsers } = useApi<{
+    users: PortalUser[];
+  }>("/api/v1/client-portal/users");
+  const { data: overviewData, mutate: mutateOverview } = useApi<{
+    data: PortalOverview;
+  }>("/api/v1/client-portal/overview");
 
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -123,7 +131,16 @@ export default function ClientPortalPage() {
         const data = await res.json();
         setSuccess(`Usuário criado. Token de acesso: ${data.portal_token}`);
         setShowForm(false);
-        setForm({ email: "", contact_name: "", company_name: "", phone: "", can_view_incidents: true, can_view_sla: true, can_view_services: true, can_create_tickets: false });
+        setForm({
+          email: "",
+          contact_name: "",
+          company_name: "",
+          phone: "",
+          can_view_incidents: true,
+          can_view_sla: true,
+          can_view_services: true,
+          can_create_tickets: false,
+        });
         mutateUsers();
         mutateOverview();
       } else {
@@ -137,20 +154,30 @@ export default function ClientPortalPage() {
     }
   }, [form, mutateUsers, mutateOverview]);
 
-  const handleDeactivate = useCallback(async (id: string) => {
-    try {
-      await fetch(`/api/v1/client-portal/users/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      mutateUsers();
-    } catch {
-      // Silencioso
-    }
-  }, [mutateUsers]);
+  const handleDeactivate = useCallback(
+    async (id: string) => {
+      try {
+        await fetch(`/api/v1/client-portal/users/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+        mutateUsers();
+      } catch {
+        // Silencioso
+      }
+    },
+    [mutateUsers],
+  );
 
   return (
-    <div className="min-h-screen p-6 space-y-6" style={{ background: COLORS.bg, fontFamily: "'JetBrains Mono','Consolas',monospace", color: COLORS.text }}>
+    <div
+      className="min-h-screen p-6 space-y-6"
+      style={{
+        background: COLORS.bg,
+        fontFamily: "'JetBrains Mono','Consolas',monospace",
+        color: COLORS.text,
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -162,93 +189,308 @@ export default function ClientPortalPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { mutateUsers(); mutateOverview(); }} className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2" style={{ background: `${COLORS.muted}15`, border: `1px solid ${COLORS.muted}`, color: COLORS.muted, cursor: "pointer" }}>
+          <button
+            onClick={() => {
+              mutateUsers();
+              mutateOverview();
+            }}
+            className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2"
+            style={{
+              background: `${COLORS.muted}15`,
+              border: `1px solid ${COLORS.muted}`,
+              color: COLORS.muted,
+              cursor: "pointer",
+            }}
+          >
             <RefreshCw size={12} /> Atualizar
           </button>
-          <button onClick={() => setShowForm(!showForm)} className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2" style={{ background: COLORS.teal, color: "white", cursor: "pointer" }}>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="text-[12px] px-3 py-1.5 rounded font-bold flex items-center gap-2"
+            style={{
+              background: COLORS.teal,
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
             <Plus size={12} /> Novo Cliente
           </button>
         </div>
       </div>
 
-      {error && <div className="rounded-md p-3 text-sm" style={{ background: "var(--status-error-bg)", border: "1px solid var(--status-error-border)", color: COLORS.red }}>{error}</div>}
-      {success && <div className="rounded-md p-3 text-sm" style={{ background: "var(--status-ok-bg)", border: "1px solid var(--status-ok-border)", color: COLORS.green }}>{success}</div>}
+      {error && (
+        <div
+          className="rounded-md p-3 text-sm"
+          style={{
+            background: "var(--status-error-bg)",
+            border: "1px solid var(--status-error-border)",
+            color: COLORS.red,
+          }}
+        >
+          {error}
+        </div>
+      )}
+      {success && (
+        <div
+          className="rounded-md p-3 text-sm"
+          style={{
+            background: "var(--status-ok-bg)",
+            border: "1px solid var(--status-ok-border)",
+            color: COLORS.green,
+          }}
+        >
+          {success}
+        </div>
+      )}
 
       {/* Overview Cards */}
       {overview && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <OverviewCard label="Serviços OK" value={overview.services.operational} total={overview.services.total} icon={<CheckCircle2 size={14} />} color={COLORS.green} />
-          <OverviewCard label="Degradados" value={overview.services.degraded} total={overview.services.total} icon={<AlertTriangle size={14} />} color={COLORS.amber} />
-          <OverviewCard label="Incidentes Abertos" value={overview.incidents.open} total={overview.incidents.total_30d} icon={<XCircle size={14} />} color={COLORS.red} />
-          <OverviewCard label="SLA Médio" value={parseFloat(overview.sla.avg_percentage).toFixed(2) + "%"} icon={<ShieldCheck size={14} />} color={COLORS.teal} />
+          <OverviewCard
+            label="Serviços OK"
+            value={overview.services.operational}
+            total={overview.services.total}
+            icon={<CheckCircle2 size={14} />}
+            color={COLORS.green}
+          />
+          <OverviewCard
+            label="Degradados"
+            value={overview.services.degraded}
+            total={overview.services.total}
+            icon={<AlertTriangle size={14} />}
+            color={COLORS.amber}
+          />
+          <OverviewCard
+            label="Incidentes Abertos"
+            value={overview.incidents.open}
+            total={overview.incidents.total_30d}
+            icon={<XCircle size={14} />}
+            color={COLORS.red}
+          />
+          <OverviewCard
+            label="SLA Médio"
+            value={parseFloat(overview.sla.avg_percentage).toFixed(2) + "%"}
+            icon={<ShieldCheck size={14} />}
+            color={COLORS.teal}
+          />
         </div>
       )}
 
       {/* Create Form */}
       {showForm && (
-        <div className="rounded-xl p-6 space-y-4" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
-          <h3 className="text-sm font-bold" style={{ color: COLORS.teal }}>Novo Usuário do Portal</h3>
+        <div
+          className="rounded-xl p-6 space-y-4"
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
+        >
+          <h3 className="text-sm font-bold" style={{ color: COLORS.teal }}>
+            Novo Usuário do Portal
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label style={labelStyle}>Email *</label>
-              <input style={inputStyle} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="cliente@empresa.com" />
+              <input
+                style={inputStyle}
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="cliente@empresa.com"
+              />
             </div>
             <div>
               <label style={labelStyle}>Nome do Contato *</label>
-              <input style={inputStyle} value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} />
+              <input
+                style={inputStyle}
+                value={form.contact_name}
+                onChange={(e) =>
+                  setForm({ ...form, contact_name: e.target.value })
+                }
+              />
             </div>
             <div>
               <label style={labelStyle}>Empresa</label>
-              <input style={inputStyle} value={form.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+              <input
+                style={inputStyle}
+                value={form.company_name}
+                onChange={(e) =>
+                  setForm({ ...form, company_name: e.target.value })
+                }
+              />
             </div>
             <div>
               <label style={labelStyle}>Telefone</label>
-              <input style={inputStyle} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <input
+                style={inputStyle}
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
             </div>
           </div>
           <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: COLORS.text }}>
-              <input type="checkbox" checked={form.can_view_incidents} onChange={(e) => setForm({ ...form, can_view_incidents: e.target.checked })} /> Ver Incidentes
+            <label
+              className="flex items-center gap-2 text-[11px]"
+              style={{ color: COLORS.text }}
+            >
+              <input
+                type="checkbox"
+                checked={form.can_view_incidents}
+                onChange={(e) =>
+                  setForm({ ...form, can_view_incidents: e.target.checked })
+                }
+              />{" "}
+              Ver Incidentes
             </label>
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: COLORS.text }}>
-              <input type="checkbox" checked={form.can_view_sla} onChange={(e) => setForm({ ...form, can_view_sla: e.target.checked })} /> Ver SLA
+            <label
+              className="flex items-center gap-2 text-[11px]"
+              style={{ color: COLORS.text }}
+            >
+              <input
+                type="checkbox"
+                checked={form.can_view_sla}
+                onChange={(e) =>
+                  setForm({ ...form, can_view_sla: e.target.checked })
+                }
+              />{" "}
+              Ver SLA
             </label>
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: COLORS.text }}>
-              <input type="checkbox" checked={form.can_view_services} onChange={(e) => setForm({ ...form, can_view_services: e.target.checked })} /> Ver Serviços
+            <label
+              className="flex items-center gap-2 text-[11px]"
+              style={{ color: COLORS.text }}
+            >
+              <input
+                type="checkbox"
+                checked={form.can_view_services}
+                onChange={(e) =>
+                  setForm({ ...form, can_view_services: e.target.checked })
+                }
+              />{" "}
+              Ver Serviços
             </label>
-            <label className="flex items-center gap-2 text-[11px]" style={{ color: COLORS.text }}>
-              <input type="checkbox" checked={form.can_create_tickets} onChange={(e) => setForm({ ...form, can_create_tickets: e.target.checked })} /> Criar Tickets
+            <label
+              className="flex items-center gap-2 text-[11px]"
+              style={{ color: COLORS.text }}
+            >
+              <input
+                type="checkbox"
+                checked={form.can_create_tickets}
+                onChange={(e) =>
+                  setForm({ ...form, can_create_tickets: e.target.checked })
+                }
+              />{" "}
+              Criar Tickets
             </label>
           </div>
-          <button onClick={handleCreate} disabled={saving || !form.email || !form.contact_name} className="px-4 py-1.5 rounded text-[12px] font-bold flex items-center gap-2" style={{ background: COLORS.teal, color: "white", cursor: "pointer", opacity: (saving || !form.email || !form.contact_name) ? 0.5 : 1 }}>
-            {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Criar
+          <button
+            onClick={handleCreate}
+            disabled={saving || !form.email || !form.contact_name}
+            className="px-4 py-1.5 rounded text-[12px] font-bold flex items-center gap-2"
+            style={{
+              background: COLORS.teal,
+              color: "white",
+              cursor: "pointer",
+              opacity: saving || !form.email || !form.contact_name ? 0.5 : 1,
+            }}
+          >
+            {saving ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Plus size={12} />
+            )}{" "}
+            Criar
           </button>
         </div>
       )}
 
       {/* Users List */}
-      <div className="rounded-xl overflow-hidden" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
+      >
         <div className="p-4 border-b" style={{ borderColor: COLORS.border }}>
-          <h3 className="text-[10px] font-bold uppercase" style={{ color: COLORS.muted }}>Clientes do Portal ({users.length})</h3>
+          <h3
+            className="text-[10px] font-bold uppercase"
+            style={{ color: COLORS.muted }}
+          >
+            Clientes do Portal ({users.length})
+          </h3>
         </div>
         <div className="divide-y" style={{ borderColor: COLORS.border }}>
           {users.map((u) => (
             <div key={u.id} className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: `${COLORS.teal}15`, color: COLORS.teal }}>
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold"
+                  style={{ background: `${COLORS.teal}15`, color: COLORS.teal }}
+                >
                   {u.contact_name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-[12px] font-bold" style={{ color: COLORS.text }}>
+                  <p
+                    className="text-[12px] font-bold"
+                    style={{ color: COLORS.text }}
+                  >
                     {u.contact_name}
-                    {!u.is_active && <span className="ml-2 text-[10px] uppercase" style={{ color: COLORS.muted }}>(inativo)</span>}
+                    {!u.is_active && (
+                      <span
+                        className="ml-2 text-[10px] uppercase"
+                        style={{ color: COLORS.muted }}
+                      >
+                        (inativo)
+                      </span>
+                    )}
                   </p>
-                  <p className="text-[10px]" style={{ color: COLORS.muted }}>{u.email} · {u.company_name ?? "—"}</p>
+                  <p className="text-[10px]" style={{ color: COLORS.muted }}>
+                    {u.email} · {u.company_name ?? "—"}
+                  </p>
                   <div className="flex items-center gap-2 mt-1">
-                    {u.can_view_incidents && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${COLORS.blue}15`, color: COLORS.blue }}>Incidentes</span>}
-                    {u.can_view_sla && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${COLORS.teal}15`, color: COLORS.teal }}>SLA</span>}
-                    {u.can_view_services && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${COLORS.green}15`, color: COLORS.green }}>Serviços</span>}
-                    {u.can_create_tickets && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: `${COLORS.amber}15`, color: COLORS.amber }}>Tickets</span>}
+                    {u.can_view_incidents && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{
+                          background: `${COLORS.blue}15`,
+                          color: COLORS.blue,
+                        }}
+                      >
+                        Incidentes
+                      </span>
+                    )}
+                    {u.can_view_sla && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{
+                          background: `${COLORS.teal}15`,
+                          color: COLORS.teal,
+                        }}
+                      >
+                        SLA
+                      </span>
+                    )}
+                    {u.can_view_services && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{
+                          background: `${COLORS.green}15`,
+                          color: COLORS.green,
+                        }}
+                      >
+                        Serviços
+                      </span>
+                    )}
+                    {u.can_create_tickets && (
+                      <span
+                        className="text-[9px] px-1.5 py-0.5 rounded"
+                        style={{
+                          background: `${COLORS.amber}15`,
+                          color: COLORS.amber,
+                        }}
+                      >
+                        Tickets
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -260,7 +502,16 @@ export default function ClientPortalPage() {
                   </span>
                 )}
                 {u.is_active && (
-                  <button onClick={() => handleDeactivate(u.id)} className="px-2 py-1 rounded text-[10px] font-bold" style={{ background: `${COLORS.red}15`, border: `1px solid ${COLORS.red}`, color: COLORS.red, cursor: "pointer" }}>
+                  <button
+                    onClick={() => handleDeactivate(u.id)}
+                    className="px-2 py-1 rounded text-[10px] font-bold"
+                    style={{
+                      background: `${COLORS.red}15`,
+                      border: `1px solid ${COLORS.red}`,
+                      color: COLORS.red,
+                      cursor: "pointer",
+                    }}
+                  >
                     <Trash2 size={10} />
                   </button>
                 )}
@@ -269,7 +520,9 @@ export default function ClientPortalPage() {
           ))}
           {users.length === 0 && (
             <div className="p-6 text-center">
-              <p className="text-[12px]" style={{ color: COLORS.muted }}>Nenhum cliente cadastrado no portal</p>
+              <p className="text-[12px]" style={{ color: COLORS.muted }}>
+                Nenhum cliente cadastrado no portal
+              </p>
             </div>
           )}
         </div>
@@ -277,19 +530,49 @@ export default function ClientPortalPage() {
 
       {/* Recent Incidents (Client View) */}
       {overview && overview.recent_incidents.length > 0 && (
-        <div className="rounded-xl overflow-hidden" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+        <div
+          className="rounded-xl overflow-hidden"
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
+        >
           <div className="p-4 border-b" style={{ borderColor: COLORS.border }}>
-            <h3 className="text-[10px] font-bold uppercase" style={{ color: COLORS.muted }}>Incidentes Recentes (30 dias)</h3>
+            <h3
+              className="text-[10px] font-bold uppercase"
+              style={{ color: COLORS.muted }}
+            >
+              Incidentes Recentes (30 dias)
+            </h3>
           </div>
           <div className="divide-y" style={{ borderColor: COLORS.border }}>
             {overview.recent_incidents.map((inc) => (
-              <div key={inc.id} className="p-4 flex items-center justify-between">
+              <div
+                key={inc.id}
+                className="p-4 flex items-center justify-between"
+              >
                 <div className="flex items-center gap-3">
-                  <Activity size={14} style={{ color: inc.severity === "critical" ? COLORS.red : inc.severity === "warning" ? COLORS.amber : COLORS.muted }} />
+                  <Activity
+                    size={14}
+                    style={{
+                      color:
+                        inc.severity === "critical"
+                          ? COLORS.red
+                          : inc.severity === "warning"
+                            ? COLORS.amber
+                            : COLORS.muted,
+                    }}
+                  />
                   <div>
-                    <p className="text-[12px] font-bold" style={{ color: COLORS.text }}>{inc.title}</p>
+                    <p
+                      className="text-[12px] font-bold"
+                      style={{ color: COLORS.text }}
+                    >
+                      {inc.title}
+                    </p>
                     <p className="text-[10px]" style={{ color: COLORS.muted }}>
-                      {new Date(inc.started_at).toLocaleString("pt-BR")} · {inc.status}
+                      {new Date(inc.started_at).toLocaleString("pt-BR")} ·{" "}
+                      {inc.status}
                     </p>
                   </div>
                 </div>
@@ -305,15 +588,43 @@ export default function ClientPortalPage() {
   );
 }
 
-function OverviewCard({ label, value, total, icon, color }: { label: string; value: string; total?: string; icon: React.ReactNode; color: string }) {
+function OverviewCard({
+  label,
+  value,
+  total,
+  icon,
+  color,
+}: {
+  label: string;
+  value: string;
+  total?: string;
+  icon: React.ReactNode;
+  color: string;
+}) {
   return (
-    <div className="rounded-xl p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)" }}>
-      <div className="text-[10px] font-bold uppercase mb-1 flex items-center gap-1" style={{ color: "var(--text-muted)" }}>
+    <div
+      className="rounded-xl p-4"
+      style={{
+        background: "var(--surface-2)",
+        border: "1px solid var(--border-default)",
+      }}
+    >
+      <div
+        className="text-[10px] font-bold uppercase mb-1 flex items-center gap-1"
+        style={{ color: "var(--text-muted)" }}
+      >
         {icon} {label}
       </div>
       <div className="text-2xl font-bold" style={{ color }}>
         {value}
-        {total && <span className="text-sm font-normal ml-1" style={{ color: "var(--text-muted)" }}>/ {total}</span>}
+        {total && (
+          <span
+            className="text-sm font-normal ml-1"
+            style={{ color: "var(--text-muted)" }}
+          >
+            / {total}
+          </span>
+        )}
       </div>
     </div>
   );

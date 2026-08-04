@@ -54,10 +54,9 @@ export function DeviceDetailClient({
   const categoryKeys = metricCategories.map((c) => c.key).join(",");
   useEffect(() => {
     setCollapsedCategories((prev) => {
+      const keys = categoryKeys.split(",").filter(Boolean);
       const knownKeys = new Set(prev);
-      const newCollapsed = metricCategories
-        .map((c) => c.key)
-        .filter((key) => !knownKeys.has(key));
+      const newCollapsed = keys.filter((key) => !knownKeys.has(key));
       if (newCollapsed.length === 0) return prev;
       return [...prev, ...newCollapsed];
     });

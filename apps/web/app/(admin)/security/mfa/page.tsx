@@ -3,7 +3,6 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 
 const COLORS = {
@@ -31,7 +30,8 @@ interface MfaSetup {
 }
 
 export default function MfaSettingsPage() {
-  const { data: status, mutate: mutateStatus } = useApi<MfaStatus>("/api/mfa/status");
+  const { data: status, mutate: mutateStatus } =
+    useApi<MfaStatus>("/api/mfa/status");
   const [setup, setSetup] = useState<MfaSetup | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [disableCode, setDisableCode] = useState("");
@@ -78,7 +78,9 @@ export default function MfaSettingsPage() {
         setError(data.error?.message ?? "Código inválido");
         return;
       }
-      setSuccess("MFA habilitado com sucesso! Guarde seus códigos de recuperação.");
+      setSuccess(
+        "MFA habilitado com sucesso! Guarde seus códigos de recuperação.",
+      );
       setSetup(null);
       setVerifyCode("");
       mutateStatus();
@@ -117,7 +119,11 @@ export default function MfaSettingsPage() {
   return (
     <div
       className="min-h-screen p-6 space-y-6"
-      style={{ background: COLORS.bg, fontFamily: "'JetBrains Mono','Consolas',monospace", color: COLORS.text }}
+      style={{
+        background: COLORS.bg,
+        fontFamily: "'JetBrains Mono','Consolas',monospace",
+        color: COLORS.text,
+      }}
     >
       <div className="flex items-center justify-between">
         <div>
@@ -131,7 +137,11 @@ export default function MfaSettingsPage() {
         <a
           href="/dashboard"
           className="text-[12px] px-3 py-1.5 rounded border transition-colors"
-          style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted }}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+            color: COLORS.muted,
+          }}
         >
           ← Voltar
         </a>
@@ -140,7 +150,11 @@ export default function MfaSettingsPage() {
       {error && (
         <div
           className="rounded-md p-3 text-sm"
-          style={{ background: `var(--status-error-bg)`, border: `1px solid var(--status-error-border)`, color: COLORS.red }}
+          style={{
+            background: `var(--status-error-bg)`,
+            border: `1px solid var(--status-error-border)`,
+            color: COLORS.red,
+          }}
         >
           {error}
         </div>
@@ -148,7 +162,11 @@ export default function MfaSettingsPage() {
       {success && (
         <div
           className="rounded-md p-3 text-sm"
-          style={{ background: `var(--status-ok-bg)`, border: `1px solid var(--status-ok-border)`, color: COLORS.green }}
+          style={{
+            background: `var(--status-ok-bg)`,
+            border: `1px solid var(--status-ok-border)`,
+            color: COLORS.green,
+          }}
         >
           {success}
         </div>
@@ -157,26 +175,43 @@ export default function MfaSettingsPage() {
       {/* Status atual */}
       <div
         className="rounded-xl p-5"
-        style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
       >
-        <div className="text-[13px] font-bold mb-4" style={{ color: COLORS.muted }}>
+        <div
+          className="text-[13px] font-bold mb-4"
+          style={{ color: COLORS.muted }}
+        >
           STATUS ATUAL
         </div>
         <div className="flex gap-6">
           <div className="flex items-center gap-2">
             <div
               className="w-2.5 h-2.5 rounded-full"
-              style={{ background: status?.totp_enabled ? COLORS.green : COLORS.border }}
+              style={{
+                background: status?.totp_enabled ? COLORS.green : COLORS.border,
+              }}
             />
-            <span className="text-sm">TOTP {status?.totp_enabled ? "Habilitado" : "Desabilitado"}</span>
+            <span className="text-sm">
+              TOTP {status?.totp_enabled ? "Habilitado" : "Desabilitado"}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div
               className="w-2.5 h-2.5 rounded-full"
-              style={{ background: status?.webauthn_enabled ? COLORS.green : COLORS.border }}
+              style={{
+                background: status?.webauthn_enabled
+                  ? COLORS.green
+                  : COLORS.border,
+              }}
             />
             <span className="text-sm">
-              WebAuthn {status?.webauthn_enabled ? `${status.webauthn_credentials} dispositivo(s)` : "Desabilitado"}
+              WebAuthn{" "}
+              {status?.webauthn_enabled
+                ? `${status.webauthn_credentials} dispositivo(s)`
+                : "Desabilitado"}
             </span>
           </div>
         </div>
@@ -186,19 +221,30 @@ export default function MfaSettingsPage() {
       {!status?.totp_enabled && !setup && (
         <div
           className="rounded-xl p-5"
-          style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
         >
-          <div className="text-[13px] font-bold mb-2" style={{ color: COLORS.muted }}>
+          <div
+            className="text-[13px] font-bold mb-2"
+            style={{ color: COLORS.muted }}
+          >
             HABILITAR MFA TOTP
           </div>
           <p className="text-sm mb-4" style={{ color: COLORS.muted }}>
-            Use Google Authenticator, Authy ou 1Password para escanear o QR code.
+            Use Google Authenticator, Authy ou 1Password para escanear o QR
+            code.
           </p>
           <button
             onClick={handleSetup}
             disabled={loading}
             className="px-4 py-2 rounded-md text-sm font-bold transition-opacity disabled:opacity-50"
-            style={{ background: COLORS.teal, color: COLORS.bg, cursor: loading ? "not-allowed" : "pointer" }}
+            style={{
+              background: COLORS.teal,
+              color: COLORS.bg,
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
           >
             {loading ? "Iniciando..." : "Iniciar configuração"}
           </button>
@@ -209,15 +255,21 @@ export default function MfaSettingsPage() {
       {setup && (
         <div
           className="rounded-xl p-5 space-y-4"
-          style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
         >
-          <div className="text-[13px] font-bold" style={{ color: COLORS.muted }}>
+          <div
+            className="text-[13px] font-bold"
+            style={{ color: COLORS.muted }}
+          >
             ESCANEIE O QR CODE
           </div>
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-shrink-0">
               <a href={setup.qr_code_uri} className="block">
-                { }
+                {}
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setup.qr_code_uri)}`}
                   alt="QR Code TOTP"
@@ -230,18 +282,28 @@ export default function MfaSettingsPage() {
             </div>
             <div className="flex-1 space-y-3">
               <div>
-                <div className="text-[11px] font-bold uppercase mb-1" style={{ color: COLORS.muted }}>
+                <div
+                  className="text-[11px] font-bold uppercase mb-1"
+                  style={{ color: COLORS.muted }}
+                >
                   Secret manual
                 </div>
                 <code
                   className="block p-2 rounded text-[12px] break-all"
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.teal }}
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.teal,
+                  }}
                 >
                   {setup.secret}
                 </code>
               </div>
               <div>
-                <div className="text-[11px] font-bold uppercase mb-1" style={{ color: COLORS.muted }}>
+                <div
+                  className="text-[11px] font-bold uppercase mb-1"
+                  style={{ color: COLORS.muted }}
+                >
                   Códigos de recuperação
                 </div>
                 <button
@@ -254,10 +316,17 @@ export default function MfaSettingsPage() {
                 {showRecoveryCodes && (
                   <div
                     className="mt-2 p-3 rounded grid grid-cols-2 gap-1"
-                    style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+                    style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                    }}
                   >
                     {setup.recovery_codes.map((code, i) => (
-                      <code key={i} className="text-[12px]" style={{ color: COLORS.amber }}>
+                      <code
+                        key={i}
+                        className="text-[12px]"
+                        style={{ color: COLORS.amber }}
+                      >
                         {code}
                       </code>
                     ))}
@@ -268,7 +337,11 @@ export default function MfaSettingsPage() {
           </div>
 
           <div className="space-y-2 pt-3">
-            <label htmlFor="verify-setup-code" className="text-[11px] font-bold uppercase" style={{ color: COLORS.muted }}>
+            <label
+              htmlFor="verify-setup-code"
+              className="text-[11px] font-bold uppercase"
+              style={{ color: COLORS.muted }}
+            >
               Digite o código de 6 dígitos do seu autenticador
             </label>
             <div className="flex gap-3">
@@ -279,23 +352,41 @@ export default function MfaSettingsPage() {
                 pattern="\d{6}"
                 maxLength={6}
                 value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) =>
+                  setVerifyCode(e.target.value.replace(/\D/g, ""))
+                }
                 placeholder="000000"
                 className="rounded-md px-3 py-2 text-sm text-center tracking-[0.5em]"
-                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text, width: 200 }}
+                style={{
+                  background: COLORS.bg,
+                  border: `1px solid ${COLORS.border}`,
+                  color: COLORS.text,
+                  width: 200,
+                }}
               />
               <button
                 onClick={handleVerifySetup}
                 disabled={loading || verifyCode.length !== 6}
                 className="px-4 py-2 rounded-md text-sm font-bold disabled:opacity-50"
-                style={{ background: COLORS.green, color: COLORS.bg, cursor: loading ? "not-allowed" : "pointer" }}
+                style={{
+                  background: COLORS.green,
+                  color: COLORS.bg,
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
               >
                 {loading ? "Verificando..." : "Confirmar"}
               </button>
               <button
-                onClick={() => { setSetup(null); setVerifyCode(""); }}
+                onClick={() => {
+                  setSetup(null);
+                  setVerifyCode("");
+                }}
                 className="px-4 py-2 rounded-md text-sm"
-                style={{ background: COLORS.border, color: COLORS.muted, cursor: "pointer" }}
+                style={{
+                  background: COLORS.border,
+                  color: COLORS.muted,
+                  cursor: "pointer",
+                }}
               >
                 Cancelar
               </button>
@@ -308,7 +399,10 @@ export default function MfaSettingsPage() {
       {status?.totp_enabled && (
         <div
           className="rounded-xl p-5 space-y-3"
-          style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
         >
           <div className="text-[13px] font-bold" style={{ color: COLORS.red }}>
             DESABILITAR MFA
@@ -323,16 +417,27 @@ export default function MfaSettingsPage() {
               pattern="\d{6}"
               maxLength={6}
               value={disableCode}
-              onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))}
+              onChange={(e) =>
+                setDisableCode(e.target.value.replace(/\D/g, ""))
+              }
               placeholder="000000"
               className="rounded-md px-3 py-2 text-sm text-center tracking-[0.5em]"
-              style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text, width: 200 }}
+              style={{
+                background: COLORS.bg,
+                border: `1px solid ${COLORS.border}`,
+                color: COLORS.text,
+                width: 200,
+              }}
             />
             <button
               onClick={handleDisable}
               disabled={loading || disableCode.length !== 6}
               className="px-4 py-2 rounded-md text-sm font-bold disabled:opacity-50"
-              style={{ background: COLORS.red, color: "#fff", cursor: loading ? "not-allowed" : "pointer" }}
+              style={{
+                background: COLORS.red,
+                color: "#fff",
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
             >
               {loading ? "Desabilitando..." : "Desabilitar"}
             </button>
