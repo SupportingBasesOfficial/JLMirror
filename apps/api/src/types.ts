@@ -9,10 +9,19 @@ export interface AuthUser {
   tenantIds?: string[];
 }
 
+export interface TvTokenData {
+  id: string;
+  tenant_id: string;
+  is_active: boolean;
+  rotation_interval_seconds: number;
+  panels: string[];
+}
+
 declare module "hono" {
   interface ContextVariableMap {
     user: AuthUser;
     correlationId: string;
     validatedData: unknown;
+    tvToken: TvTokenData;
   }
 }

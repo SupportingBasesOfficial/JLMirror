@@ -4,24 +4,12 @@ import { Hono } from "hono";
 import { query } from "@repo/db";
 import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
+import { safeCount, safeRows } from "../lib/query-helpers.js";
 import "../types.js";
 
 export const dashboardRoute = new Hono();
 
 dashboardRoute.use("/*", requirePermission("dashboard:read"));
-
-function safeCount(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): number {
-  const row = result.data?.rows?.[0];
-  return row ? parseInt((row.count as string) ?? "0", 10) : 0;
-}
-
-function safeRows(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): Array<Record<string, unknown>> {
-  return result.data?.rows ?? [];
-}
 
 // ========== Cross-Feature Dashboard ==========
 

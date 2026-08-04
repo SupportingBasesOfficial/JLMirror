@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- Migration: corrige get_tenant_user_auth para retornar scope
 -- Causa raiz: a funcao retornava apenas (tenant_id, role) sem scope.
 -- O auth.ts lia rows[0].scope que era undefined, sempre defaulting para "tenant".

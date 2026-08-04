@@ -62,6 +62,9 @@ import type { Server } from "http";
 import { devicesRoute } from "./routes/devices.js";
 import { zabbixRoute } from "./routes/zabbix.js";
 import { docsRoute } from "./routes/docs.js";
+import { tvRoute } from "./routes/tv.js";
+import { brandingRoute } from "./routes/branding.js";
+import { billingRoute } from "./routes/billing.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { requestLogger } from "./middleware/request-logger.js";
 import { jwtAuth } from "./middleware/jwt-auth.js";
@@ -171,8 +174,17 @@ app.route("/api/v1/docs", docsRoute);
 app.use("/api/v1/auth/*", rateLimitAuth);
 app.route("/api/v1/auth", authRoute);
 
+// TV public endpoint — mounted before JWT auth (uses own token auth)
+app.route("/api/v1/tv/data", tvRoute);
+
+// Branding public endpoint — mounted before JWT auth (public, no auth needed)
+app.route("/api/v1/branding", brandingRoute);
+
+// Billing webhook — public endpoint (Asaas calls this)
+app.route("/api/v1/billing/webhook", billingRoute);
+
 // Middlewares de autenticação e isolamento de tenant — aplicados globalmente
-// Rotas publicas (health, metrics, docs, auth) sao montadas ANTES destes middlewares
+// Rotas publicas (health, metrics, docs, auth, tv/data) sao montadas ANTES destes middlewares
 // e portanto nao sao afetadas. Todas as demais rotas exigem JWT + tenant context.
 app.use("/api/v1/*", jwtAuth);
 app.use("/api/v1/*", tenantContext);
@@ -372,6 +384,10 @@ app.route("/api/v1/sla", slaRoute);
 app.use("/api/v1/apm", requireModule("module_apm"));
 app.use("/api/v1/apm/*", requireModule("module_apm"));
 app.route("/api/v1/apm", apmRoute);
+
+app.route("/api/v1/tv", tvRoute);
+
+app.route("/api/v1/billing", billingRoute);
 
 // Middleware de métricas Prometheus — registra todas as requests
 app.use("*", async (c, next) => {

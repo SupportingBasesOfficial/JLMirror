@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { z } from "zod";
 
 // ========== Auth Schemas ==========
@@ -19,6 +21,17 @@ export const changePasswordSchema = z.object({
   new_password: z.string().min(8),
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(32),
+  new_password: z.string().min(8),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 // ========== MFA Schemas ==========
 export const mfaSetupVerifySchema = z.object({
@@ -531,7 +544,7 @@ export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 // ========== Notification Schemas ==========
 export const createChannelSchema = z.object({
   name: z.string().min(1),
-  type: z.enum(["email", "slack", "teams", "webhook", "telegram"]),
+  type: z.enum(["email", "slack", "teams", "webhook", "telegram", "whatsapp"]),
   config: z.record(z.unknown()),
   channel_type: z.string().optional(),
   is_active: z.boolean().default(true),

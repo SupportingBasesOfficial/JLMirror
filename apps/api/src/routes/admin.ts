@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import argon2 from "argon2";
 import { query } from "@repo/db";
 import { z } from "zod";
-import { encryptTokenParts } from "@repo/zabbix";
+import { encryptTokenParts, BlindedZabbixClient } from "@repo/zabbix";
 import { invalidateZabbixConfigCache } from "./zabbix.js";
 import {
   createClientUserSchema,
@@ -17,6 +17,7 @@ import {
   type UpsertClientCompanyInput,
 } from "@repo/shared-validation";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { safeRows, safeCount } from "../lib/query-helpers.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
@@ -24,19 +25,6 @@ export const adminRoute = new Hono();
 
 // jwtAuth e tenantContext sao aplicados globalmente em index.ts para /api/v1/admin
 // Nao duplicar aqui — admin opera em tabelas public (globais), nao em schemas de tenant
-
-function safeRows(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): Array<Record<string, unknown>> {
-  return result.data?.rows ?? [];
-}
-
-function safeCount(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): number {
-  const row = result.data?.rows?.[0];
-  return row ? parseInt((row.count as string) ?? "0", 10) : 0;
-}
 
 const createTenantSchema = z.object({
   name: z.string().min(1).max(255),
@@ -905,5 +893,152 @@ adminRoute.get(
     );
 
     return c.json({ clients: result.data?.rows ?? [] });
+  },
+);
+
+// ========== Onboarding v2: Teste de Conexao Zabbix, Host Groups e Preview ==========
+
+const zabbixTestSchema = z.object({
+  zabbix_api_url: z.string().url(),
+  zabbix_api_token: z.string().min(1),
+});
+
+// POST /api/v1/admin/zabbix/test-connection — testa conexao com Zabbix antes de criar tenant
+adminRoute.post(
+  "/zabbix/test-connection",
+  requirePermission("admin:tenants:write"),
+  async (c) => {
+    const body = await safeJsonBody(c);
+    const parsed = zabbixTestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "URL e Token são obrigatórios",
+          },
+        },
+        400,
+      );
+    }
+
+    try {
+      const client = new BlindedZabbixClient({
+        apiUrl: parsed.data.zabbix_api_url,
+        apiToken: parsed.data.zabbix_api_token,
+        timeout: 10_000,
+      });
+
+      const version = await client.getApiVersion();
+
+      return c.json({
+        success: true,
+        api_version: version,
+        message: `Conexão bem-sucedida — Zabbix API ${version}`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      return c.json(
+        { error: { code: "ZABBIX_CONNECTION_FAILED", message } },
+        502,
+      );
+    }
+  },
+);
+
+// POST /api/v1/admin/zabbix/host-groups — lista host groups disponiveis
+adminRoute.post(
+  "/zabbix/host-groups",
+  requirePermission("admin:tenants:write"),
+  async (c) => {
+    const body = await safeJsonBody(c);
+    const parsed = zabbixTestSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "URL e Token são obrigatórios",
+          },
+        },
+        400,
+      );
+    }
+
+    try {
+      const client = new BlindedZabbixClient({
+        apiUrl: parsed.data.zabbix_api_url,
+        apiToken: parsed.data.zabbix_api_token,
+        timeout: 15_000,
+      });
+
+      const hostGroups = await client.getHostGroups();
+
+      return c.json({
+        host_groups: hostGroups.map((g) => ({
+          groupid: g.groupid,
+          name: g.name,
+        })),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      return c.json(
+        { error: { code: "ZABBIX_CONNECTION_FAILED", message } },
+        502,
+      );
+    }
+  },
+);
+
+// POST /api/v1/admin/zabbix/preview-hosts — preview de hosts em um host group
+const zabbixPreviewSchema = z.object({
+  zabbix_api_url: z.string().url(),
+  zabbix_api_token: z.string().min(1),
+  host_group_id: z.string().min(1),
+});
+
+adminRoute.post(
+  "/zabbix/preview-hosts",
+  requirePermission("admin:tenants:write"),
+  async (c) => {
+    const body = await safeJsonBody(c);
+    const parsed = zabbixPreviewSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "URL, Token e Host Group ID são obrigatórios",
+          },
+        },
+        400,
+      );
+    }
+
+    try {
+      const client = new BlindedZabbixClient({
+        apiUrl: parsed.data.zabbix_api_url,
+        apiToken: parsed.data.zabbix_api_token,
+        timeout: 15_000,
+      });
+
+      const hosts = await client.getDevices(parsed.data.host_group_id);
+
+      return c.json({
+        host_count: hosts.length,
+        hosts: hosts.map((h) => ({
+          hostid: h.hostid,
+          host: h.host,
+          name: h.name,
+          status: h.status,
+        })),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro desconhecido";
+      return c.json(
+        { error: { code: "ZABBIX_CONNECTION_FAILED", message } },
+        502,
+      );
+    }
   },
 );

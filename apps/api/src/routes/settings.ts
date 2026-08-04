@@ -11,6 +11,8 @@ import {
 } from "@repo/shared-validation";
 import { requirePermission } from "../middleware/require-permission.js";
 import { clearModuleFlagCache } from "../middleware/require-module.js";
+import { buildDynamicUpdate } from "../lib/dynamic-update.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const settingsRoute = new Hono();
@@ -77,10 +79,6 @@ settingsRoute.put("/", requirePermission("settings:write"), async (c) => {
     ]);
   }
 
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIdx = 1;
-
   const fieldMap: Record<string, string> = {
     company_name: "company_name",
     logo_url: "logo_url",
@@ -126,12 +124,14 @@ settingsRoute.put("/", requirePermission("settings:write"), async (c) => {
     require_mfa: "require_mfa",
   };
 
-  for (const [key, dbField] of Object.entries(fieldMap)) {
-    if (data[key as keyof typeof data] !== undefined) {
-      updateFields.push(`${dbField} = $${paramIdx++}`);
-      params.push(data[key as keyof typeof data]);
-    }
-  }
+  const { setClause, params } = buildDynamicUpdate(
+    data as Record<string, unknown>,
+    fieldMap,
+    { skipValues: ["***"] },
+  );
+
+  const updateFields = setClause ? [setClause] : [];
+  let paramIdx = params.length + 1;
 
   // Campos sensíveis: só atualiza se não for "***"
   if (
@@ -163,10 +163,12 @@ settingsRoute.put("/", requirePermission("settings:write"), async (c) => {
     );
   }
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'settings.update', 'tenant_settings', NULL, $2, NULL, NULL)",
-    [user.sub, JSON.stringify({ fields: Object.keys(data) })],
-  );
+  await writeAuditLog({
+    userId: user.sub,
+    action: "settings.update",
+    entityType: "tenant_settings",
+    newData: { fields: Object.keys(data) },
+  });
 
   return c.json({ updated: true });
 });

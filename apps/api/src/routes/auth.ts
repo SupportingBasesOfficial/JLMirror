@@ -4,7 +4,6 @@ import { Hono } from "hono";
 import argon2 from "argon2";
 import crypto from "node:crypto";
 import { query } from "@repo/db";
-import { logger } from "@repo/logger";
 import {
   verifyToken,
   generateAndStoreTokens,
@@ -16,10 +15,28 @@ import {
   loginInputSchema,
   refreshTokenSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
   type LoginInput,
   type RefreshTokenInput,
   type ChangePasswordInput,
+  type ForgotPasswordInput,
+  type ResetPasswordInput,
 } from "@repo/shared-validation";
+import {
+  requestPasswordReset,
+  consumeResetToken,
+} from "../lib/password-reset.js";
+import {
+  createSession,
+  revokeAllSessions,
+  revokeSession,
+} from "../lib/session.js";
+import {
+  findOrCreateExternalUser,
+  getUserTenantAuth,
+} from "../lib/external-auth.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { jwtAuth } from "../middleware/jwt-auth.js";
 import "../types.js";
 
@@ -154,7 +171,7 @@ authRoute.post("/login", async (c) => {
       tenant_ids: tenantIds,
     });
 
-  // Cria sessão em public.sessions com device fingerprint
+  // Cria sessao, dispositivo confiavel e atualiza last_login_at
   const clientFingerprint = body.device_fingerprint as string | undefined;
   const clientIp =
     c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -162,45 +179,14 @@ authRoute.post("/login", async (c) => {
     null;
   const clientUserAgent = c.req.header("user-agent") || null;
 
-  const sessionResult = await query(
-    `INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at, device_fingerprint, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5::inet, $6)`,
-    [
-      user.id,
-      refreshTokenHash,
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      clientFingerprint ?? null,
-      clientIp,
-      clientUserAgent,
-    ],
-  );
-
-  if (sessionResult.error) {
-    logger.error("Erro ao criar sessao", {
-      error: sessionResult.error.message,
-    });
-  }
-
-  // Registra ou atualiza dispositivo confiável
-  if (clientFingerprint) {
-    await query(
-      `INSERT INTO public.trusted_devices (user_id, device_fingerprint, device_label, ip_address, user_agent, last_seen_at)
-       VALUES ($1, $2, $3, $4::inet, $5, now())
-       ON CONFLICT (user_id, device_fingerprint) DO UPDATE SET last_seen_at = now(), ip_address = $4::inet, user_agent = $5`,
-      [
-        user.id,
-        clientFingerprint,
-        body.device_label ?? null,
-        clientIp,
-        clientUserAgent,
-      ],
-    );
-  }
-
-  // Atualiza last_login_at
-  await query("UPDATE public.users SET last_login_at = now() WHERE id = $1", [
-    user.id,
-  ]);
+  await createSession({
+    userId: user.id,
+    refreshTokenHash,
+    deviceFingerprint: clientFingerprint ?? null,
+    deviceLabel: body.device_label ?? null,
+    ipAddress: clientIp,
+    userAgent: clientUserAgent,
+  });
 
   return c.json({
     access_token: accessToken,
@@ -408,15 +394,14 @@ authRoute.delete("/sessions/:sessionId", jwtAuth, async (c) => {
 
   const sessionId = c.req.param("sessionId");
 
-  await query("DELETE FROM public.sessions WHERE id = $1 AND user_id = $2", [
-    sessionId,
-    user.sub,
-  ]);
+  await revokeSession(user.sub, sessionId);
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'auth.session.revoke', 'sessions', $2, NULL, NULL, NULL)",
-    [user.sub, sessionId],
-  );
+  await writeAuditLog({
+    userId: user.sub,
+    action: "auth.session.revoke",
+    entityType: "sessions",
+    entityId: sessionId,
+  });
 
   return c.json({ revoked: true });
 });
@@ -432,12 +417,13 @@ authRoute.delete("/sessions", jwtAuth, async (c) => {
   }
 
   // Remove todas as sessões do usuário (força re-login em todos os dispositivos)
-  await query("DELETE FROM public.sessions WHERE user_id = $1", [user.sub]);
+  await revokeAllSessions(user.sub);
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'auth.session.revoke_all', 'sessions', NULL, NULL, NULL, NULL)",
-    [user.sub],
-  );
+  await writeAuditLog({
+    userId: user.sub,
+    action: "auth.session.revoke_all",
+    entityType: "sessions",
+  });
 
   return c.json({ revoked_all: true });
 });
@@ -494,10 +480,12 @@ authRoute.delete("/devices/:deviceId", jwtAuth, async (c) => {
     [deviceId, user.sub],
   );
 
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'auth.device.revoke', 'trusted_devices', $2, NULL, NULL, NULL)",
-    [user.sub, deviceId],
-  );
+  await writeAuditLog({
+    userId: user.sub,
+    action: "auth.device.revoke",
+    entityType: "trusted_devices",
+    entityId: deviceId,
+  });
 
   return c.json({ removed: true });
 });
@@ -563,15 +551,83 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
   );
 
   // Revoga todas as sessões existentes para forçar re-login com nova senha
-  await query("DELETE FROM public.sessions WHERE user_id = $1", [user.sub]);
+  await revokeAllSessions(user.sub);
 
   // Log de auditoria
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'auth.change_password', 'users', $2, NULL, NULL, NULL)",
-    [user.sub, user.sub],
-  );
+  await writeAuditLog({
+    userId: user.sub,
+    action: "auth.change_password",
+    entityType: "users",
+    entityId: user.sub,
+  });
 
   return c.json({ changed: true });
+});
+
+// POST /api/v1/auth/forgot-password — solicita reset de senha por email
+// Resposta sempre generica (anti user-enumeration). Rate limit ja aplicado em /auth/*.
+authRoute.post("/forgot-password", async (c) => {
+  const body = await c.req.json<ForgotPasswordInput>();
+  const parsed = forgotPasswordSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Email inválido" } },
+      400,
+    );
+  }
+
+  const requestIp =
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+
+  // Processamento assincrono nao-bloqueante seria ideal, mas await mantem
+  // timing constante independente do email existir ou nao
+  await requestPasswordReset(parsed.data.email, requestIp);
+
+  return c.json({
+    sent: true,
+    message:
+      "Se o email estiver cadastrado, você receberá um link de recuperação em instantes",
+  });
+});
+
+// POST /api/v1/auth/reset-password — redefine senha com token valido
+authRoute.post("/reset-password", async (c) => {
+  const body = await c.req.json<ResetPasswordInput>();
+  const parsed = resetPasswordSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json(
+      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+      400,
+    );
+  }
+
+  const { token, new_password } = parsed.data;
+
+  const newHash = await argon2.hash(new_password);
+  const result = await consumeResetToken(token, newHash);
+
+  if (!result.success) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_TOKEN",
+          message:
+            "Link de recuperação inválido ou expirado — solicite um novo",
+        },
+      },
+      400,
+    );
+  }
+
+  // Log de auditoria
+  await writeAuditLog({
+    userId: result.userId!,
+    action: "auth.reset_password",
+    entityType: "users",
+    entityId: result.userId,
+  });
+
+  return c.json({ reset: true });
 });
 
 // ========== OAuth Google ==========
@@ -642,44 +698,20 @@ authRoute.post("/oauth/callback", async (c) => {
     const tokenResult = await provider.exchangeCode(body.code);
     const userInfo = await provider.getUserInfo(tokenResult.access_token);
 
-    // Busca ou cria usuário por email
-    const existingUser = await query<{
-      id: string;
-      email: string;
-      full_name: string | null;
-      is_active: boolean;
-    }>(
-      "SELECT id, email, full_name, is_active FROM public.users WHERE email = $1",
-      [userInfo.email],
+    const resolved = await findOrCreateExternalUser(
+      { email: userInfo.email, name: userInfo.name },
+      "oauth-no-password",
     );
 
-    let userId: string;
-
-    if (existingUser.data?.rows[0]) {
-      if (!existingUser.data.rows[0].is_active) {
-        return c.json(
-          { error: { code: "USER_INACTIVE", message: "Usuário inativo" } },
-          403,
-        );
-      }
-      userId = existingUser.data.rows[0].id;
-    } else {
-      // Cria usuário sem senha (auth externo)
-      const newUser = await query<{ id: string }>(
-        "INSERT INTO public.users (email, password_hash, full_name, is_active) VALUES ($1, $2, $3, true) RETURNING id",
-        [userInfo.email, "oauth-no-password", userInfo.name],
+    if ("error" in resolved) {
+      return c.json(
+        { error: { code: "USER_INACTIVE", message: "Usuário inativo" } },
+        403,
       );
-      userId = newUser.data?.rows[0]?.id as string;
     }
 
-    // Busca tenants
-    const tenantsResult = await query<{
-      tenant_id: string;
-      role: string;
-      scope: string;
-    }>("SELECT * FROM public.get_tenant_user_auth($1)", [userId]);
-
-    if (!tenantsResult.data?.rows.length) {
+    const tenantAuth = await getUserTenantAuth(resolved.id);
+    if (!tenantAuth) {
       return c.json(
         {
           error: {
@@ -691,44 +723,31 @@ authRoute.post("/oauth/callback", async (c) => {
       );
     }
 
-    const roles = tenantsResult.data.rows.map((r) => r.role);
-    const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
-    const userScope = tenantsResult.data.rows[0].scope as "global" | "tenant";
-    const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
-
     const { accessToken, refreshToken, refreshTokenHash } =
       await generateAndStoreTokens({
-        sub: userId,
-        tenant_id: primaryTenantId,
-        roles,
-        scope: userScope,
-        tenant_ids: tenantIds,
+        sub: resolved.id,
+        tenant_id: tenantAuth.primaryTenantId,
+        roles: tenantAuth.roles,
+        scope: tenantAuth.scope,
+        tenant_ids: tenantAuth.tenantIds,
       });
 
-    await query(
-      "INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3)",
-      [
-        userId,
-        refreshTokenHash,
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      ],
-    );
+    await createSession({
+      userId: resolved.id,
+      refreshTokenHash,
+    });
 
     return c.json({
       access_token: accessToken,
       refresh_token: refreshToken,
       user: {
-        id: userId,
+        id: resolved.id,
         email: userInfo.email,
         full_name: userInfo.name,
         is_active: true,
       },
-      scope: userScope,
-      tenants: tenantsResult.data.rows.map((r) => ({
-        tenant_id: r.tenant_id,
-        role: r.role,
-        scope: r.scope,
-      })),
+      scope: tenantAuth.scope,
+      tenants: tenantAuth.tenants,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
@@ -781,42 +800,20 @@ authRoute.post("/ldap/bind", async (c) => {
       );
     }
 
-    // Busca ou cria usuário por email
-    const existingUser = await query<{
-      id: string;
-      email: string;
-      full_name: string | null;
-      is_active: boolean;
-    }>(
-      "SELECT id, email, full_name, is_active FROM public.users WHERE email = $1",
-      [ldapUser.email],
+    const resolved = await findOrCreateExternalUser(
+      { email: ldapUser.email, name: ldapUser.name },
+      "ldap-no-password",
     );
 
-    let userId: string;
-
-    if (existingUser.data?.rows[0]) {
-      if (!existingUser.data.rows[0].is_active) {
-        return c.json(
-          { error: { code: "USER_INACTIVE", message: "Usuário inativo" } },
-          403,
-        );
-      }
-      userId = existingUser.data.rows[0].id;
-    } else {
-      const newUser = await query<{ id: string }>(
-        "INSERT INTO public.users (email, password_hash, full_name, is_active) VALUES ($1, $2, $3, true) RETURNING id",
-        [ldapUser.email, "ldap-no-password", ldapUser.name],
+    if ("error" in resolved) {
+      return c.json(
+        { error: { code: "USER_INACTIVE", message: "Usuário inativo" } },
+        403,
       );
-      userId = newUser.data?.rows[0]?.id as string;
     }
 
-    const tenantsResult = await query<{
-      tenant_id: string;
-      role: string;
-      scope: string;
-    }>("SELECT * FROM public.get_tenant_user_auth($1)", [userId]);
-
-    if (!tenantsResult.data?.rows.length) {
+    const tenantAuth = await getUserTenantAuth(resolved.id);
+    if (!tenantAuth) {
       return c.json(
         {
           error: {
@@ -828,44 +825,31 @@ authRoute.post("/ldap/bind", async (c) => {
       );
     }
 
-    const roles = tenantsResult.data.rows.map((r) => r.role);
-    const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
-    const userScope = tenantsResult.data.rows[0].scope as "global" | "tenant";
-    const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
-
     const { accessToken, refreshToken, refreshTokenHash } =
       await generateAndStoreTokens({
-        sub: userId,
-        tenant_id: primaryTenantId,
-        roles,
-        scope: userScope,
-        tenant_ids: tenantIds,
+        sub: resolved.id,
+        tenant_id: tenantAuth.primaryTenantId,
+        roles: tenantAuth.roles,
+        scope: tenantAuth.scope,
+        tenant_ids: tenantAuth.tenantIds,
       });
 
-    await query(
-      "INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at) VALUES ($1, $2, $3)",
-      [
-        userId,
-        refreshTokenHash,
-        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      ],
-    );
+    await createSession({
+      userId: resolved.id,
+      refreshTokenHash,
+    });
 
     return c.json({
       access_token: accessToken,
       refresh_token: refreshToken,
       user: {
-        id: userId,
+        id: resolved.id,
         email: ldapUser.email,
         full_name: ldapUser.name,
         is_active: true,
       },
-      scope: userScope,
-      tenants: tenantsResult.data.rows.map((r) => ({
-        tenant_id: r.tenant_id,
-        role: r.role,
-        scope: r.scope,
-      })),
+      scope: tenantAuth.scope,
+      tenants: tenantAuth.tenants,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";

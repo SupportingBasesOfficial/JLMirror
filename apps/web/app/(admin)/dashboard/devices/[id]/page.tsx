@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 import { cookies } from "next/headers";
 import { serverApiGetWithToken } from "@/lib/api-client";
 import { DeviceDetailClient } from "@/components/device-detail-client";
@@ -37,9 +39,21 @@ export default async function DeviceDetailPage({
   }
 
   const [hostResult, itemsResult, triggersResult] = await Promise.all([
-    serverApiGetWithToken<ZabbixHostResponse>(`/api/v1/zabbix/devices/${hostId}`, accessToken, refreshToken),
-    serverApiGetWithToken<ZabbixItemsResponse>(`/api/v1/zabbix/devices/${hostId}/items`, accessToken, refreshToken),
-    serverApiGetWithToken<ZabbixTriggersResponse>(`/api/v1/zabbix/triggers?host_id=${hostId}`, accessToken, refreshToken),
+    serverApiGetWithToken<ZabbixHostResponse>(
+      `/api/v1/zabbix/devices/${hostId}`,
+      accessToken,
+      refreshToken,
+    ),
+    serverApiGetWithToken<ZabbixItemsResponse>(
+      `/api/v1/zabbix/devices/${hostId}/items`,
+      accessToken,
+      refreshToken,
+    ),
+    serverApiGetWithToken<ZabbixTriggersResponse>(
+      `/api/v1/zabbix/triggers?host_id=${hostId}`,
+      accessToken,
+      refreshToken,
+    ),
   ]);
 
   if (hostResult.error || itemsResult.error) {

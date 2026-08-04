@@ -13,22 +13,10 @@ import {
   type ApproveChangeInput,
 } from "@repo/shared-validation";
 import { requirePermission } from "../middleware/require-permission.js";
+import { safeRows, safeCount } from "../lib/query-helpers.js";
 import "../types.js";
 
 export const changesRoute = new Hono();
-
-function safeRows(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): Array<Record<string, unknown>> {
-  return result.data?.rows ?? [];
-}
-
-function safeCount(result: {
-  data?: { rows?: Array<Record<string, unknown>> } | null;
-}): number {
-  const row = result.data?.rows?.[0];
-  return row ? parseInt((row.count as string) ?? "0", 10) : 0;
-}
 
 // ========== List Changes ==========
 

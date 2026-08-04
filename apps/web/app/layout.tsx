@@ -5,14 +5,15 @@ import { Toaster } from "@repo/ui";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { WebVitalsReporter } from "./web-vitals";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 
 export const metadata = {
   title: {
     default: "JLMIRROR",
     template: "%s — JLMIRROR",
   },
-  description:
-    "JLMIRROR — Portal de Monitoramento Multi-tenant",
+  description: "JLMIRROR — Portal de Monitoramento Multi-tenant",
   applicationName: "JLMIRROR",
   authors: [{ name: "JL Informatica" }],
   icons: {
@@ -65,6 +66,8 @@ export default function RootLayout({
           {children}
           <Toaster />
           <WebVitalsReporter />
+          <PwaInstallPrompt />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

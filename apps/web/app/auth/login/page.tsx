@@ -14,9 +14,11 @@ import {
   generateDeviceFingerprint,
   getDeviceLabel,
 } from "@/lib/device-fingerprint";
+import { useTenantBranding } from "@/lib/use-tenant-branding";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { branding } = useTenantBranding();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
@@ -122,7 +124,7 @@ export default function LoginPage() {
     position: "absolute",
     inset: 0,
     pointerEvents: "none",
-    backgroundImage: `linear-gradient(rgba(27,168,152,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(27,168,152,0.04) 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(${branding.primary_color}0A 1px, transparent 1px), linear-gradient(90deg, ${branding.primary_color}0A 1px, transparent 1px)`,
     backgroundSize: "40px 40px",
   };
 
@@ -133,8 +135,7 @@ export default function LoginPage() {
     top: "50%",
     left: "50%",
     transform: "translate(-50%, -50%)",
-    background:
-      "radial-gradient(circle, rgba(27,168,152,0.08) 0%, transparent 70%)",
+    background: `radial-gradient(circle, ${branding.primary_color}14 0%, transparent 70%)`,
     pointerEvents: "none",
   };
 
@@ -164,8 +165,8 @@ export default function LoginPage() {
   };
 
   function handleInputFocus(e: React.FocusEvent<HTMLInputElement>) {
-    e.target.style.borderColor = "#1BA898";
-    e.target.style.boxShadow = "0 0 0 3px rgba(27,168,152,0.1)";
+    e.target.style.borderColor = branding.primary_color;
+    e.target.style.boxShadow = `0 0 0 3px ${branding.primary_color}1A`;
   }
 
   function handleInputBlur(e: React.FocusEvent<HTMLInputElement>) {
@@ -190,13 +191,12 @@ export default function LoginPage() {
           <div
             className="absolute top-0 left-0 right-0 h-px"
             style={{
-              background:
-                "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
+              background: `linear-gradient(90deg, transparent 0%, ${branding.primary_color}44 50%, transparent 100%)`,
             }}
           />
 
           <SpotlightCard
-            spotlightColor="rgba(27, 168, 152, 0.10)"
+            spotlightColor={`${branding.primary_color}1A`}
             spotlightSize={300}
             className="w-full max-w-sm mx-4 rounded-xl p-8 relative"
             style={cardStyle}
@@ -207,24 +207,23 @@ export default function LoginPage() {
                 <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
                   <path
                     d="M8 22V10M8 10L14 16M8 10L2 16"
-                    stroke="#1BA898"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    transform="translate(4 0)"
+                    stroke={branding.primary_color}
                   />
                   <path
                     d="M20 10V22M20 22L26 16M20 22L14 16"
-                    stroke="#35D0C4"
+                    stroke={branding.secondary_color}
                     strokeWidth="2.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     transform="translate(-2 0)"
                   />
-                  <circle cx="16" cy="16" r="2" fill="#1BA898" />
+                  <circle cx="16" cy="16" r="2" fill={branding.primary_color} />
                 </svg>
               </div>
-              <h1 className="text-xl font-bold" style={{ color: "#1BA898" }}>
+              <h1
+                className="text-xl font-bold"
+                style={{ color: branding.primary_color }}
+              >
                 Verificação MFA
               </h1>
               <p className="mt-1 text-[11px]" style={{ color: "#6E7F88" }}>
@@ -276,11 +275,10 @@ export default function LoginPage() {
                 strength={0.2}
                 className="w-full rounded-md py-2.5 text-sm font-bold transition-opacity disabled:opacity-50"
                 style={{
-                  background:
-                    "linear-gradient(135deg, #1BA898 0%, #35D0C4 100%)",
+                  background: `linear-gradient(135deg, ${branding.primary_color} 0%, ${branding.secondary_color} 100%)`,
                   color: "#0B1015",
                   cursor: loading ? "not-allowed" : "pointer",
-                  boxShadow: "0 0 20px rgba(27,168,152,0.25)",
+                  boxShadow: `0 0 20px ${branding.primary_color}40`,
                 }}
               >
                 {loading ? "Verificando..." : "Verificar"}
@@ -324,8 +322,7 @@ export default function LoginPage() {
         <div
           className="absolute top-0 left-0 right-0 h-px"
           style={{
-            background:
-              "linear-gradient(90deg, transparent 0%, #1BA89844 50%, transparent 100%)",
+            background: `linear-gradient(90deg, transparent 0%, ${branding.primary_color}44 50%, transparent 100%)`,
           }}
         />
 
@@ -364,7 +361,7 @@ export default function LoginPage() {
         </div>
 
         <SpotlightCard
-          spotlightColor="rgba(27, 168, 152, 0.10)"
+          spotlightColor={`${branding.primary_color}1A`}
           spotlightSize={320}
           className="w-full max-w-sm mx-4 rounded-xl p-8 relative"
           style={cardStyle}
@@ -375,7 +372,7 @@ export default function LoginPage() {
               <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
                 <path
                   d="M8 22V10M8 10L14 16M8 10L2 16"
-                  stroke="#1BA898"
+                  stroke={branding.primary_color}
                   strokeWidth="2.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -383,19 +380,19 @@ export default function LoginPage() {
                 />
                 <path
                   d="M20 10V22M20 22L26 16M20 22L14 16"
-                  stroke="#35D0C4"
+                  stroke={branding.secondary_color}
                   strokeWidth="2.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   transform="translate(-2 0)"
                 />
-                <circle cx="16" cy="16" r="2" fill="#1BA898" />
+                <circle cx="16" cy="16" r="2" fill={branding.primary_color} />
               </svg>
             </div>
             <h1
               className="text-2xl font-bold"
               style={{
-                background: "linear-gradient(135deg, #C9D4DA 0%, #1BA898 100%)",
+                background: `linear-gradient(135deg, #C9D4DA 0%, ${branding.primary_color} 100%)`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -471,15 +468,60 @@ export default function LoginPage() {
               strength={0.2}
               className="w-full rounded-md py-2.5 text-sm font-bold transition-opacity disabled:opacity-50"
               style={{
-                background: "linear-gradient(135deg, #1BA898 0%, #35D0C4 100%)",
+                background: `linear-gradient(135deg, ${branding.primary_color} 0%, ${branding.secondary_color} 100%)`,
                 color: "#0B1015",
                 cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: "0 0 20px rgba(27,168,152,0.25)",
+                boxShadow: `0 0 20px ${branding.primary_color}40`,
               }}
             >
               {loading ? "Entrando..." : "Entrar"}
             </MagneticButton>
           </form>
+
+          {/* Divider */}
+          <div className="mt-5 flex items-center gap-3">
+            <div className="flex-1 h-px" style={{ background: "#1E2530" }} />
+            <span
+              className="text-[10px] uppercase tracking-widest"
+              style={{ color: "#6E7F88" }}
+            >
+              ou
+            </span>
+            <div className="flex-1 h-px" style={{ background: "#1E2530" }} />
+          </div>
+
+          {/* Google OAuth */}
+          <a
+            href="/api/auth/oauth/google?return_url=/dashboard"
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-md py-2.5 text-sm font-bold transition-opacity hover:opacity-80"
+            style={{
+              background: "#10171C",
+              border: "1px solid #1E2530",
+              color: "#C9D4DA",
+              cursor: "pointer",
+              textDecoration: "none",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Entrar com Google
+          </a>
 
           {/* Footer do card */}
           <div
@@ -491,7 +533,7 @@ export default function LoginPage() {
               style={{
                 width: 5,
                 height: 5,
-                background: "#1BA898",
+                background: branding.primary_color,
                 animation: "pulse 2s infinite",
               }}
             />

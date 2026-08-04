@@ -1,3 +1,5 @@
+// @ai-context: .zero-error/architecture-map.md#state-store
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Logger leve com níveis estruturados — JSON em produção, colorido em dev
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -8,14 +10,17 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-const currentLevel: LogLevel =
-  (process.env.LOG_LEVEL as LogLevel) ?? "info";
+const currentLevel: LogLevel = (process.env.LOG_LEVEL as LogLevel) ?? "info";
 
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_PRIORITY[level] >= LEVEL_PRIORITY[currentLevel];
 }
 
-function formatMessage(level: LogLevel, msg: string, meta?: Record<string, unknown>): string {
+function formatMessage(
+  level: LogLevel,
+  msg: string,
+  meta?: Record<string, unknown>,
+): string {
   const timestamp = new Date().toISOString();
   if (process.env.NODE_ENV === "production") {
     return JSON.stringify({ timestamp, level, message: msg, ...meta });
@@ -31,6 +36,7 @@ function formatMessage(level: LogLevel, msg: string, meta?: Record<string, unkno
   return `${colors[level]}[${timestamp}] ${level.toUpperCase()}${reset} ${msg}${metaStr}`;
 }
 
+/* eslint-disable no-console */
 export const logger = {
   debug(msg: string, meta?: Record<string, unknown>) {
     if (shouldLog("debug")) console.debug(formatMessage("debug", msg, meta));

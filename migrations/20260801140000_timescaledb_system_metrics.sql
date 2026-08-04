@@ -1,3 +1,5 @@
+-- @ai-context: .zero-error/architecture-map.md#state-store
+-- @ai-restriction: .zero-error/code-standards.md#error-handling
 -- TimescaleDB — hypertable para metricas internas do JLMIRROR
 -- Permite ingestao de alta frequencia com auto-particionamento e compressao automatica
 -- Se TimescaleDB nao estiver disponivel, a table funciona como table normal

@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "JLMIRROR — Portal de Monitoramento",
   "short_name": "JLMIRROR",
   "description": "Portal de Monitoramento Multi-tenant",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0a0a0a",
@@ -21,19 +23,25 @@
     {
       "name": "Dashboard",
       "short_name": "Dashboard",
-      "url": "/dashboard",
+      "url": "/dashboard?source=pwa",
       "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     },
     {
       "name": "Alertas",
       "short_name": "Alertas",
-      "url": "/alerts",
+      "url": "/alerts?source=pwa",
       "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     },
     {
       "name": "Workflows",
       "short_name": "Workflows",
-      "url": "/workflows",
+      "url": "/workflows?source=pwa",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Modo TV",
+      "short_name": "TV",
+      "url": "/tv?source=pwa",
       "icons": [{ "src": "/icon.svg", "sizes": "any" }]
     }
   ]

@@ -16,7 +16,10 @@ interface UseWebSocketOptions {
 }
 
 // Hook para conectar ao WebSocket da API e receber notificacoes em tempo real
-export function useWebSocket(token: string | null, options: UseWebSocketOptions = {}) {
+export function useWebSocket(
+  token: string | null,
+  options: UseWebSocketOptions = {},
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
@@ -28,7 +31,10 @@ export function useWebSocket(token: string | null, options: UseWebSocketOptions 
     if (!token) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:${process.env.NEXT_PUBLIC_API_PORT ?? "3001"}/ws?token=${token}`;
+    const wsBaseUrl =
+      process.env.NEXT_PUBLIC_WS_URL ??
+      `ws://${window.location.hostname}:3001/ws`;
+    const wsUrl = `${wsBaseUrl}${wsBaseUrl.includes("?") ? "&" : "?"}token=${token}`;
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
