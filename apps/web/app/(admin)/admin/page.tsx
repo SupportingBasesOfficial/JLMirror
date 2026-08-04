@@ -13,6 +13,7 @@ import {
   KeyRound,
   UserPlus,
   UserCog,
+  Trash2,
 } from "lucide-react";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
@@ -282,6 +283,30 @@ export default function AdminPage() {
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data?.error?.message ?? "Erro ao executar ação");
+      }
+    } catch {
+      setError("Erro de conexão");
+    }
+  }
+
+  async function handleDelete(t: Tenant) {
+    const confirmed = window.confirm(
+      `Excluir tenant "${t.name}"?\n\nEsta ação é IRREVERSÍVEL e irá:\n• Remover todos os usuários associados\n• Deletar o schema do banco\n• Apagar todas as configurações de Zabbix\n\nDeseja continuar?`,
+    );
+    if (!confirmed) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/tenants/${t.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setSuccess(`Tenant "${t.name}" excluído com sucesso`);
+        mutateTenants();
+        mutateStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data?.error?.message ?? "Erro ao excluir tenant");
       }
     } catch {
       setError("Erro de conexão");
@@ -651,6 +676,19 @@ export default function AdminPage() {
                     Ativar
                   </button>
                 )}
+                <button
+                  onClick={() => handleDelete(t)}
+                  className="px-2 py-1 rounded text-[10px] font-bold"
+                  style={{
+                    background: `color-mix(in srgb, var(--status-error-text) 8%, transparent)`,
+                    border: `1px solid var(--status-error-border)`,
+                    color: COLORS.red,
+                    cursor: "pointer",
+                  }}
+                  title="Excluir tenant permanentemente"
+                >
+                  <Trash2 size={10} className="inline" /> Excluir
+                </button>
               </div>
             </div>
           ))}

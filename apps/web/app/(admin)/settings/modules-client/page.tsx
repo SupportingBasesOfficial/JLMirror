@@ -3,7 +3,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ArrowLeft, RefreshCw, Puzzle, Check, X, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  RefreshCw,
+  Puzzle,
+  Check,
+  Loader2,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import Link from "next/link";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
@@ -35,34 +43,17 @@ interface ModulesResponse {
   modules: ModuleFlag[];
 }
 
-// Categorias para agrupar os modulos na UI
+// Categorias para agrupar os módulos na UI do cliente
 const CATEGORIES: { title: string; prefixes: string[] }[] = [
-  {
-    title: "Núcleo",
-    prefixes: [
-      "module_auth",
-      "module_dashboard",
-      "module_zabbix",
-      "module_rbac",
-      "module_mfa",
-      "module_settings",
-      "module_profile",
-      "module_feature_flags",
-    ],
-  },
   {
     title: "Monitoramento & Infraestrutura",
     prefixes: [
-      "module_devices",
-      "module_monitoring",
       "module_system_health",
       "module_capacity",
       "module_assets",
       "module_backup",
-      "module_k8s",
       "module_ssl",
-      "module_firewall",
-      "module_patches",
+      "module_discovery",
     ],
   },
   {
@@ -72,8 +63,6 @@ const CATEGORIES: { title: string; prefixes: string[] }[] = [
       "module_changes",
       "module_kb",
       "module_tasks",
-      "module_scripts",
-      "module_executions",
       "module_workflows",
       "module_notifications",
       "module_push",
@@ -82,14 +71,7 @@ const CATEGORIES: { title: string; prefixes: string[] }[] = [
   },
   {
     title: "Segurança & Compliance",
-    prefixes: [
-      "module_compliance",
-      "module_lgpd",
-      "module_audit",
-      "module_security_audit",
-      "module_escalation",
-      "module_correlation",
-    ],
+    prefixes: ["module_compliance", "module_correlation", "module_drift"],
   },
   {
     title: "Inteligência & Analytics",
@@ -110,13 +92,9 @@ const CATEGORIES: { title: string; prefixes: string[] }[] = [
       "module_api_keys",
       "module_webhooks",
       "module_itsm",
-      "module_discovery",
-      "module_drift",
       "module_marketplace",
       "module_data_transfer",
-      "module_client_portal",
       "module_status_page",
-      "module_admin",
       "module_sla",
     ],
   },
@@ -129,36 +107,36 @@ function getCategory(key: string): string {
   return "Outros";
 }
 
-export default function ModulesPage() {
+export default function ClientModulesPage() {
   const { data, isLoading, progress, mutate } = useApi<ModulesResponse>(
     "/api/v1/settings/modules",
   );
   const [toggling, setToggling] = useState<string | null>(null);
-  const [visibilityToggling, setVisibilityToggling] = useState<string | null>(
-    null,
-  );
   const [error, setError] = useState<string | null>(null);
 
+  // Cliente só vê módulos onde client_visible = true
+  const clientModules = useMemo(() => {
+    return (data?.modules ?? []).filter((m) => m.client_visible);
+  }, [data]);
+
   const groupedModules = useMemo(() => {
-    const modules = data?.modules ?? [];
     const groups: Record<string, ModuleFlag[]> = {};
-    for (const mod of modules) {
+    for (const mod of clientModules) {
       const cat = getCategory(mod.key);
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(mod);
     }
     return groups;
-  }, [data]);
+  }, [clientModules]);
 
-  const modules = data?.modules ?? [];
-  const activeCount = modules.filter((m) => m.enabled).length;
-  const inactiveCount = modules.length - activeCount;
+  const activeCount = clientModules.filter((m) => m.client_enabled).length;
+  const inactiveCount = clientModules.length - activeCount;
 
-  async function toggleModule(key: string, enabled: boolean) {
+  async function toggleClientModule(key: string, enabled: boolean) {
     setToggling(key);
     setError(null);
     try {
-      await apiFetch(`/api/v1/settings/modules/${key}`, {
+      await apiFetch(`/api/v1/settings/modules/${key}/client`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled }),
@@ -168,27 +146,6 @@ export default function ModulesPage() {
       setError(err instanceof Error ? err.message : "Erro ao alterar módulo");
     } finally {
       setToggling(null);
-    }
-  }
-
-  async function toggleClientVisible(key: string, client_visible: boolean) {
-    setVisibilityToggling(key);
-    setError(null);
-    try {
-      await apiFetch(`/api/v1/settings/modules/${key}/visibility`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_visible }),
-      });
-      await mutate();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Erro ao alterar visibilidade do módulo",
-      );
-    } finally {
-      setVisibilityToggling(null);
     }
   }
 
@@ -206,12 +163,12 @@ export default function ModulesPage() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Link
-            href="/settings"
+            href="/dashboard"
             className="flex items-center gap-1.5 text-xs font-medium transition-colors hover:opacity-70"
             style={{ color: COLORS.muted }}
           >
             <ArrowLeft size={14} />
-            Configurações
+            Dashboard
           </Link>
         </div>
 
@@ -230,11 +187,11 @@ export default function ModulesPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold" style={{ color: COLORS.text }}>
-                Módulos do Sistema
+                Meus Módulos
               </h1>
               <p className="text-xs" style={{ color: COLORS.muted }}>
-                {activeCount} ativos · {inactiveCount} inativos ·{" "}
-                {modules.length} total
+                {activeCount} ativos · {inactiveCount} disponíveis ·{" "}
+                {clientModules.length} liberados
               </p>
             </div>
           </div>
@@ -265,104 +222,88 @@ export default function ModulesPage() {
           </div>
         )}
 
-        {/* Modulos agrupados por categoria */}
-        <div className="space-y-8">
-          {Object.entries(groupedModules).map(([category, mods]) => (
-            <div key={category}>
-              <h2
-                className="text-[10px] font-bold uppercase tracking-widest mb-3"
-                style={{ color: COLORS.muted }}
-              >
-                {category}
-              </h2>
-              <div
-                className="grid gap-3"
-                style={{
-                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                }}
-              >
-                {mods.map((mod) => (
-                  <ModuleCard
-                    key={mod.key}
-                    module={mod}
-                    toggling={toggling === mod.key}
-                    visibilityToggling={visibilityToggling === mod.key}
-                    onToggle={(enabled) => toggleModule(mod.key, enabled)}
-                    onToggleVisibility={(visible) =>
-                      toggleClientVisible(mod.key, visible)
-                    }
-                  />
-                ))}
+        {clientModules.length === 0 ? (
+          <div
+            className="rounded-xl p-8 text-center"
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <EyeOff
+              size={32}
+              style={{ color: COLORS.muted, margin: "0 auto 12px" }}
+            />
+            <p className="text-sm font-medium" style={{ color: COLORS.text }}>
+              Nenhum módulo liberado ainda
+            </p>
+            <p className="text-xs mt-1" style={{ color: COLORS.muted }}>
+              Seu administrador ainda não liberou módulos opcionais para
+              ativação.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {Object.entries(groupedModules).map(([category, mods]) => (
+              <div key={category}>
+                <h2
+                  className="text-[10px] font-bold uppercase tracking-widest mb-3"
+                  style={{ color: COLORS.muted }}
+                >
+                  {category}
+                </h2>
+                <div
+                  className="grid gap-3"
+                  style={{
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(320px, 1fr))",
+                  }}
+                >
+                  {mods.map((mod) => (
+                    <ClientModuleCard
+                      key={mod.key}
+                      module={mod}
+                      toggling={toggling === mod.key}
+                      onToggle={(enabled) =>
+                        toggleClientModule(mod.key, enabled)
+                      }
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function ModuleCard({
+function ClientModuleCard({
   module: mod,
   toggling,
-  visibilityToggling,
   onToggle,
-  onToggleVisibility,
 }: {
   module: ModuleFlag;
   toggling: boolean;
-  visibilityToggling: boolean;
   onToggle: (enabled: boolean) => void;
-  onToggleVisibility: (client_visible: boolean) => void;
 }) {
-  const isCore = [
-    "module_auth",
-    "module_dashboard",
-    "module_zabbix",
-    "module_rbac",
-    "module_mfa",
-    "module_settings",
-    "module_profile",
-    "module_feature_flags",
-  ].includes(mod.key);
-  // Módulos administrativos não devem ser liberados para cliente
-  const isAdminOnly = [
-    "module_admin",
-    "module_rbac",
-    "module_feature_flags",
-    "module_audit",
-    "module_security_audit",
-  ].includes(mod.key);
-
   return (
     <div
       className="rounded-xl p-4 transition-all"
       style={{
         background: COLORS.card,
-        border: `1px solid ${mod.enabled ? `${COLORS.teal}33` : COLORS.border}`,
+        border: `1px solid ${mod.client_enabled ? `${COLORS.teal}33` : COLORS.border}`,
       }}
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3
-              className="text-sm font-semibold truncate"
-              style={{ color: COLORS.text }}
-            >
-              {mod.name}
-            </h3>
-            {isCore && (
-              <span
-                className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                style={{
-                  background: "var(--brand-glow)",
-                  color: COLORS.teal,
-                }}
-              >
-                Núcleo
-              </span>
-            )}
-          </div>
+          <h3
+            className="text-sm font-semibold truncate"
+            style={{ color: COLORS.text }}
+          >
+            {mod.name}
+          </h3>
           <p
             className="text-[11px] mt-0.5 line-clamp-2"
             style={{ color: COLORS.muted }}
@@ -371,14 +312,14 @@ function ModuleCard({
           </p>
         </div>
         <ToggleSwitch
-          enabled={mod.enabled}
-          disabled={isCore || toggling}
+          enabled={mod.client_enabled}
+          disabled={toggling}
           loading={toggling}
           onToggle={onToggle}
         />
       </div>
       <div className="flex items-center gap-1.5 mt-2">
-        {mod.enabled ? (
+        {mod.client_enabled ? (
           <>
             <Check size={12} style={{ color: COLORS.green }} />
             <span
@@ -390,12 +331,12 @@ function ModuleCard({
           </>
         ) : (
           <>
-            <X size={12} style={{ color: COLORS.muted }} />
+            <Eye size={12} style={{ color: COLORS.amber }} />
             <span
               className="text-[10px] font-medium"
-              style={{ color: COLORS.muted }}
+              style={{ color: COLORS.amber }}
             >
-              Inativo
+              Disponível
             </span>
           </>
         )}
@@ -406,40 +347,6 @@ function ModuleCard({
           {mod.key}
         </span>
       </div>
-
-      {/* Linha de visibilidade para cliente */}
-      {!isCore && !isAdminOnly && (
-        <div
-          className="flex items-center justify-between gap-2 mt-3 pt-3"
-          style={{ borderTop: `1px solid ${COLORS.border}` }}
-        >
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              className="text-[10px] font-medium"
-              style={{ color: COLORS.muted }}
-            >
-              Liberar para cliente
-            </span>
-            {mod.client_visible && (
-              <span
-                className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                style={{
-                  background: `${COLORS.amber}11`,
-                  color: COLORS.amber,
-                }}
-              >
-                Visível
-              </span>
-            )}
-          </div>
-          <ToggleSwitch
-            enabled={mod.client_visible}
-            disabled={visibilityToggling}
-            loading={visibilityToggling}
-            onToggle={onToggleVisibility}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -469,11 +376,6 @@ function ToggleSwitch({
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled && !enabled ? 0.5 : 1,
       }}
-      title={
-        disabled && isCoreModule(disabled, enabled)
-          ? "Módulo de núcleo — sempre ativo"
-          : undefined
-      }
     >
       {loading ? (
         <Loader2
@@ -494,8 +396,4 @@ function ToggleSwitch({
       )}
     </button>
   );
-}
-
-function isCoreModule(_disabled: boolean, _enabled: boolean): boolean {
-  return false;
 }

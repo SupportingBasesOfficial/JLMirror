@@ -354,12 +354,13 @@ settingsRoute.get("/usage", requirePermission("settings:read"), async (c) => {
 // ========== Modules Management ==========
 
 // GET /api/v1/settings/modules — lista todos os modulos com status ativo/inativo
+// Retorna client_visible e client_enabled para que o frontend distinga as duas camadas
 settingsRoute.get("/modules", requirePermission("settings:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
   const result = await query(
-    `SELECT key, name, description, default_value, is_active
+    `SELECT key, name, description, default_value, is_active, client_visible, client_enabled
      FROM public.feature_flags
      WHERE key LIKE 'module_%' AND (tenant_id IS NULL OR tenant_id = $1)
      ORDER BY key`,
@@ -372,6 +373,8 @@ settingsRoute.get("/modules", requirePermission("settings:read"), async (c) => {
     description: row.description as string,
     enabled: row.default_value === true || row.default_value === "true",
     is_active: row.is_active as boolean,
+    client_visible: row.client_visible as boolean,
+    client_enabled: row.client_enabled as boolean,
   }));
 
   return c.json({ modules });
@@ -444,5 +447,152 @@ settingsRoute.put(
     );
 
     return c.json({ key: moduleKey, enabled: body.enabled });
+  },
+);
+
+// PUT /api/v1/settings/modules/:key/visibility — admin define se modulo é visível para o cliente
+settingsRoute.put(
+  "/modules/:key/visibility",
+  requirePermission("settings:write"),
+  async (c) => {
+    const moduleKey = c.req.param("key");
+    const user = c.get("user");
+
+    if (!moduleKey.startsWith("module_")) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Chave de módulo inválida",
+          },
+        },
+        400,
+      );
+    }
+
+    const body = await c.req.json<{ client_visible: boolean }>();
+    if (typeof body.client_visible !== "boolean") {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Campo 'client_visible' deve ser boolean",
+          },
+        },
+        400,
+      );
+    }
+
+    const flagResult = await query<{ id: string }>(
+      `SELECT id FROM public.feature_flags WHERE key = $1 AND tenant_id IS NULL LIMIT 1`,
+      [moduleKey],
+    );
+
+    if (!flagResult.data?.rows[0]) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Módulo não encontrado" } },
+        404,
+      );
+    }
+
+    await query(
+      `UPDATE public.feature_flags SET client_visible = $1, updated_at = NOW()
+       WHERE key = $2 AND tenant_id IS NULL`,
+      [body.client_visible, moduleKey],
+    );
+
+    clearModuleFlagCache();
+
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'settings.module.visibility', 'feature_flags', NULL, $2, NULL, NULL)",
+      [
+        user.sub,
+        JSON.stringify({
+          module: moduleKey,
+          client_visible: body.client_visible,
+        }),
+      ],
+    );
+
+    return c.json({ key: moduleKey, client_visible: body.client_visible });
+  },
+);
+
+// PUT /api/v1/settings/modules/:key/client — cliente ativa/desativa módulo liberado pelo admin
+settingsRoute.put(
+  "/modules/:key/client",
+  requirePermission("settings:write"),
+  async (c) => {
+    const moduleKey = c.req.param("key");
+    const user = c.get("user");
+
+    if (!moduleKey.startsWith("module_")) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Chave de módulo inválida",
+          },
+        },
+        400,
+      );
+    }
+
+    const body = await c.req.json<{ enabled: boolean }>();
+    if (typeof body.enabled !== "boolean") {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Campo 'enabled' deve ser boolean",
+          },
+        },
+        400,
+      );
+    }
+
+    // Verifica se a flag existe e se o admin liberou para o cliente
+    const flagResult = await query<{ client_visible: boolean }>(
+      `SELECT client_visible FROM public.feature_flags
+       WHERE key = $1 AND tenant_id IS NULL LIMIT 1`,
+      [moduleKey],
+    );
+
+    if (!flagResult.data?.rows[0]) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Módulo não encontrado" } },
+        404,
+      );
+    }
+
+    if (!flagResult.data.rows[0].client_visible) {
+      return c.json(
+        {
+          error: {
+            code: "FORBIDDEN",
+            message: "Este módulo não foi liberado para ativação pelo cliente",
+          },
+        },
+        403,
+      );
+    }
+
+    await query(
+      `UPDATE public.feature_flags SET client_enabled = $1, updated_at = NOW()
+       WHERE key = $2 AND tenant_id IS NULL`,
+      [body.enabled, moduleKey],
+    );
+
+    clearModuleFlagCache();
+
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'settings.module.client_toggle', 'feature_flags', NULL, $2, NULL, NULL)",
+      [
+        user.sub,
+        JSON.stringify({ module: moduleKey, client_enabled: body.enabled }),
+      ],
+    );
+
+    return c.json({ key: moduleKey, client_enabled: body.enabled });
   },
 );

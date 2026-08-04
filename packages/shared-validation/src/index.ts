@@ -1351,16 +1351,21 @@ export const updateLicenseSchema = z.object({
 export type UpdateLicenseInput = z.infer<typeof updateLicenseSchema>;
 
 // ========== Client Portal Schemas ==========
-export const createClientUserSchema = z.object({
-  email: z.string().email(),
-  full_name: z.string().min(1),
-  password: z.string().min(8),
-  company_id: z.string().uuid().optional(),
-  provisional_password: z.string().optional(),
-  phone: z.string().optional(),
-  must_change_password: z.boolean().default(true),
-  role: z.string().optional(),
-});
+export const createClientUserSchema = z
+  .object({
+    email: z.string().email(),
+    full_name: z.string().min(1),
+    password: z.string().min(8).optional(),
+    company_id: z.string().uuid().optional(),
+    provisional_password: z.string().min(8).optional(),
+    phone: z.string().optional(),
+    must_change_password: z.boolean().default(true),
+    role: z.string().optional(),
+  })
+  .refine((data) => data.password || data.provisional_password, {
+    message: "password ou provisional_password é obrigatório",
+    path: ["password"],
+  });
 export type CreateClientUserInput = z.infer<typeof createClientUserSchema>;
 
 export const createClientContactSchema = z.object({

@@ -298,6 +298,51 @@ adminRoute.post(
   },
 );
 
+// ========== Delete Tenant ==========
+
+adminRoute.delete(
+  "/tenants/:tenantId",
+  requirePermission("admin:tenants:write"),
+  async (c) => {
+    const tenantId = c.req.param("tenantId");
+    const user = c.get("user");
+
+    // Busca schema_name antes de remover
+    const routeResult = await query<{ schema_name: string }>(
+      "SELECT schema_name FROM public.tenant_routes WHERE tenant_id = $1",
+      [tenantId],
+    );
+
+    const schemaName = routeResult.data?.rows[0]?.schema_name;
+
+    // Remove associações de usuários
+    await query("DELETE FROM public.tenant_users WHERE tenant_id = $1", [
+      tenantId,
+    ]);
+
+    // Remove rota do tenant
+    await query("DELETE FROM public.tenant_routes WHERE tenant_id = $1", [
+      tenantId,
+    ]);
+
+    // Remove o tenant
+    await query("DELETE FROM public.tenants WHERE id = $1", [tenantId]);
+
+    // Dropa o schema do tenant se existir
+    if (schemaName) {
+      const slug = schemaName.replace("tenant_", "");
+      await query("SELECT public.drop_tenant_schema($1)", [slug]);
+    }
+
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'admin.tenant.delete', 'tenants', $2, NULL, NULL, NULL)",
+      [user.sub, tenantId],
+    );
+
+    return c.json({ deleted: true });
+  },
+);
+
 adminRoute.post(
   "/tenants/:tenantId/activate",
   requirePermission("admin:tenants:write"),
@@ -532,7 +577,7 @@ adminRoute.post(
     } else {
       // Cria novo usuário com senha provisória hasheada
       const passwordHash = await argon2.hash(
-        data.provisional_password ?? data.password,
+        data.provisional_password ?? data.password ?? "",
       );
 
       const newUserResult = await query<{ id: string }>(
@@ -908,8 +953,9 @@ adminRoute.post(
   "/zabbix/test-connection",
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const body = await safeJsonBody(c);
-    const parsed = zabbixTestSchema.safeParse(body);
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+    const parsed = zabbixTestSchema.safeParse(bodyResult.data);
     if (!parsed.success) {
       return c.json(
         {
@@ -951,8 +997,9 @@ adminRoute.post(
   "/zabbix/host-groups",
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const body = await safeJsonBody(c);
-    const parsed = zabbixTestSchema.safeParse(body);
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+    const parsed = zabbixTestSchema.safeParse(bodyResult.data);
     if (!parsed.success) {
       return c.json(
         {
@@ -1001,8 +1048,9 @@ adminRoute.post(
   "/zabbix/preview-hosts",
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const body = await safeJsonBody(c);
-    const parsed = zabbixPreviewSchema.safeParse(body);
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+    const parsed = zabbixPreviewSchema.safeParse(bodyResult.data);
     if (!parsed.success) {
       return c.json(
         {

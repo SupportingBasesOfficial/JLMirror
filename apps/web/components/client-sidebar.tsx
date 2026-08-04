@@ -292,6 +292,26 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         ),
         flagKey: "module_auth",
       },
+      {
+        label: "Meus Módulos",
+        href: "/settings/modules-client",
+        icon: (
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <path d="M3.27 6.96 12 12.01l8.73-5.05" />
+            <path d="M12 22.08V12" />
+          </svg>
+        ),
+      },
     ],
   },
 ];
@@ -335,7 +355,7 @@ export function ClientSidebar() {
   );
   const searchRef = useRef<HTMLInputElement>(null);
   const pathname = usePathname();
-  const { isModuleEnabled, isLoading: flagsLoading } = useModuleFlags();
+  const { isClientModuleEnabled, isLoading: flagsLoading } = useModuleFlags();
 
   const sidebarWidth = collapsed ? "w-16" : "w-64";
 
@@ -343,7 +363,7 @@ export function ClientSidebar() {
     const flagFiltered = CLIENT_NAV_SECTIONS.map((section) => ({
       ...section,
       items: section.items.filter(
-        (item) => !item.flagKey || isModuleEnabled(item.flagKey),
+        (item) => !item.flagKey || isClientModuleEnabled(item.flagKey),
       ),
     })).filter((section) => section.items.length > 0);
 
@@ -357,7 +377,7 @@ export function ClientSidebar() {
         ),
       }))
       .filter((section) => section.items.length > 0);
-  }, [query, isModuleEnabled]);
+  }, [query, isClientModuleEnabled]);
 
   const isSearching = query.trim().length > 0;
 

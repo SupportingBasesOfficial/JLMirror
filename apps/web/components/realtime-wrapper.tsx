@@ -6,19 +6,25 @@ import { useState, useEffect, type ReactNode } from "react";
 import { RealtimeProvider } from "@/lib/realtime-provider";
 import { RealtimeToasts } from "@/components/realtime-toasts";
 
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
 export function RealtimeWrapper({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    // Extrai o access_token do cookie para passar ao WebSocket
-    const t = getCookie("access_token");
-    setToken(t);
+    // Busca o access_token via API pois o cookie é HttpOnly
+    let cancelled = false;
+    fetch("/api/ws-token", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.token) {
+          setToken(data.token as string);
+        }
+      })
+      .catch(() => {
+        // Silencioso — WebSocket fica desconconectado
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

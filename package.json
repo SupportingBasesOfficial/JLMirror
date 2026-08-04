@@ -27,7 +27,7 @@
     "analyze": "ANALYZE=true pnpm build",
     "prepare": "husky",
     "clean": "rimraf **/node_modules **/.next **/dist .turbo",
-    "db:migrate": "tsx packages/db/src/migrate.ts up",
+    "db:migrate": "tsx -r dotenv/config packages/db/src/migrate.ts up",
     "db:migrate:down": "tsx packages/db/src/migrate.ts down",
     "db:seed": "tsx scripts/seed-monitoring.ts",
     "docker:up": "docker-compose up -d",

@@ -143,9 +143,12 @@ export default function OnboardingWizardPage() {
 
   async function testConnection() {
     if (!data.zabbixApiUrl.trim() || !data.zabbixApiToken.trim()) {
+      const missing = [];
+      if (!data.zabbixApiUrl.trim()) missing.push("URL");
+      if (!data.zabbixApiToken.trim()) missing.push("Token");
       setConnectionResult({
         success: false,
-        message: "URL e Token são obrigatórios",
+        message: `${missing.join(" e ")} ${missing.length > 1 ? "são" : "é"} obrigatório${missing.length > 1 ? "s" : ""}`,
       });
       return;
     }
