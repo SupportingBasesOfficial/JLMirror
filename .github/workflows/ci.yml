@@ -190,6 +190,8 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -202,6 +204,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Run pnpm audit
         run: pnpm audit --audit-level=high || true
+      - name: Snyk SAST scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --fail-on=all
+          command: test
+        continue-on-error: true
       - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
