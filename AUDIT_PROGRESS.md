@@ -86,7 +86,10 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
   - 143 funções exportadas verificadas: 0 duplicadas across files
   - 225 consts exportados verificados: 0 duplicados across files
   - 1 duplicação local encontrada e corrigida: `safeCount` em `health-score.ts` era cópia local da função exportada em `query-helpers.ts` — substituída por import
-- [ ] 6. Sidebar admin (admin-sidebar.tsx) vs client-sidebar.tsx — links mortos, módulos sem rota
+- [x] 6. Sidebar admin vs client-sidebar — COMPLETA (commit b0aa6de):
+  - 71 links verificados (admin sidebar + client sidebar) contra page.tsx no Next.js app router
+  - 1 link morto encontrado e corrigido: `/status` no client-sidebar apontava para rota sem `page.tsx` (só existia `/status/[slug]`) — criado `app/status/page.tsx` que lista páginas de status do tenant via API
+  - 0 links mortos restantes
 - [ ] 7. Aplicar correções + migration se necessário
 - [ ] 8. pnpm lint && pnpm check-types && pnpm test:run
 - [ ] 9. git add -A && commit && push (incremental, a cada categoria fechada)
