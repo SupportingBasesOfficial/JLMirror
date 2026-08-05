@@ -15,6 +15,7 @@ interface TenantConfig {
   zabbix_encrypted_token: string;
   zabbix_token_iv: string;
   zabbix_token_tag: string;
+  zabbix_host_group_id: string;
 }
 
 const QUEUE_NAME = "device-sync";
@@ -22,17 +23,17 @@ const SYNC_INTERVAL_MS = 300_000;
 const SYNC_CONCURRENCY = 10;
 
 export async function startDeviceSync(): Promise<void> {
-  await registerRepeatableJob(
-    QUEUE_NAME,
-    "sync-all-tenants",
-    { every: SYNC_INTERVAL_MS },
-  );
+  await registerRepeatableJob(QUEUE_NAME, "sync-all-tenants", {
+    every: SYNC_INTERVAL_MS,
+  });
 
   startWorker(QUEUE_NAME, async () => {
     try {
       await syncAllTenants();
     } catch (err) {
-      logger.error("Erro no device sync", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no device sync", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 }
@@ -44,7 +45,7 @@ export function stopDeviceSync(): void {
 
 export async function syncAllTenants(): Promise<void> {
   const tenantsResult = await query<TenantConfig>(
-    `SELECT t.id as tenant_id, tr.zabbix_api_url, tr.zabbix_encrypted_token, tr.zabbix_token_iv, tr.zabbix_token_tag
+    `SELECT t.id as tenant_id, tr.zabbix_api_url, tr.zabbix_encrypted_token, tr.zabbix_token_iv, tr.zabbix_token_tag, tr.zabbix_host_group_id
      FROM public.tenants t
      JOIN public.tenant_routes tr ON t.id = tr.tenant_id
      WHERE t.status = 'active'
@@ -73,7 +74,11 @@ export async function syncAllTenants(): Promise<void> {
       const r = results[j];
       if (r.status === "rejected") {
         failed++;
-        logger.error("Erro no sync do tenant", { tenantId: chunk[j].tenant_id, error: r.reason instanceof Error ? r.reason.message : String(r.reason) });
+        logger.error("Erro no sync do tenant", {
+          tenantId: chunk[j].tenant_id,
+          error:
+            r.reason instanceof Error ? r.reason.message : String(r.reason),
+        });
       }
     }
   }
@@ -81,7 +86,9 @@ export async function syncAllTenants(): Promise<void> {
   logger.info("Sync concluido", { completed, total, failed });
 }
 
-export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced: number; total: number }> {
+export async function syncTenantDevices(
+  tenant: TenantConfig,
+): Promise<{ synced: number; total: number }> {
   const apiToken = decryptTokenParts(
     tenant.zabbix_encrypted_token,
     tenant.zabbix_token_iv,
@@ -97,13 +104,18 @@ export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced:
     apiToken,
   });
 
-  const devices = await client.getDevices();
+  // Passa o host_group_id para filtrar apenas os hosts do grupo do tenant
+  const devices = await client.getDevices(tenant.zabbix_host_group_id);
 
   let synced = 0;
   if (devices.length > 0) {
-    const hostnames = devices.map((d) => d.name || d.host || `host-${d.hostid}`);
+    const hostnames = devices.map(
+      (d) => d.name || d.host || `host-${d.hostid}`,
+    );
     const ips = devices.map((d) => d.interfaces?.[0]?.ip ?? "0.0.0.0");
-    const statuses = devices.map((d) => (d.status === "0" ? "active" : "inactive"));
+    const statuses = devices.map((d) =>
+      d.status === "0" ? "active" : "inactive",
+    );
     const hostIds = devices.map((d) => d.hostid);
 
     const upsertResult = await query(
@@ -121,9 +133,58 @@ export async function syncTenantDevices(tenant: TenantConfig): Promise<{ synced:
 
     if (!upsertResult.error) {
       synced = devices.length;
+      // Auto-cria assets a partir dos devices do Zabbix
+      await syncAssetsFromDevices(tenant.tenant_id, devices);
     }
   }
 
-  logger.info("Tenant sincronizado", { tenantId: tenant.tenant_id, synced, total: devices.length });
+  logger.info("Tenant sincronizado", {
+    tenantId: tenant.tenant_id,
+    synced,
+    total: devices.length,
+  });
   return { synced, total: devices.length };
+}
+
+// Auto-cria assets a partir dos devices do Zabbix
+// Usa asset_tag = zabbix_host_id para evitar duplicatas (ON CONFLICT)
+async function syncAssetsFromDevices(
+  tenantId: string,
+  devices: Array<{
+    hostid: string;
+    name?: string;
+    host?: string;
+    interfaces?: Array<{ ip?: string }>;
+  }>,
+): Promise<void> {
+  try {
+    const assetTags = devices.map((d) => `zbx-${d.hostid}`);
+    const names = devices.map((d) => d.name || d.host || `host-${d.hostid}`);
+    const hostnames = devices.map(
+      (d) => d.host || d.name || `host-${d.hostid}`,
+    );
+    const ips = devices.map((d) => d.interfaces?.[0]?.ip ?? null);
+
+    await query(
+      `INSERT INTO public.assets (tenant_id, asset_tag, name, asset_type, category, status, criticality, hostname, ip_address)
+       SELECT $1, asset_tag, name, 'server', 'hardware', 'active', 'medium', hostname, ip
+       FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[]) AS t(asset_tag, name, hostname, ip)
+       ON CONFLICT (tenant_id, asset_tag) DO UPDATE SET
+         name = EXCLUDED.name,
+         hostname = EXCLUDED.hostname,
+         ip_address = EXCLUDED.ip_address,
+         updated_at = timezone('utc'::text, now())`,
+      [tenantId, assetTags, names, hostnames, ips],
+    );
+
+    logger.info("Assets sincronizados do Zabbix", {
+      tenantId,
+      count: devices.length,
+    });
+  } catch (err) {
+    logger.error("Erro ao sincronizar assets do Zabbix", {
+      tenantId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }

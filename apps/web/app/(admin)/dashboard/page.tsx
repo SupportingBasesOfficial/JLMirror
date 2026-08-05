@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ZabbixHost, ZabbixTrigger } from "@repo/zabbix";
 import DashboardOverviewWrapper from "./dashboard-overview-wrapper";
+import { DeviceSyncTrigger } from "./device-sync-trigger";
 
 async function getZabbixDevices(accessToken: string, refreshToken?: string) {
   const result = await serverApiGetWithToken<{ devices: ZabbixHost[] }>(
@@ -89,6 +90,9 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5" style={{ animation: "fadeIn 0.3s ease-out" }}>
+      {/* Dispara sync de devices do Zabbix imediatamente ao carregar o dashboard */}
+      <DeviceSyncTrigger />
+
       {/* KPIs consolidados de todos os modulos — carrega em paralelo via Suspense */}
       <Suspense
         fallback={

@@ -109,6 +109,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       zabbix_encrypted_token: string;
       zabbix_token_iv: string;
       zabbix_token_tag: string;
+      zabbix_host_group_id: string;
     }>("SELECT * FROM public.get_tenant_zabbix_config($1)", [tenantId]);
 
     if (configResult.error || !configResult.data?.rows[0]) {
@@ -140,6 +141,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
         zabbix_encrypted_token: config.zabbix_encrypted_token,
         zabbix_token_iv: config.zabbix_token_iv,
         zabbix_token_tag: config.zabbix_token_tag,
+        zabbix_host_group_id: config.zabbix_host_group_id,
       });
 
       return c.json({

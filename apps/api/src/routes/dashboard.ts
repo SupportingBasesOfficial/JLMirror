@@ -5,6 +5,7 @@ import { query } from "@repo/db";
 import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeCount, safeRows } from "../lib/query-helpers.js";
+import { syncTenantDevices } from "../lib/device-sync.js";
 import "../types.js";
 
 export const dashboardRoute = new Hono();
@@ -224,6 +225,67 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
     upcoming_changes: upcomingChanges,
     ssl_expiring_soon: sslExpiringSoon,
   });
+});
+
+// ========== On-Demand Device Sync ==========
+
+// POST /api/v1/dashboard/sync-devices — sincroniza devices do Zabbix sob demanda
+// Usado no primeiro login do cliente para não esperar o intervalo de 5 min
+dashboardRoute.post("/sync-devices", async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  if (!tenantId) {
+    return c.json(
+      { error: { code: "NO_TENANT", message: "Usuário sem tenant associado" } },
+      400,
+    );
+  }
+
+  // Busca config do Zabbix para o tenant
+  const configResult = await query<{
+    zabbix_api_url: string;
+    zabbix_encrypted_token: string;
+    zabbix_token_iv: string;
+    zabbix_token_tag: string;
+    zabbix_host_group_id: string;
+  }>(
+    `SELECT zabbix_api_url, zabbix_encrypted_token, zabbix_token_iv, zabbix_token_tag, zabbix_host_group_id
+     FROM public.tenant_routes
+     WHERE tenant_id = $1 AND status = 'active'
+       AND zabbix_encrypted_token IS NOT NULL
+       AND zabbix_token_iv IS NOT NULL
+       AND zabbix_token_tag IS NOT NULL`,
+    [tenantId],
+  );
+
+  if (!configResult.data?.rows[0]) {
+    return c.json(
+      {
+        error: {
+          code: "NO_ZABBIX_CONFIG",
+          message: "Integração Zabbix não configurada",
+        },
+      },
+      404,
+    );
+  }
+
+  try {
+    const result = await syncTenantDevices({
+      tenant_id: tenantId,
+      ...configResult.data.rows[0],
+    });
+
+    return c.json({
+      success: true,
+      synced: result.synced,
+      total: result.total,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro desconhecido";
+    return c.json({ error: { code: "SYNC_FAILED", message } }, 502);
+  }
 });
 
 // ========== Quick Links / Navigation ==========
