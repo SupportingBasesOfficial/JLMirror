@@ -81,7 +81,11 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
     - 3 tabelas global admin: sso_providers, tenant_routes, tenant_users — restritas a `global_admin_role`/`app_runtime` (sem tenant_isolation pois são B2B)
   - 12 partições sem RLS — CORRIGIDAS: capacity_metrics_202607-10, system_logs_202607-10, trace_spans_202607-10 — RLS habilitado + policy tenant_isolation
   - Pós-migration: 0 partições sem RLS, 0 tabelas com policies fracas (exceto 3 globais intencionais)
-- [ ] 5. Duplicação de funções/rotas
+- [x] 5. Duplicação de funções/rotas — COMPLETA (commit 981d096):
+  - 278 rotas backend verificadas: 0 rotas duplicadas (mesmo method+path no mesmo arquivo)
+  - 143 funções exportadas verificadas: 0 duplicadas across files
+  - 225 consts exportados verificados: 0 duplicados across files
+  - 1 duplicação local encontrada e corrigida: `safeCount` em `health-score.ts` era cópia local da função exportada em `query-helpers.ts` — substituída por import
 - [ ] 6. Sidebar admin (admin-sidebar.tsx) vs client-sidebar.tsx — links mortos, módulos sem rota
 - [ ] 7. Aplicar correções + migration se necessário
 - [ ] 8. pnpm lint && pnpm check-types && pnpm test:run
