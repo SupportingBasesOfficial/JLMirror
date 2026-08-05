@@ -540,7 +540,7 @@ taskRoute.get("/:id/runs", requirePermission("tasks:read"), async (c) => {
 
 // ========== Stats ==========
 
-taskRoute.get("/stats/overview", requirePermission("tasks:read"), async (c) => {
+taskRoute.get("/stats", requirePermission("tasks:read"), async (c) => {
   const user = c.get("user");
 
   const overviewResult = await query(

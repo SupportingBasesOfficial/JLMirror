@@ -570,65 +570,61 @@ ticketRoute.delete(
 
 // ========== Stats ==========
 
-ticketRoute.get(
-  "/stats/overview",
-  requirePermission("tickets:read"),
-  async (c) => {
-    const user = c.get("user");
+ticketRoute.get("/stats", requirePermission("tickets:read"), async (c) => {
+  const user = c.get("user");
 
-    const statusResult = await query(
-      `SELECT status, COUNT(*) as count
+  const statusResult = await query(
+    `SELECT status, COUNT(*) as count
      FROM public.tickets WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const priorityResult = await query(
-      `SELECT priority, COUNT(*) as count
+  const priorityResult = await query(
+    `SELECT priority, COUNT(*) as count
      FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')
      GROUP BY priority ORDER BY
        CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const slaResult = await query(
-      `SELECT
+  const slaResult = await query(
+    `SELECT
        COUNT(*) FILTER (WHERE is_overdue = true) as overdue,
        COUNT(*) FILTER (WHERE status NOT IN ('resolved','closed','cancelled')) as open_tickets,
        AVG(response_time_mins) FILTER (WHERE response_time_mins IS NOT NULL) as avg_response_mins,
        AVG(resolution_time_mins) FILTER (WHERE resolution_time_mins IS NOT NULL) as avg_resolution_mins,
        AVG(rating) FILTER (WHERE rating IS NOT NULL) as avg_rating
      FROM public.tickets WHERE tenant_id = $1`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const categoryResult = await query(
-      `SELECT tc.name, tc.color,
+  const categoryResult = await query(
+    `SELECT tc.name, tc.color,
        COUNT(t.id) as ticket_count,
        COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved','closed','cancelled')) as open_count
      FROM public.ticket_categories tc
      LEFT JOIN public.tickets t ON tc.id = t.category_id AND t.tenant_id = $1
      WHERE tc.tenant_id = $1 AND tc.is_active = true
      GROUP BY tc.name, tc.color ORDER BY open_count DESC`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const totalResult = await query(
-      "SELECT COUNT(*) as total FROM public.tickets WHERE tenant_id = $1",
-      [user?.tenant_id ?? null],
-    );
+  const totalResult = await query(
+    "SELECT COUNT(*) as total FROM public.tickets WHERE tenant_id = $1",
+    [user?.tenant_id ?? null],
+  );
 
-    return c.json({
-      total: totalResult.data?.rows[0]?.total ?? "0",
-      by_status: statusResult.data?.rows ?? [],
-      by_priority: priorityResult.data?.rows ?? [],
-      sla: slaResult.data?.rows[0] ?? {
-        overdue: "0",
-        open_tickets: "0",
-        avg_response_mins: null,
-        avg_resolution_mins: null,
-        avg_rating: null,
-      },
-      by_category: categoryResult.data?.rows ?? [],
-    });
-  },
-);
+  return c.json({
+    total: totalResult.data?.rows[0]?.total ?? "0",
+    by_status: statusResult.data?.rows ?? [],
+    by_priority: priorityResult.data?.rows ?? [],
+    sla: slaResult.data?.rows[0] ?? {
+      overdue: "0",
+      open_tickets: "0",
+      avg_response_mins: null,
+      avg_resolution_mins: null,
+      avg_rating: null,
+    },
+    by_category: categoryResult.data?.rows ?? [],
+  });
+});

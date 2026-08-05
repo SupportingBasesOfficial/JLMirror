@@ -187,9 +187,8 @@ export default function AssetsPage() {
     isLoading: loading,
     mutate: mutateAssets,
   } = useApi<{ assets: Asset[] }>(assetsQuery);
-  const { data: stats, mutate: mutateStats } = useApi<AssetStats>(
-    "/api/assets/stats/overview",
-  );
+  const { data: stats, mutate: mutateStats } =
+    useApi<AssetStats>("/api/assets/stats");
   const assets = aData?.assets ?? [];
 
   // Form

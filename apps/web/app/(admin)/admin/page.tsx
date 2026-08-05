@@ -138,9 +138,8 @@ export default function AdminPage() {
   const { data: tData, mutate: mutateTenants } = useApi<{ tenants: Tenant[] }>(
     "/api/admin/tenants",
   );
-  const { data: stats, mutate: mutateStats } = useApi<Stats>(
-    "/api/admin/stats/overview",
-  );
+  const { data: stats, mutate: mutateStats } =
+    useApi<Stats>("/api/admin/stats");
   const tenants = tData?.tenants ?? [];
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);

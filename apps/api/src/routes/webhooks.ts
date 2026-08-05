@@ -561,14 +561,11 @@ webhookRoute.post(
 
 // ========== Stats ==========
 
-webhookRoute.get(
-  "/stats/overview",
-  requirePermission("webhooks:read"),
-  async (c) => {
-    const user = c.get("user");
+webhookRoute.get("/stats", requirePermission("webhooks:read"), async (c) => {
+  const user = c.get("user");
 
-    const overviewResult = await query(
-      `SELECT
+  const overviewResult = await query(
+    `SELECT
        COUNT(*) as total_webhooks,
        COUNT(*) FILTER (WHERE is_active = true) as active_webhooks,
        COUNT(*) FILTER (WHERE is_verified = true) as verified_webhooks,
@@ -576,47 +573,46 @@ webhookRoute.get(
        SUM(successful_deliveries) as successful_deliveries,
        SUM(failed_deliveries) as failed_deliveries
      FROM public.webhooks WHERE tenant_id = $1`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const recentDeliveries = await query(
-      `SELECT d.id, d.event_name, d.status, d.attempt_number, d.response_status_code,
+  const recentDeliveries = await query(
+    `SELECT d.id, d.event_name, d.status, d.attempt_number, d.response_status_code,
        d.response_time_ms, d.error_message, d.created_at, w.name as webhook_name
      FROM public.webhook_deliveries d
      JOIN public.webhooks w ON d.webhook_id = w.id
      WHERE d.tenant_id = $1
      ORDER BY d.created_at DESC LIMIT 10`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const pendingRetries = await query(
-      `SELECT COUNT(*) as count FROM public.webhook_deliveries
+  const pendingRetries = await query(
+    `SELECT COUNT(*) as count FROM public.webhook_deliveries
      WHERE tenant_id = $1 AND status IN ('pending', 'retrying')`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const topWebhooks = await query(
-      `SELECT id, name, total_deliveries, successful_deliveries, failed_deliveries, last_delivery_status
+  const topWebhooks = await query(
+    `SELECT id, name, total_deliveries, successful_deliveries, failed_deliveries, last_delivery_status
      FROM public.webhooks WHERE tenant_id = $1
      ORDER BY total_deliveries DESC LIMIT 5`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    return c.json({
-      overview: overviewResult.data?.rows[0] ?? {
-        total_webhooks: "0",
-        active_webhooks: "0",
-        verified_webhooks: "0",
-        total_deliveries: "0",
-        successful_deliveries: "0",
-        failed_deliveries: "0",
-      },
-      recent_deliveries: recentDeliveries.data?.rows ?? [],
-      pending_retries: pendingRetries.data?.rows[0]?.count ?? "0",
-      top_webhooks: topWebhooks.data?.rows ?? [],
-    });
-  },
-);
+  return c.json({
+    overview: overviewResult.data?.rows[0] ?? {
+      total_webhooks: "0",
+      active_webhooks: "0",
+      verified_webhooks: "0",
+      total_deliveries: "0",
+      successful_deliveries: "0",
+      failed_deliveries: "0",
+    },
+    recent_deliveries: recentDeliveries.data?.rows ?? [],
+    pending_retries: pendingRetries.data?.rows[0]?.count ?? "0",
+    top_webhooks: topWebhooks.data?.rows ?? [],
+  });
+});
 
 // ========== Verify Signature (inbound) ==========
 

@@ -1,0 +1,28 @@
+﻿page.tsx:105: const { data: statsData } = useApi<{ active_connectors: number; total_syncs: number; successful_syncs: number; failed_syncs: number; by_type: Array<Record<string, unknown>> }>("/api/v1/itsm/stats");
+page.tsx:106: const { data: stats, mutate: mutateStats } = useApi<SslStats>("/api/ssl/stats");
+page.tsx:107: const { data: statsData, mutate: mutateStats } = useApi<{ total_apps: number; installed: number; active: number; by_category: Array<Record<string, unknown>> }>("/api/v1/marketplace/stats");
+page.tsx:110: const { data: stats } = useApi<LogStats>("/api/logs/stats");
+page.tsx:115: "/api/webhooks/stats",
+page.tsx:117: const { data: stats } = useApi<TraceStats>("/api/traces/stats");
+page.tsx:123: const { data: stats, mutate: mutateStats } = useApi<Stats>("/api/reports/stats");
+page.tsx:124: const { data: stats, mutate: mutateStats } = useApi<TransferStats>("/api/data-transfer/stats");
+page.tsx:136: const { data: stats, mutate: mutateStats } = useApi<BackupStats>("/api/backups/stats");
+page.tsx:142: "/api/admin/stats/overview",
+page.tsx:153: const { data: stats, mutate: mutateStats } = useApi<NotifStats>("/api/notifications/stats");
+page.tsx:164: "/api/v1/correlation/stats",
+page.tsx:173: const { data: stats, mutate: mutateStats } = useApi<KbStats>("/api/kb/stats");
+page.tsx:174: useApi<TicketStats>("/api/tickets/stats");
+page.tsx:191: "/api/assets/stats/overview",
+page.tsx:201: "/api/capacity/stats",
+page.tsx:201: "/api/compliance/stats",
+page.tsx:202: useApi<Stats>("/api/changes/stats");
+page.tsx:229: "/api/system-health/stats",
+page.tsx:66: const { data: statsData, mutate: mutateStats } = useApi<AnomalyStats>("/api/v1/anomaly/stats");
+page.tsx:72: const { data: statsData, mutate: mutateStats } = useApi<PredictionStats>("/api/v1/predictions/stats");
+page.tsx:73: const { data: statsData, mutate: mutateStats } = useApi<DriftStats>("/api/v1/drift/stats");
+page.tsx:88: const { data: stats, mutate: mutateStats } = useApi<FlagStats>("/api/feature-flags/stats");
+page.tsx:90: const { data: statsData, mutate: mutateStats } = useApi<FinOpsStats>("/api/v1/finops/stats");
+page.tsx:93: const { data: stats, mutate: mutateStats } = useApi<TaskStats>("/api/tasks/stats");
+page.tsx:96: }>("/api/v1/chatops/stats");
+page.tsx:98: "/api/api-keys/stats",
+page.tsx:98: const { data: stats } = useApi<AuditStats>("/api/audit/stats");

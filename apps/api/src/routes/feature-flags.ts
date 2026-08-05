@@ -492,7 +492,7 @@ featureFlagRoute.get(
 // ========== Stats ==========
 
 featureFlagRoute.get(
-  "/stats/overview",
+  "/stats",
   requirePermission("feature_flags:read"),
   async (c) => {
     const user = c.get("user");

@@ -430,71 +430,66 @@ reportsRoute.get(
 
 // ========== Stats ==========
 
-reportsRoute.get(
-  "/stats/overview",
-  requirePermission("reports:read"),
-  async (c) => {
-    const user = c.get("user");
-    const tenantId = user?.tenant_id ?? null;
+reportsRoute.get("/stats", requirePermission("reports:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
 
-    const totalReports = await query(
-      "SELECT COUNT(*) as count FROM public.scheduled_reports WHERE tenant_id = $1",
-      [tenantId],
-    );
-    const activeReports = await query(
-      "SELECT COUNT(*) as count FROM public.scheduled_reports WHERE tenant_id = $1 AND is_active = true",
-      [tenantId],
-    );
-    const totalTemplates = await query(
-      "SELECT COUNT(*) as count FROM public.report_templates WHERE tenant_id IS NULL OR tenant_id = $1",
-      [tenantId],
-    );
-    const totalDeliveries = await query(
-      "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1",
-      [tenantId],
-    );
-    const successfulDeliveries = await query(
-      "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1 AND status = 'completed'",
-      [tenantId],
-    );
-    const failedDeliveries = await query(
-      "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1 AND status = 'failed'",
-      [tenantId],
-    );
+  const totalReports = await query(
+    "SELECT COUNT(*) as count FROM public.scheduled_reports WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const activeReports = await query(
+    "SELECT COUNT(*) as count FROM public.scheduled_reports WHERE tenant_id = $1 AND is_active = true",
+    [tenantId],
+  );
+  const totalTemplates = await query(
+    "SELECT COUNT(*) as count FROM public.report_templates WHERE tenant_id IS NULL OR tenant_id = $1",
+    [tenantId],
+  );
+  const totalDeliveries = await query(
+    "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const successfulDeliveries = await query(
+    "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1 AND status = 'completed'",
+    [tenantId],
+  );
+  const failedDeliveries = await query(
+    "SELECT COUNT(*) as count FROM public.report_deliveries WHERE tenant_id = $1 AND status = 'failed'",
+    [tenantId],
+  );
 
-    const getCount = (r: {
-      data?: { rows?: Array<Record<string, unknown>> } | null;
-    }): number => {
-      const row = r.data?.rows?.[0];
-      return row ? parseInt((row.count as string) ?? "0", 10) : 0;
-    };
+  const getCount = (r: {
+    data?: { rows?: Array<Record<string, unknown>> } | null;
+  }): number => {
+    const row = r.data?.rows?.[0];
+    return row ? parseInt((row.count as string) ?? "0", 10) : 0;
+  };
 
-    // Recent deliveries
-    const recentDeliveries = await query(
-      `SELECT rd.*, sr.name as report_name FROM public.report_deliveries rd
+  // Recent deliveries
+  const recentDeliveries = await query(
+    `SELECT rd.*, sr.name as report_name FROM public.report_deliveries rd
      LEFT JOIN public.scheduled_reports sr ON rd.report_id = sr.id
      WHERE rd.tenant_id = $1 ORDER BY rd.created_at DESC LIMIT 10`,
-      [tenantId],
-    );
+    [tenantId],
+  );
 
-    return c.json({
-      total_reports: getCount(totalReports),
-      active_reports: getCount(activeReports),
-      total_templates: getCount(totalTemplates),
-      total_deliveries: getCount(totalDeliveries),
-      successful_deliveries: getCount(successfulDeliveries),
-      failed_deliveries: getCount(failedDeliveries),
-      success_rate:
-        getCount(totalDeliveries) > 0
-          ? Math.round(
-              (getCount(successfulDeliveries) / getCount(totalDeliveries)) *
-                100,
-            )
-          : 0,
-      recent_deliveries: recentDeliveries.data?.rows ?? [],
-    });
-  },
-);
+  return c.json({
+    total_reports: getCount(totalReports),
+    active_reports: getCount(activeReports),
+    total_templates: getCount(totalTemplates),
+    total_deliveries: getCount(totalDeliveries),
+    successful_deliveries: getCount(successfulDeliveries),
+    failed_deliveries: getCount(failedDeliveries),
+    success_rate:
+      getCount(totalDeliveries) > 0
+        ? Math.round(
+            (getCount(successfulDeliveries) / getCount(totalDeliveries)) * 100,
+          )
+        : 0,
+    recent_deliveries: recentDeliveries.data?.rows ?? [],
+  });
+});
 
 // ========== White-label Branding ==========
 

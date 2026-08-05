@@ -451,75 +451,71 @@ adminRoute.delete(
 
 // ========== Global Stats ==========
 
-adminRoute.get(
-  "/stats/overview",
-  requirePermission("admin:tenants:read"),
-  async (c) => {
-    const totalTenants = safeCount(
-      await query("SELECT COUNT(*) as count FROM public.tenants"),
-    );
-    const activeTenants = safeCount(
-      await query(
-        "SELECT COUNT(*) as count FROM public.tenants WHERE status = 'active'",
-      ),
-    );
-    const suspendedTenants = safeCount(
-      await query(
-        "SELECT COUNT(*) as count FROM public.tenants WHERE status = 'suspended'",
-      ),
-    );
-    const totalUsers = safeCount(
-      await query("SELECT COUNT(*) as count FROM public.users"),
-    );
-    const activeUsers = safeCount(
-      await query(
-        "SELECT COUNT(*) as count FROM public.users WHERE is_active = true",
-      ),
-    );
-    const totalTenantUsers = safeCount(
-      await query("SELECT COUNT(*) as count FROM public.tenant_users"),
-    );
-    const totalRoutes = safeCount(
-      await query(
-        "SELECT COUNT(*) as count FROM public.tenant_routes WHERE status = 'active'",
-      ),
-    );
+adminRoute.get("/stats", requirePermission("admin:tenants:read"), async (c) => {
+  const totalTenants = safeCount(
+    await query("SELECT COUNT(*) as count FROM public.tenants"),
+  );
+  const activeTenants = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.tenants WHERE status = 'active'",
+    ),
+  );
+  const suspendedTenants = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.tenants WHERE status = 'suspended'",
+    ),
+  );
+  const totalUsers = safeCount(
+    await query("SELECT COUNT(*) as count FROM public.users"),
+  );
+  const activeUsers = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.users WHERE is_active = true",
+    ),
+  );
+  const totalTenantUsers = safeCount(
+    await query("SELECT COUNT(*) as count FROM public.tenant_users"),
+  );
+  const totalRoutes = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.tenant_routes WHERE status = 'active'",
+    ),
+  );
 
-    // Tenants by status
-    const byStatus = safeRows(
-      await query(
-        "SELECT status, COUNT(*) as count FROM public.tenants GROUP BY status",
-      ),
-    );
+  // Tenants by status
+  const byStatus = safeRows(
+    await query(
+      "SELECT status, COUNT(*) as count FROM public.tenants GROUP BY status",
+    ),
+  );
 
-    // Recent tenants
-    const recent = safeRows(
-      await query(
-        `SELECT id, name, status, created_at FROM public.tenants ORDER BY created_at DESC LIMIT 10`,
-      ),
-    );
+  // Recent tenants
+  const recent = safeRows(
+    await query(
+      `SELECT id, name, status, created_at FROM public.tenants ORDER BY created_at DESC LIMIT 10`,
+    ),
+  );
 
-    // Users by role
-    const byRole = safeRows(
-      await query(
-        "SELECT role, COUNT(*) as count FROM public.tenant_users GROUP BY role",
-      ),
-    );
+  // Users by role
+  const byRole = safeRows(
+    await query(
+      "SELECT role, COUNT(*) as count FROM public.tenant_users GROUP BY role",
+    ),
+  );
 
-    return c.json({
-      total_tenants: totalTenants,
-      active_tenants: activeTenants,
-      suspended_tenants: suspendedTenants,
-      total_users: totalUsers,
-      active_users: activeUsers,
-      total_tenant_users: totalTenantUsers,
-      total_routes: totalRoutes,
-      by_status: byStatus,
-      by_role: byRole,
-      recent,
-    });
-  },
-);
+  return c.json({
+    total_tenants: totalTenants,
+    active_tenants: activeTenants,
+    suspended_tenants: suspendedTenants,
+    total_users: totalUsers,
+    active_users: activeUsers,
+    total_tenant_users: totalTenantUsers,
+    total_routes: totalRoutes,
+    by_status: byStatus,
+    by_role: byRole,
+    recent,
+  });
+});
 
 // ========== CRM: Criar Usuário do Cliente com Senha Provisória ==========
 

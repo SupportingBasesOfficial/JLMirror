@@ -301,14 +301,11 @@ apiKeyRoute.get("/:id/usage", requirePermission("api_keys:read"), async (c) => {
 
 // ========== Stats ==========
 
-apiKeyRoute.get(
-  "/stats/overview",
-  requirePermission("api_keys:read"),
-  async (c) => {
-    const user = c.get("user");
+apiKeyRoute.get("/stats", requirePermission("api_keys:read"), async (c) => {
+  const user = c.get("user");
 
-    const overviewResult = await query(
-      `SELECT
+  const overviewResult = await query(
+    `SELECT
        COUNT(*) as total_keys,
        COUNT(*) FILTER (WHERE is_active = true) as active_keys,
        COUNT(*) FILTER (WHERE is_active = true AND expires_at IS NOT NULL AND expires_at < timezone('utc'::text, now())) as expired,
@@ -316,35 +313,34 @@ apiKeyRoute.get(
        SUM(total_requests) as total_requests,
        SUM(requests_today) as requests_today
      FROM public.api_keys WHERE tenant_id = $1`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const topKeys = await query(
-      `SELECT id, name, key_prefix, total_requests, requests_today, last_used_at, is_active
+  const topKeys = await query(
+    `SELECT id, name, key_prefix, total_requests, requests_today, last_used_at, is_active
      FROM public.api_keys WHERE tenant_id = $1
      ORDER BY total_requests DESC LIMIT 5`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    const recentUsage = await query(
-      `SELECT DATE_TRUNC('day', created_at) as day, COUNT(*) as requests
+  const recentUsage = await query(
+    `SELECT DATE_TRUNC('day', created_at) as day, COUNT(*) as requests
      FROM public.api_key_usage_log
      WHERE tenant_id = $1 AND created_at > timezone('utc'::text, now()) - INTERVAL '7 days'
      GROUP BY day ORDER BY day DESC`,
-      [user?.tenant_id ?? null],
-    );
+    [user?.tenant_id ?? null],
+  );
 
-    return c.json({
-      overview: overviewResult.data?.rows[0] ?? {
-        total_keys: "0",
-        active_keys: "0",
-        expired: "0",
-        expiring_soon: "0",
-        total_requests: "0",
-        requests_today: "0",
-      },
-      top_keys: topKeys.data?.rows ?? [],
-      recent_usage: recentUsage.data?.rows ?? [],
-    });
-  },
-);
+  return c.json({
+    overview: overviewResult.data?.rows[0] ?? {
+      total_keys: "0",
+      active_keys: "0",
+      expired: "0",
+      expiring_soon: "0",
+      total_requests: "0",
+      requests_today: "0",
+    },
+    top_keys: topKeys.data?.rows ?? [],
+    recent_usage: recentUsage.data?.rows ?? [],
+  });
+});

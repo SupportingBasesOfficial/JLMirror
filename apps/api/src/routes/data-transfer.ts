@@ -656,7 +656,7 @@ dataTransferRoute.delete(
 // ========== Stats ==========
 
 dataTransferRoute.get(
-  "/stats/overview",
+  "/stats",
   requirePermission("data_transfer:read"),
   async (c) => {
     const user = c.get("user");
