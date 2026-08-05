@@ -6,12 +6,10 @@ const publicRoutes = ["/", "/auth/login"];
 
 // Rotas que exigem scope global (JL staff). Bloqueio server-side precoce.
 // A verificacao criptografica do JWT continua no backend via jwtAuth.
-const ADMIN_ONLY_PREFIXES = [
-  "/admin",
-  "/settings/modules",
-  "/white-label",
-  "/status-page-admin",
-];
+const ADMIN_ONLY_PREFIXES = ["/admin", "/white-label", "/status-page-admin"];
+
+// Rotas admin-only com match exato (não podem ser prefix de rotas do cliente)
+const ADMIN_ONLY_EXACT = ["/settings/modules"];
 
 // Decodifica o payload de um JWT sem verificar assinatura.
 // Usado apenas para bloqueio precoce no middleware (edge).
@@ -69,9 +67,9 @@ export async function middleware(request: NextRequest) {
   // Bloqueio precoce de rotas admin-only para usuarios nao-global
   // Decodifica o payload do JWT (sem verificar assinatura — leitura apenas)
   // A verificacao criptografica completa continua no backend via jwtAuth
-  const isAdminOnlyRoute = ADMIN_ONLY_PREFIXES.some((prefix) =>
-    pathname.startsWith(prefix),
-  );
+  const isAdminOnlyRoute =
+    ADMIN_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix)) ||
+    ADMIN_ONLY_EXACT.some((route) => pathname === route);
   if (isAdminOnlyRoute) {
     const payload = decodeJwtPayload(accessToken.value);
     if (!payload || payload.scope !== "global") {
