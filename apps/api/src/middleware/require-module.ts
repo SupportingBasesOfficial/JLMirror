@@ -8,24 +8,37 @@ import { query } from "@repo/db";
 const flagCache = new Map<string, { value: boolean; expires: number }>();
 const CACHE_TTL_MS = 30_000;
 
-async function isModuleEnabled(moduleKey: string, tenantId: string | null): Promise<boolean> {
+async function isModuleEnabled(
+  moduleKey: string,
+  tenantId: string | null,
+): Promise<boolean> {
   const cacheKey = `${moduleKey}:${tenantId ?? "global"}`;
   const cached = flagCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
     return cached.value;
   }
 
-  const result = await query<{ default_value: unknown }>(
-    `SELECT default_value FROM public.feature_flags
+  // Considera default_value (admin) E client_enabled (cliente) para tenants
+  const result = await query<{
+    default_value: unknown;
+    client_enabled: boolean | null;
+  }>(
+    `SELECT default_value, client_enabled FROM public.feature_flags
      WHERE key = $1 AND is_active = true AND (tenant_id IS NULL OR tenant_id = $2)
      ORDER BY tenant_id NULLS LAST LIMIT 1`,
     [moduleKey, tenantId],
   );
 
-  const rawValue = result.data?.rows[0]?.default_value;
-  const enabled = rawValue === true || rawValue === "true";
+  const row = result.data?.rows[0];
+  const adminEnabled =
+    row?.default_value === true || row?.default_value === "true";
+  const clientEnabled = row?.client_enabled === true;
+  const enabled = adminEnabled || clientEnabled;
 
-  flagCache.set(cacheKey, { value: enabled, expires: Date.now() + CACHE_TTL_MS });
+  flagCache.set(cacheKey, {
+    value: enabled,
+    expires: Date.now() + CACHE_TTL_MS,
+  });
   return enabled;
 }
 
@@ -43,7 +56,12 @@ export function requireModule(moduleKey: string) {
     const enabled = await isModuleEnabled(moduleKey, tenantId);
     if (!enabled) {
       return c.json(
-        { error: { code: "MODULE_DISABLED", message: "Este módulo não está ativado para este tenant" } },
+        {
+          error: {
+            code: "MODULE_DISABLED",
+            message: "Este módulo não está ativado para este tenant",
+          },
+        },
         403,
       );
     }
