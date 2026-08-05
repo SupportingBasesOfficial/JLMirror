@@ -10,6 +10,20 @@ import "../types.js";
 
 export const chatopsRoute = new Hono();
 
+// GET /api/v1/chatops — overview do modulo
+chatopsRoute.get("/", requirePermission("chatops:read"), async (c) => {
+  return c.json({
+    overview: "ChatOps — Integração com Slack/Teams",
+    endpoints: [
+      "/config",
+      "/history",
+      "/stats",
+      "/webhook/slack",
+      "/webhook/teams",
+    ],
+  });
+});
+
 // ========== Webhook Receiver (Slack/Teams) ==========
 
 // POST /api/v1/chatops/webhook/slack — recebe slash commands do Slack

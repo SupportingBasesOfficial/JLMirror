@@ -13,6 +13,24 @@ import "../types.js";
 
 export const complianceRoute = new Hono();
 
+// GET /api/v1/compliance — overview do modulo
+complianceRoute.get("/", requirePermission("compliance:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const policiesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.compliance_policies WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      policies: policiesResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/policies", "/policies/:id"],
+  });
+});
+
 // ========== Policies ==========
 
 complianceRoute.get(

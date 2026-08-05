@@ -21,6 +21,24 @@ import "../types.js";
 
 export const systemHealthRoute = new Hono();
 
+// GET /api/v1/system-health — overview do modulo
+systemHealthRoute.get("/", requirePermission("health:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const checksResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.health_checks WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      checks: checksResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/checks", "/checks/:id", "/incidents", "/score", "/stats"],
+  });
+});
+
 // ========== Health Checks ==========
 
 systemHealthRoute.get(

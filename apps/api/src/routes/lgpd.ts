@@ -7,6 +7,29 @@ import "../types.js";
 
 export const lgpdRoute = new Hono();
 
+// GET /api/v1/lgpd — overview do modulo
+lgpdRoute.get("/", requirePermission("admin:tenants:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const requestsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'pending') as pending FROM public.lgpd_requests WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      requests: requestsResult.data?.rows[0] ?? { total: "0", pending: "0" },
+    },
+    endpoints: [
+      "/requests",
+      "/requests/export",
+      "/requests/:id",
+      "/data-subjects",
+    ],
+  });
+});
+
 // GET /api/v1/lgpd/requests — lista solicitações LGPD
 lgpdRoute.get(
   "/requests",

@@ -9,6 +9,24 @@ import "../types.js";
 
 export const escalationRoute = new Hono();
 
+// GET /api/v1/escalation — overview do modulo
+escalationRoute.get("/", requirePermission("health:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const policiesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.alert_escalation_policies WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      policies: policiesResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/policies", "/policies/:id", "/instances"],
+  });
+});
+
 const createPolicySchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),

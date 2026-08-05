@@ -17,6 +17,33 @@ import "../types.js";
 
 export const dataTransferRoute = new Hono();
 
+// GET /api/v1/data-transfer — overview do modulo
+dataTransferRoute.get(
+  "/",
+  requirePermission("data_transfer:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+
+    const exportsResult = await query(
+      "SELECT COUNT(*) as total FROM public.data_exports WHERE tenant_id = $1",
+      [tenantId],
+    );
+    const importsResult = await query(
+      "SELECT COUNT(*) as total FROM public.data_imports WHERE tenant_id = $1",
+      [tenantId],
+    );
+
+    return c.json({
+      overview: {
+        exports: exportsResult.data?.rows[0]?.total ?? "0",
+        imports: importsResult.data?.rows[0]?.total ?? "0",
+      },
+      endpoints: ["/whitelist", "/templates", "/exports", "/imports"],
+    });
+  },
+);
+
 // ========== Whitelist ==========
 
 dataTransferRoute.get(

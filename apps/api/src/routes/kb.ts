@@ -17,6 +17,35 @@ import "../types.js";
 
 export const kbRoute = new Hono();
 
+// GET /api/v1/kb — overview do modulo
+kbRoute.get("/", requirePermission("kb:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const categoriesResult = await query(
+    "SELECT COUNT(*) as total FROM public.kb_categories WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const articlesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'published') as published FROM public.kb_articles WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      categories: categoriesResult.data?.rows[0]?.total ?? "0",
+      articles: articlesResult.data?.rows[0] ?? { total: "0", published: "0" },
+    },
+    endpoints: [
+      "/categories",
+      "/articles",
+      "/articles/:id",
+      "/search",
+      "/stats",
+    ],
+  });
+});
+
 // ========== Categories ==========
 
 kbRoute.get("/categories", requirePermission("kb:read"), async (c) => {

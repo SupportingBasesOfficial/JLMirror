@@ -15,6 +15,14 @@ import "../types.js";
 
 export const logsRoute = new Hono();
 
+// GET /api/v1/logs — overview do modulo
+logsRoute.get("/", requirePermission("logs:read"), async (c) => {
+  return c.json({
+    overview: "Logs — Ingestão e busca de logs de sistema",
+    endpoints: ["/ingest", "/ingest/batch", "/search", "/stats", "/levels"],
+  });
+});
+
 // POST /api/v1/logs/ingest — insere um log (requer auth)
 logsRoute.post("/ingest", async (c) => {
   const user = c.get("user");

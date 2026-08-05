@@ -23,6 +23,20 @@ import "../types.js";
 
 export const adminRoute = new Hono();
 
+// GET /api/v1/admin — overview do modulo
+adminRoute.get("/", requirePermission("admin:tenants:read"), async (c) => {
+  const tenantsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM public.tenants",
+  );
+
+  return c.json({
+    overview: {
+      tenants: tenantsResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/tenants", "/tenants/:id", "/tenants/:id/users", "/stats"],
+  });
+});
+
 // jwtAuth e tenantContext sao aplicados globalmente em index.ts para /api/v1/admin
 // Nao duplicar aqui — admin opera em tabelas public (globais), nao em schemas de tenant
 

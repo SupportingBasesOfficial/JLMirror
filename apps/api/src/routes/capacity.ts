@@ -18,6 +18,29 @@ import "../types.js";
 
 export const capacityRoute = new Hono();
 
+// GET /api/v1/capacity — overview do modulo
+capacityRoute.get("/", requirePermission("capacity:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const metricsResult = await query(
+    "SELECT COUNT(*) as total FROM public.capacity_metrics WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const thresholdsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.capacity_thresholds WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      metrics: metricsResult.data?.rows[0]?.total ?? "0",
+      thresholds: thresholdsResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/metrics", "/thresholds", "/reports", "/stats"],
+  });
+});
+
 // ========== Metrics ==========
 
 // GET /api/v1/capacity/metrics — lista métricas com filtros

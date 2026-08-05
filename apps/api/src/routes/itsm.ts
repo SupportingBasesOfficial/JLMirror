@@ -16,6 +16,30 @@ import "../types.js";
 
 export const itsmRoute = new Hono();
 
+// GET /api/v1/itsm — overview do modulo
+itsmRoute.get("/", requirePermission("itsm:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const connectorsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.itsm_connectors WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      connectors: connectorsResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: [
+      "/connectors",
+      "/connectors/:id",
+      "/connectors/:id/test",
+      "/sync-log",
+      "/stats",
+    ],
+  });
+});
+
 // ========== Connectors CRUD ==========
 
 // GET /api/v1/itsm/connectors — lista connectors

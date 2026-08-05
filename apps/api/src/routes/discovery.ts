@@ -9,6 +9,29 @@ import "../types.js";
 
 export const discoveryRoute = new Hono();
 
+// GET /api/v1/discovery — overview do modulo
+discoveryRoute.get("/", requirePermission("discovery:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const sessionsResult = await query(
+    "SELECT COUNT(*) as total FROM public.discovery_sessions WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      sessions: sessionsResult.data?.rows[0]?.total ?? "0",
+    },
+    endpoints: [
+      "/sessions",
+      "/sessions/:id",
+      "/sessions/:id/devices",
+      "/sessions/:id/links",
+    ],
+  });
+});
+
 // ========== Sessions ==========
 
 // GET /api/v1/discovery/sessions — lista sessoes de discovery

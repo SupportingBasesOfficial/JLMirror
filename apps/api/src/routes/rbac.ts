@@ -13,6 +13,19 @@ import "../types.js";
 
 export const rbacRoute = new Hono();
 
+// GET /api/v1/rbac — overview do modulo
+rbacRoute.get("/", async (c) => {
+  return c.json({
+    overview: "RBAC — Role-Based Access Control",
+    endpoints: [
+      "/permissions",
+      "/roles",
+      "/roles/:id/permissions",
+      "/me/permissions",
+    ],
+  });
+});
+
 // GET /api/v1/rbac/permissions — lista todas as permissões
 rbacRoute.get("/permissions", async (c) => {
   const result = await query(

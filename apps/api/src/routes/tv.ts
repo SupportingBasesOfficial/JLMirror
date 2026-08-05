@@ -10,6 +10,14 @@ import "../types.js";
 
 export const tvRoute = new Hono();
 
+// GET /api/v1/tv — overview do modulo
+tvRoute.get("/", requirePermission("tv:manage"), async (c) => {
+  return c.json({
+    overview: "TV — Painéis para TV/monitores",
+    endpoints: ["/tokens", "/tokens/:id", "/data"],
+  });
+});
+
 // ========== Gestao de Tokens (auth required) ==========
 
 const createTvTokenSchema = z.object({

@@ -14,6 +14,29 @@ import "../types.js";
 
 export const sslRoute = new Hono();
 
+// GET /api/v1/ssl — overview do modulo
+sslRoute.get("/", requirePermission("ssl:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const certsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'valid') as valid, COUNT(*) FILTER (WHERE status = 'expiring') as expiring, COUNT(*) FILTER (WHERE status = 'expired') as expired FROM public.ssl_certificates WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      certificates: certsResult.data?.rows[0] ?? {
+        total: "0",
+        valid: "0",
+        expiring: "0",
+        expired: "0",
+      },
+    },
+    endpoints: ["/certificates", "/certificates/:id", "/alerts", "/stats"],
+  });
+});
+
 // Funcao que faz handshake TLS real para verificar validade do certificado
 async function checkTlsCertificate(
   hostname: string,

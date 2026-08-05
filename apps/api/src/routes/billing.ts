@@ -16,6 +16,67 @@ import "../types.js";
 
 export const billingRoute = new Hono();
 
+// GET /api/v1/billing — overview do modulo
+billingRoute.get("/", requirePermission("billing:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const subsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'active') as active FROM public.billing_subscriptions WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const invoicesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status IN ('PENDING','OVERDUE')) as pending FROM public.billing_invoices WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      subscriptions: subsResult.data?.rows[0] ?? { total: "0", active: "0" },
+      invoices: invoicesResult.data?.rows[0] ?? { total: "0", pending: "0" },
+    },
+    endpoints: [
+      "/subscriptions",
+      "/invoices",
+      "/payments",
+      "/payments/:id/status",
+      "/stats",
+    ],
+  });
+});
+
+// GET /api/v1/billing/stats — estatisticas de billing
+billingRoute.get("/stats", requirePermission("billing:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const revenueResult = await query(
+    `SELECT COALESCE(SUM(amount_cents), 0) as total_revenue,
+       COUNT(*) FILTER (WHERE status IN ('RECEIVED','CONFIRMED')) as paid_invoices,
+       COUNT(*) FILTER (WHERE status IN ('PENDING','OVERDUE')) as pending_invoices,
+       COUNT(*) as total_invoices
+     FROM public.billing_invoices WHERE tenant_id = $1`,
+    [tenantId],
+  );
+
+  const subsResult = await query(
+    `SELECT plan, billing_cycle, status, COUNT(*) as count
+     FROM public.billing_subscriptions WHERE tenant_id = $1
+     GROUP BY plan, billing_cycle, status`,
+    [tenantId],
+  );
+
+  return c.json({
+    revenue: revenueResult.data?.rows[0] ?? {
+      total_revenue: "0",
+      paid_invoices: "0",
+      pending_invoices: "0",
+      total_invoices: "0",
+    },
+    subscriptions_by_plan: subsResult.data?.rows ?? [],
+  });
+});
+
 const createSubscriptionSchema = z.object({
   plan: z.enum(["starter", "pro", "enterprise"]).default("starter"),
   billing_cycle: z.enum(["monthly", "quarterly", "yearly"]).default("monthly"),

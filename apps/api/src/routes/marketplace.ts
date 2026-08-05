@@ -9,6 +9,14 @@ import "../types.js";
 
 export const marketplaceRoute = new Hono();
 
+// GET /api/v1/marketplace — overview do modulo
+marketplaceRoute.get("/", async (c) => {
+  return c.json({
+    overview: "Marketplace — Catálogo de integrações",
+    endpoints: ["/apps", "/apps/:slug", "/installs", "/installs/:id"],
+  });
+});
+
 // ========== Apps Catalog ==========
 
 // GET /api/v1/marketplace/apps — lista apps do catalogo

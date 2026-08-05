@@ -18,6 +18,25 @@ import "../types.js";
 
 export const featureFlagRoute = new Hono();
 
+// GET /api/v1/feature-flags — overview do modulo
+featureFlagRoute.get(
+  "/",
+  requirePermission("feature_flags:read"),
+  async (c) => {
+    return c.json({
+      overview: "Feature Flags — Controle de funcionalidades por tenant",
+      endpoints: [
+        "/",
+        "/:key",
+        "/:key/evaluate",
+        "/:key/overrides",
+        "/modules",
+        "/modules/:key/visibility",
+      ],
+    });
+  },
+);
+
 function hashString(input: string): number {
   const hash = createHash("sha256").update(input).digest();
   return hash.readUInt32BE(0);

@@ -9,6 +9,32 @@ import "../types.js";
 
 export const workflowRoute = new Hono();
 
+// GET /api/v1/workflows — overview do modulo
+workflowRoute.get("/", requirePermission("workflows:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const workflowsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.workflows WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      workflows: workflowsResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: [
+      "",
+      "/:id",
+      "/:id/execute",
+      "/:id/clone",
+      "/devices/list",
+      "/executions/:id",
+      "/executions/:id/cancel",
+    ],
+  });
+});
+
 const stepTypeSchema = z.enum([
   "script",
   "command",

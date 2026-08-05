@@ -19,6 +19,20 @@ import "../types.js";
 
 export const pushRoute = new Hono();
 
+// GET /api/v1/push — overview do modulo
+pushRoute.get("/", async (c) => {
+  return c.json({
+    overview: "Push — Notificações Web Push",
+    endpoints: [
+      "/vapid-public-key",
+      "/subscribe",
+      "/unsubscribe",
+      "/broadcast",
+      "/subscriptions",
+    ],
+  });
+});
+
 // GET /api/v1/push/vapid-public-key — retorna a chave publica VAPID
 pushRoute.get("/vapid-public-key", async (c) => {
   const publicKey = getVapidPublicKey();

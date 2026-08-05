@@ -13,6 +13,24 @@ import "../types.js";
 
 export const anomalyRoute = new Hono();
 
+// GET /api/v1/anomaly — overview do modulo
+anomalyRoute.get("/", requirePermission("anomaly:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const detectionsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.anomaly_detections WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      detections: detectionsResult.data?.rows[0] ?? { total: "0", open: "0" },
+    },
+    endpoints: ["/detections", "/detections/:id", "/stats", "/config"],
+  });
+});
+
 // ========== Anomaly Detections ==========
 
 // GET /api/v1/anomaly/detections — lista deteccoes

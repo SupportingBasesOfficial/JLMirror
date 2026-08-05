@@ -37,6 +37,14 @@ clientPortalRoute.use("/*", async (c, next) => {
   await next();
 });
 
+// GET /api/v1/client-portal — overview do modulo
+clientPortalRoute.get("/", async (c) => {
+  return c.json({
+    overview: "Client Portal — Portal do cliente",
+    endpoints: ["/users", "/overview", "/services", "/incidents"],
+  });
+});
+
 // ========== Client Portal Users (Admin manage) ==========
 
 // GET /api/v1/client-portal/users — lista usuarios do portal

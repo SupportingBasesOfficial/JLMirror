@@ -16,6 +16,24 @@ import "../types.js";
 
 export const firewallRoute = new Hono();
 
+// GET /api/v1/firewall — overview do modulo
+firewallRoute.get("/", requirePermission("firewall:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const rulesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.firewall_rules WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/rules", "/rules/:id", "/changes", "/hosts"],
+  });
+});
+
 // Executa comando SSH remoto e retorna saida
 function execSshCommand(
   host: string,

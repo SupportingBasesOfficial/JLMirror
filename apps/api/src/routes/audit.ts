@@ -7,6 +7,14 @@ import "../types.js";
 
 export const auditRoute = new Hono();
 
+// GET /api/v1/audit — overview do modulo
+auditRoute.get("/", requirePermission("audit:read"), async (c) => {
+  return c.json({
+    overview: "Audit — Logs de auditoria do sistema",
+    endpoints: ["/logs", "/stats"],
+  });
+});
+
 // GET /api/v1/audit/logs — lista logs de auditoria com filtros
 auditRoute.get("/logs", requirePermission("audit:read"), async (c) => {
   const userId = c.req.query("user_id");

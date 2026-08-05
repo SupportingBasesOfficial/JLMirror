@@ -7,6 +7,14 @@ import "../types.js";
 
 export const tracesRoute = new Hono();
 
+// GET /api/v1/traces — overview do modulo
+tracesRoute.get("/", requirePermission("traces:read"), async (c) => {
+  return c.json({
+    overview: "Traces — Distributed tracing",
+    endpoints: ["/search", "/stats", "/:traceId"],
+  });
+});
+
 interface TraceSpanRow {
   id: string;
   trace_id: string;

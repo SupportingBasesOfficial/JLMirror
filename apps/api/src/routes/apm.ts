@@ -6,6 +6,14 @@ import { requirePermission } from "../middleware/require-permission.js";
 
 export const apmRoute = new Hono();
 
+// GET /api/v1/apm — overview do modulo
+apmRoute.get("/", requirePermission("traces:read"), async (c) => {
+  return c.json({
+    overview: "APM — Application Performance Monitoring",
+    endpoints: ["/overview", "/throughput"],
+  });
+});
+
 // GET /api/v1/apm/overview — dashboard de observabilidade runtime
 apmRoute.get("/overview", requirePermission("traces:read"), async (c) => {
   const user = c.get("user");

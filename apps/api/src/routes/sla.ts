@@ -23,6 +23,37 @@ import "../types.js";
 
 export const slaRoute = new Hono();
 
+// GET /api/v1/sla — overview do modulo
+slaRoute.get("/", requirePermission("sla:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const servicesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.sla_services WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const incidentsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.sla_incidents WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      services: servicesResult.data?.rows[0] ?? { total: "0", active: "0" },
+      incidents: incidentsResult.data?.rows[0] ?? { total: "0", open: "0" },
+    },
+    endpoints: [
+      "/services",
+      "/services/:id",
+      "/incidents",
+      "/maintenance",
+      "/report",
+      "/dashboard",
+      "/stats",
+    ],
+  });
+});
+
 // ========== Services ==========
 
 // GET /api/v1/sla/services — lista todos os serviços

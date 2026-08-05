@@ -9,6 +9,29 @@ import "../types.js";
 
 export const correlationRoute = new Hono();
 
+// GET /api/v1/correlation — overview do modulo
+correlationRoute.get("/", requirePermission("health:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const rulesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.correlation_rules WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const groupsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.correlation_groups WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
+      groups: groupsResult.data?.rows[0] ?? { total: "0", open: "0" },
+    },
+    endpoints: ["/rules", "/rules/:id", "/groups", "/groups/:id", "/stats"],
+  });
+});
+
 const groupingStrategySchema = z.enum([
   "same_device",
   "same_host_group",

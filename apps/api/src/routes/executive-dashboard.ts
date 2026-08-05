@@ -14,6 +14,14 @@ executiveDashboardRoute.use(
   requirePermission("dashboard:executive:read"),
 );
 
+// GET /api/v1/dashboard/executive — overview do modulo
+executiveDashboardRoute.get("/", async (c) => {
+  return c.json({
+    overview: "Executive Dashboard — Visão executiva",
+    endpoints: ["/overview", "/trends", "/alerts", "/summary"],
+  });
+});
+
 // ========== Executive Overview ==========
 
 executiveDashboardRoute.get("/overview", httpCache(60), async (c) => {

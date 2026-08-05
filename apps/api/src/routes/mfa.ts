@@ -20,6 +20,30 @@ import "../types.js";
 
 export const mfaRoute = new Hono();
 
+// GET /api/v1/mfa — status MFA do usuario atual
+mfaRoute.get("/", requirePermission("self:mfa:write"), async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Autenticação necessária" } },
+      401,
+    );
+  }
+
+  const result = await query<{
+    mfa_enabled: boolean;
+    mfa_method: string | null;
+  }>("SELECT mfa_enabled, mfa_method FROM public.users WHERE id = $1", [
+    user.sub,
+  ]);
+
+  return c.json({
+    enabled: result.data?.rows[0]?.mfa_enabled ?? false,
+    method: result.data?.rows[0]?.mfa_method ?? null,
+    endpoints: ["/setup", "/verify", "/disable", "/status", "/recovery-codes"],
+  });
+});
+
 // POST /api/v1/mfa/setup — inicia configuração TOTP (retorna secret + QR code + recovery codes)
 mfaRoute.post("/setup", requirePermission("self:mfa:write"), async (c) => {
   const user = c.get("user");

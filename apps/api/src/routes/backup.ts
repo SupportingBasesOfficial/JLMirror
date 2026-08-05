@@ -17,6 +17,29 @@ import "../types.js";
 
 export const backupRoute = new Hono();
 
+// GET /api/v1/backups — overview do modulo
+backupRoute.get("/", requirePermission("backup:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const jobsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.backup_jobs WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const restoresResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'running') as running FROM public.backup_restores WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      jobs: jobsResult.data?.rows[0] ?? { total: "0", active: "0" },
+      restores: restoresResult.data?.rows[0] ?? { total: "0", running: "0" },
+    },
+    endpoints: ["/jobs", "/jobs/:id", "/snapshots", "/restores", "/stats"],
+  });
+});
+
 // Executa comando shell e retorna saida padrao ou erro
 function execCommand(
   command: string,

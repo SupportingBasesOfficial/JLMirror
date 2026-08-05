@@ -82,6 +82,23 @@ zabbixRoute.use("/*", async (c, next) => {
 });
 
 // Registra rotas por dominio
+zabbixRoute.get("/", async (c) => {
+  return c.json({
+    overview: "Zabbix — Monitoração integrada",
+    endpoints: [
+      "/ping",
+      "/devices",
+      "/devices/:hostId",
+      "/devices/:hostId/items",
+      "/triggers",
+      "/services",
+      "/history",
+      "/graphs",
+      "/graphs/:graphId/data",
+    ],
+  });
+});
+
 registerHostRoutes(zabbixRoute);
 registerHistoryRoutes(zabbixRoute);
 registerProblemsRoutes(zabbixRoute);

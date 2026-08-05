@@ -9,6 +9,29 @@ import "../types.js";
 
 export const securityAuditRoute = new Hono();
 
+// GET /api/v1/security-audit — overview do modulo
+securityAuditRoute.get("/", requirePermission("compliance:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const rulesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.security_audit_rules WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const findingsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.security_audit_findings WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
+      findings: findingsResult.data?.rows[0] ?? { total: "0", open: "0" },
+    },
+    endpoints: ["/rules", "/findings", "/scans", "/summary"],
+  });
+});
+
 const categorySchema = z.enum([
   "access_control",
   "encryption",

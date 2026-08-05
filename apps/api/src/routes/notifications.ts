@@ -23,6 +23,39 @@ export const notificationRoute = new Hono();
 // Re-exporta para compatibilidade com imports existentes
 export { deliverNotification };
 
+// GET /api/v1/notifications — overview do modulo
+notificationRoute.get(
+  "/",
+  requirePermission("notifications:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+
+    const channelsResult = await query(
+      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.notification_channels WHERE tenant_id = $1",
+      [tenantId],
+    );
+    const rulesResult = await query(
+      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.notification_rules WHERE tenant_id = $1",
+      [tenantId],
+    );
+
+    return c.json({
+      overview: {
+        channels: channelsResult.data?.rows[0] ?? { total: "0", active: "0" },
+        rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
+      },
+      endpoints: [
+        "/channels",
+        "/channels/:id",
+        "/rules",
+        "/rules/:id",
+        "/send",
+      ],
+    });
+  },
+);
+
 // ========== Channels ==========
 
 notificationRoute.get(

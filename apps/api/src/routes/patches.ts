@@ -9,6 +9,24 @@ import "../types.js";
 
 export const patchRoute = new Hono();
 
+// GET /api/v1/patches — overview do modulo
+patchRoute.get("/", requirePermission("patches:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const patchesResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'pending') as pending FROM public.patches WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      patches: patchesResult.data?.rows[0] ?? { total: "0", pending: "0" },
+    },
+    endpoints: ["/scans", "/deployments", "/deployments/:id"],
+  });
+});
+
 const severitySchema = z.enum(["critical", "high", "medium", "low"]);
 const categorySchema = z.enum(["security", "feature", "bugfix", "driver"]);
 

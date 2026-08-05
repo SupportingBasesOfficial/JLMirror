@@ -14,6 +14,14 @@ import "../types.js";
 
 export const finopsRoute = new Hono();
 
+// GET /api/v1/finops — overview do modulo
+finopsRoute.get("/", requirePermission("finops:read"), async (c) => {
+  return c.json({
+    overview: "FinOps — Financial Operations",
+    endpoints: ["/costs", "/summary", "/optimizations", "/budgets", "/stats"],
+  });
+});
+
 // ========== Cost Entries ==========
 
 // GET /api/v1/finops/costs — lista custos com filtros

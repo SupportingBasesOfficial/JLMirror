@@ -15,6 +15,24 @@ import "../types.js";
 
 export const k8sRoute = new Hono();
 
+// GET /api/v1/k8s — overview do modulo
+k8sRoute.get("/", requirePermission("k8s:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const clustersResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.k8s_clusters WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      clusters: clustersResult.data?.rows[0] ?? { total: "0", active: "0" },
+    },
+    endpoints: ["/clusters", "/clusters/:id", "/clusters/:id/events"],
+  });
+});
+
 // Executa kubectl e retorna JSON parseado
 function execKubectl(
   kubeconfigPath: string | null,

@@ -10,6 +10,29 @@ import "../types.js";
 
 export const driftRoute = new Hono();
 
+// GET /api/v1/drift — overview do modulo
+driftRoute.get("/", requirePermission("drift:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const baselinesResult = await query(
+    "SELECT COUNT(*) as total FROM public.config_baselines WHERE tenant_id = $1",
+    [tenantId],
+  );
+  const eventsResult = await query(
+    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.config_drift_events WHERE tenant_id = $1",
+    [tenantId],
+  );
+
+  return c.json({
+    overview: {
+      baselines: baselinesResult.data?.rows[0]?.total ?? "0",
+      events: eventsResult.data?.rows[0] ?? { total: "0", open: "0" },
+    },
+    endpoints: ["/baselines", "/events", "/stats"],
+  });
+});
+
 // ========== Baselines ==========
 
 // GET /api/v1/drift/baselines — lista baselines
