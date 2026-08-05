@@ -359,11 +359,12 @@ settingsRoute.get("/modules", requirePermission("settings:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
+  // DISTINCT ON garante uma unica linha por key, preferindo o override do tenant sobre o template global
   const result = await query(
-    `SELECT key, name, description, default_value, is_active, client_visible, client_enabled
+    `SELECT DISTINCT ON (key) key, name, description, default_value, is_active, client_visible, client_enabled
      FROM public.feature_flags
      WHERE key LIKE 'module_%' AND (tenant_id IS NULL OR tenant_id = $1)
-     ORDER BY key`,
+     ORDER BY key, tenant_id NULLS LAST`,
     [tenantId],
   );
 
@@ -415,27 +416,42 @@ settingsRoute.put(
       );
     }
 
-    // Verifica se a flag existe (global ou do tenant)
-    const flagResult = await query<{ id: string }>(
-      `SELECT id FROM public.feature_flags
-     WHERE key = $1 AND (tenant_id IS NULL OR tenant_id = $2)
-     ORDER BY tenant_id NULLS LAST LIMIT 1`,
-      [moduleKey, tenantId],
+    // Verifica se o template global da flag existe
+    const templateResult = await query<{ id: string }>(
+      `SELECT id FROM public.feature_flags WHERE key = $1 AND tenant_id IS NULL LIMIT 1`,
+      [moduleKey],
     );
 
-    if (!flagResult.data?.rows[0]) {
+    if (!templateResult.data?.rows[0]) {
       return c.json(
         { error: { code: "NOT_FOUND", message: "Módulo não encontrado" } },
         404,
       );
     }
 
-    // Atualiza o default_value da flag
-    await query(
-      `UPDATE public.feature_flags SET default_value = $1::jsonb, updated_at = NOW()
-     WHERE key = $2 AND (tenant_id IS NULL OR tenant_id = $3)`,
-      [JSON.stringify(body.enabled), moduleKey, tenantId],
-    );
+    if (tenantId) {
+      // Copy-on-write: cria uma linha isolada deste tenant antes de alterar.
+      // Sem isso, o UPDATE cairia na linha global (tenant_id IS NULL) e vazaria para todos os outros tenants.
+      await query(
+        `INSERT INTO public.feature_flags (tenant_id, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled)
+         SELECT $1, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled
+         FROM public.feature_flags WHERE key = $2 AND tenant_id IS NULL
+         ON CONFLICT (tenant_id, key) DO NOTHING`,
+        [tenantId, moduleKey],
+      );
+      await query(
+        `UPDATE public.feature_flags SET default_value = $1::jsonb, updated_at = NOW()
+         WHERE key = $2 AND tenant_id = $3`,
+        [JSON.stringify(body.enabled), moduleKey, tenantId],
+      );
+    } else {
+      // Ator sem tenant (staff global) — altera o template padrao usado por tenants sem override
+      await query(
+        `UPDATE public.feature_flags SET default_value = $1::jsonb, updated_at = NOW()
+         WHERE key = $2 AND tenant_id IS NULL`,
+        [JSON.stringify(body.enabled), moduleKey],
+      );
+    }
 
     // Limpa o cache do middleware require-module para que a mudanca tenha efeito imediato
     clearModuleFlagCache();
@@ -483,23 +499,41 @@ settingsRoute.put(
       );
     }
 
-    const flagResult = await query<{ id: string }>(
+    const tenantId = user?.tenant_id ?? null;
+
+    const templateResult = await query<{ id: string }>(
       `SELECT id FROM public.feature_flags WHERE key = $1 AND tenant_id IS NULL LIMIT 1`,
       [moduleKey],
     );
 
-    if (!flagResult.data?.rows[0]) {
+    if (!templateResult.data?.rows[0]) {
       return c.json(
         { error: { code: "NOT_FOUND", message: "Módulo não encontrado" } },
         404,
       );
     }
 
-    await query(
-      `UPDATE public.feature_flags SET client_visible = $1, updated_at = NOW()
-       WHERE key = $2 AND tenant_id IS NULL`,
-      [body.client_visible, moduleKey],
-    );
+    if (tenantId) {
+      // Copy-on-write: isola a decisao de visibilidade por tenant (nao pode afetar outros tenants)
+      await query(
+        `INSERT INTO public.feature_flags (tenant_id, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled)
+         SELECT $1, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled
+         FROM public.feature_flags WHERE key = $2 AND tenant_id IS NULL
+         ON CONFLICT (tenant_id, key) DO NOTHING`,
+        [tenantId, moduleKey],
+      );
+      await query(
+        `UPDATE public.feature_flags SET client_visible = $1, updated_at = NOW()
+         WHERE key = $2 AND tenant_id = $3`,
+        [body.client_visible, moduleKey, tenantId],
+      );
+    } else {
+      await query(
+        `UPDATE public.feature_flags SET client_visible = $1, updated_at = NOW()
+         WHERE key = $2 AND tenant_id IS NULL`,
+        [body.client_visible, moduleKey],
+      );
+    }
 
     clearModuleFlagCache();
 
@@ -551,11 +585,15 @@ settingsRoute.put(
       );
     }
 
+    const tenantId = user?.tenant_id ?? null;
+
     // Verifica se a flag existe e se o admin liberou para o cliente
+    // (prefere o override do tenant sobre o template global, caso exista)
     const flagResult = await query<{ client_visible: boolean }>(
       `SELECT client_visible FROM public.feature_flags
-       WHERE key = $1 AND tenant_id IS NULL LIMIT 1`,
-      [moduleKey],
+       WHERE key = $1 AND (tenant_id IS NULL OR tenant_id = $2)
+       ORDER BY tenant_id NULLS LAST LIMIT 1`,
+      [moduleKey, tenantId],
     );
 
     if (!flagResult.data?.rows[0]) {
@@ -577,11 +615,27 @@ settingsRoute.put(
       );
     }
 
-    await query(
-      `UPDATE public.feature_flags SET client_enabled = $1, updated_at = NOW()
-       WHERE key = $2 AND tenant_id IS NULL`,
-      [body.enabled, moduleKey],
-    );
+    if (tenantId) {
+      // Copy-on-write: isola a ativacao do cliente por tenant (nao pode afetar outros tenants)
+      await query(
+        `INSERT INTO public.feature_flags (tenant_id, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled)
+         SELECT $1, key, name, description, flag_type, is_active, default_value, rollout_percentage, variants, target_segments, excluded_tenant_ids, client_visible, client_enabled
+         FROM public.feature_flags WHERE key = $2 AND tenant_id IS NULL
+         ON CONFLICT (tenant_id, key) DO NOTHING`,
+        [tenantId, moduleKey],
+      );
+      await query(
+        `UPDATE public.feature_flags SET client_enabled = $1, updated_at = NOW()
+         WHERE key = $2 AND tenant_id = $3`,
+        [body.enabled, moduleKey, tenantId],
+      );
+    } else {
+      await query(
+        `UPDATE public.feature_flags SET client_enabled = $1, updated_at = NOW()
+         WHERE key = $2 AND tenant_id IS NULL`,
+        [body.enabled, moduleKey],
+      );
+    }
 
     clearModuleFlagCache();
 
