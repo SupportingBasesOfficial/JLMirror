@@ -53,6 +53,103 @@ changesRoute.get("/", requirePermission("changes:read"), async (c) => {
 
 // ========== Get Single Change ==========
 
+// ========== Stats ==========
+
+changesRoute.get("/stats", requirePermission("changes:read"), async (c) => {
+  const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
+
+  const totalChanges = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1",
+      [tenantId],
+    ),
+  );
+  const pendingApproval = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('submitted','under_review')",
+      [tenantId],
+    ),
+  );
+  const approved = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'approved'",
+      [tenantId],
+    ),
+  );
+  const inProgress = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'in_progress'",
+      [tenantId],
+    ),
+  );
+  const implemented = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'implemented'",
+      [tenantId],
+    ),
+  );
+  const failed = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('failed','rolled_back')",
+      [tenantId],
+    ),
+  );
+  const emergency = safeCount(
+    await query(
+      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND change_type = 'emergency'",
+      [tenantId],
+    ),
+  );
+
+  // By type
+  const byType = safeRows(
+    await query(
+      "SELECT change_type, COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 GROUP BY change_type",
+      [tenantId],
+    ),
+  );
+
+  // Recent changes
+  const recent = safeRows(
+    await query(
+      `SELECT cr.id, cr.rfc_number, cr.title, cr.status, cr.priority, cr.change_type, cr.created_at,
+       u.name as requester_name
+     FROM public.change_requests cr
+     LEFT JOIN public.users u ON cr.requested_by = u.id
+     WHERE cr.tenant_id = $1 ORDER BY cr.created_at DESC LIMIT 10`,
+      [tenantId],
+    ),
+  );
+
+  // Upcoming scheduled
+  const upcoming = safeRows(
+    await query(
+      `SELECT id, rfc_number, title, planned_start_at, planned_end_at, priority, risk_level
+     FROM public.change_requests
+     WHERE tenant_id = $1 AND status IN ('approved','scheduled')
+       AND planned_start_at >= NOW()
+     ORDER BY planned_start_at ASC LIMIT 5`,
+      [tenantId],
+    ),
+  );
+
+  return c.json({
+    total: totalChanges,
+    pending_approval: pendingApproval,
+    approved,
+    in_progress: inProgress,
+    implemented,
+    failed,
+    emergency,
+    success_rate:
+      totalChanges > 0 ? Math.round((implemented / totalChanges) * 100) : 0,
+    by_type: byType,
+    recent,
+    upcoming,
+  });
+});
+
 changesRoute.get("/:changeId", requirePermission("changes:read"), async (c) => {
   const changeId = c.req.param("changeId");
   const user = c.get("user");
@@ -596,100 +693,3 @@ changesRoute.get(
     return c.json({ events: result.data?.rows ?? [] });
   },
 );
-
-// ========== Stats ==========
-
-changesRoute.get("/stats", requirePermission("changes:read"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user?.tenant_id ?? null;
-
-  const totalChanges = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1",
-      [tenantId],
-    ),
-  );
-  const pendingApproval = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('submitted','under_review')",
-      [tenantId],
-    ),
-  );
-  const approved = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'approved'",
-      [tenantId],
-    ),
-  );
-  const inProgress = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'in_progress'",
-      [tenantId],
-    ),
-  );
-  const implemented = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status = 'implemented'",
-      [tenantId],
-    ),
-  );
-  const failed = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND status IN ('failed','rolled_back')",
-      [tenantId],
-    ),
-  );
-  const emergency = safeCount(
-    await query(
-      "SELECT COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 AND change_type = 'emergency'",
-      [tenantId],
-    ),
-  );
-
-  // By type
-  const byType = safeRows(
-    await query(
-      "SELECT change_type, COUNT(*) as count FROM public.change_requests WHERE tenant_id = $1 GROUP BY change_type",
-      [tenantId],
-    ),
-  );
-
-  // Recent changes
-  const recent = safeRows(
-    await query(
-      `SELECT cr.id, cr.rfc_number, cr.title, cr.status, cr.priority, cr.change_type, cr.created_at,
-       u.name as requester_name
-     FROM public.change_requests cr
-     LEFT JOIN public.users u ON cr.requested_by = u.id
-     WHERE cr.tenant_id = $1 ORDER BY cr.created_at DESC LIMIT 10`,
-      [tenantId],
-    ),
-  );
-
-  // Upcoming scheduled
-  const upcoming = safeRows(
-    await query(
-      `SELECT id, rfc_number, title, planned_start_at, planned_end_at, priority, risk_level
-     FROM public.change_requests
-     WHERE tenant_id = $1 AND status IN ('approved','scheduled')
-       AND planned_start_at >= NOW()
-     ORDER BY planned_start_at ASC LIMIT 5`,
-      [tenantId],
-    ),
-  );
-
-  return c.json({
-    total: totalChanges,
-    pending_approval: pendingApproval,
-    approved,
-    in_progress: inProgress,
-    implemented,
-    failed,
-    emergency,
-    success_rate:
-      totalChanges > 0 ? Math.round((implemented / totalChanges) * 100) : 0,
-    by_type: byType,
-    recent,
-    upcoming,
-  });
-});

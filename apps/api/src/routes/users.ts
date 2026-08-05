@@ -28,7 +28,9 @@ usersRoute.get("/", requirePermission("tenant:users:read"), async (c) => {
     scope: string;
     created_at: string;
   }>(
-    `SELECT u.id, u.email, u.full_name, u.is_active, tu.role, tu.scope, tu.created_at
+    `SELECT u.id, u.email, u.full_name, u.is_active, tu.role,
+       CASE WHEN tu.role LIKE 'global:%' THEN 'global' ELSE 'tenant' END AS scope,
+       tu.created_at
      FROM public.tenant_users tu
      JOIN public.users u ON u.id = tu.user_id
      WHERE tu.tenant_id = $1
@@ -71,7 +73,8 @@ usersRoute.get("/all", requirePermission("global:users:read"), async (c) => {
     role: string;
     scope: string;
   }>(
-    `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id, tu.role, tu.scope
+    `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id, tu.role,
+       CASE WHEN tu.role LIKE 'global:%' THEN 'global' ELSE 'tenant' END AS scope
      FROM public.tenant_users tu
      JOIN public.users u ON u.id = tu.user_id
      ORDER BY u.email`,

@@ -282,23 +282,6 @@ apiKeyRoute.post(
   },
 );
 
-// ========== Usage Log ==========
-
-apiKeyRoute.get("/:id/usage", requirePermission("api_keys:read"), async (c) => {
-  const keyId = c.req.param("id");
-  const user = c.get("user");
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
-
-  const result = await query(
-    `SELECT * FROM public.api_key_usage_log
-     WHERE api_key_id = $1 AND tenant_id = $2
-     ORDER BY created_at DESC LIMIT $3`,
-    [keyId, user?.tenant_id ?? null, limit],
-  );
-
-  return c.json({ usage: result.data?.rows ?? [] });
-});
-
 // ========== Stats ==========
 
 apiKeyRoute.get("/stats", requirePermission("api_keys:read"), async (c) => {
@@ -343,4 +326,21 @@ apiKeyRoute.get("/stats", requirePermission("api_keys:read"), async (c) => {
     top_keys: topKeys.data?.rows ?? [],
     recent_usage: recentUsage.data?.rows ?? [],
   });
+});
+
+// ========== Usage Log ==========
+
+apiKeyRoute.get("/:id/usage", requirePermission("api_keys:read"), async (c) => {
+  const keyId = c.req.param("id");
+  const user = c.get("user");
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+
+  const result = await query(
+    `SELECT * FROM public.api_key_usage_log
+     WHERE api_key_id = $1 AND tenant_id = $2
+     ORDER BY created_at DESC LIMIT $3`,
+    [keyId, user?.tenant_id ?? null, limit],
+  );
+
+  return c.json({ usage: result.data?.rows ?? [] });
 });

@@ -72,6 +72,74 @@ assetRoute.get("/", requirePermission("assets:read"), async (c) => {
   return c.json({ assets: result.data?.rows ?? [] });
 });
 
+// GET /api/v1/assets/stats — estatisticas de assets
+assetRoute.get("/stats", requirePermission("assets:read"), async (c) => {
+  const user = c.get("user");
+
+  const statusResult = await query(
+    `SELECT status, COUNT(*) as count
+     FROM public.assets WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`,
+    [user?.tenant_id ?? null],
+  );
+
+  const typeResult = await query(
+    `SELECT asset_type, COUNT(*) as count
+     FROM public.assets WHERE tenant_id = $1 GROUP BY asset_type ORDER BY count DESC`,
+    [user?.tenant_id ?? null],
+  );
+
+  const criticalityResult = await query(
+    `SELECT criticality, COUNT(*) as count
+     FROM public.assets WHERE tenant_id = $1 AND status = 'active' GROUP BY criticality ORDER BY
+     CASE criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END`,
+    [user?.tenant_id ?? null],
+  );
+
+  const warrantyResult = await query(
+    `SELECT
+       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry < CURRENT_DATE) as expired,
+       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry <= CURRENT_DATE + INTERVAL '30 days' AND warranty_expiry >= CURRENT_DATE) as expiring_soon,
+       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry > CURRENT_DATE + INTERVAL '30 days') as valid,
+       COUNT(*) FILTER (WHERE warranty_expiry IS NULL) as no_warranty
+     FROM public.assets WHERE tenant_id = $1 AND status = 'active'`,
+    [user?.tenant_id ?? null],
+  );
+
+  const licenseResult = await query(
+    `SELECT
+       COUNT(*) as total,
+       COUNT(*) FILTER (WHERE expiry_date IS NOT NULL AND expiry_date < CURRENT_DATE) as expired,
+       COUNT(*) FILTER (WHERE expiry_date IS NOT NULL AND expiry_date <= CURRENT_DATE + INTERVAL '30 days' AND expiry_date >= CURRENT_DATE) as expiring_soon,
+       COALESCE(SUM(cost), 0) as total_cost
+     FROM public.asset_licenses WHERE tenant_id = $1 AND is_active = true`,
+    [user?.tenant_id ?? null],
+  );
+
+  const totalResult = await query(
+    "SELECT COUNT(*) as total FROM public.assets WHERE tenant_id = $1",
+    [user?.tenant_id ?? null],
+  );
+
+  return c.json({
+    total: totalResult.data?.rows[0]?.total ?? "0",
+    by_status: statusResult.data?.rows ?? [],
+    by_type: typeResult.data?.rows ?? [],
+    by_criticality: criticalityResult.data?.rows ?? [],
+    warranty: warrantyResult.data?.rows[0] ?? {
+      expired: "0",
+      expiring_soon: "0",
+      valid: "0",
+      no_warranty: "0",
+    },
+    licenses: licenseResult.data?.rows[0] ?? {
+      total: "0",
+      expired: "0",
+      expiring_soon: "0",
+      total_cost: "0",
+    },
+  });
+});
+
 // GET /api/v1/assets/:id — detalhe com licencas e historico
 assetRoute.get("/:id", requirePermission("assets:read"), async (c) => {
   const assetId = c.req.param("id");
@@ -457,72 +525,3 @@ assetRoute.delete(
     return c.json({ deleted: true });
   },
 );
-
-// ========== Stats ==========
-
-assetRoute.get("/stats", requirePermission("assets:read"), async (c) => {
-  const user = c.get("user");
-
-  const statusResult = await query(
-    `SELECT status, COUNT(*) as count
-     FROM public.assets WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`,
-    [user?.tenant_id ?? null],
-  );
-
-  const typeResult = await query(
-    `SELECT asset_type, COUNT(*) as count
-     FROM public.assets WHERE tenant_id = $1 GROUP BY asset_type ORDER BY count DESC`,
-    [user?.tenant_id ?? null],
-  );
-
-  const criticalityResult = await query(
-    `SELECT criticality, COUNT(*) as count
-     FROM public.assets WHERE tenant_id = $1 AND status = 'active' GROUP BY criticality ORDER BY
-     CASE criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END`,
-    [user?.tenant_id ?? null],
-  );
-
-  const warrantyResult = await query(
-    `SELECT
-       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry < CURRENT_DATE) as expired,
-       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry <= CURRENT_DATE + INTERVAL '30 days' AND warranty_expiry >= CURRENT_DATE) as expiring_soon,
-       COUNT(*) FILTER (WHERE warranty_expiry IS NOT NULL AND warranty_expiry > CURRENT_DATE + INTERVAL '30 days') as valid,
-       COUNT(*) FILTER (WHERE warranty_expiry IS NULL) as no_warranty
-     FROM public.assets WHERE tenant_id = $1 AND status = 'active'`,
-    [user?.tenant_id ?? null],
-  );
-
-  const licenseResult = await query(
-    `SELECT
-       COUNT(*) as total,
-       COUNT(*) FILTER (WHERE expiry_date IS NOT NULL AND expiry_date < CURRENT_DATE) as expired,
-       COUNT(*) FILTER (WHERE expiry_date IS NOT NULL AND expiry_date <= CURRENT_DATE + INTERVAL '30 days' AND expiry_date >= CURRENT_DATE) as expiring_soon,
-       COALESCE(SUM(cost), 0) as total_cost
-     FROM public.asset_licenses WHERE tenant_id = $1 AND is_active = true`,
-    [user?.tenant_id ?? null],
-  );
-
-  const totalResult = await query(
-    "SELECT COUNT(*) as total FROM public.assets WHERE tenant_id = $1",
-    [user?.tenant_id ?? null],
-  );
-
-  return c.json({
-    total: totalResult.data?.rows[0]?.total ?? "0",
-    by_status: statusResult.data?.rows ?? [],
-    by_type: typeResult.data?.rows ?? [],
-    by_criticality: criticalityResult.data?.rows ?? [],
-    warranty: warrantyResult.data?.rows[0] ?? {
-      expired: "0",
-      expiring_soon: "0",
-      valid: "0",
-      no_warranty: "0",
-    },
-    licenses: licenseResult.data?.rows[0] ?? {
-      total: "0",
-      expired: "0",
-      expiring_soon: "0",
-      total_cost: "0",
-    },
-  });
-});

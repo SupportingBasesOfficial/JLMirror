@@ -104,6 +104,30 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
 
 ## ACHADOS (issues encontrados, preencher com file:line)
 
+### Teste Runtime (item extra — validação em execução)
+
+**Bug 1: `/users` retornava 500 QUERY_ERROR**
+
+- Causa: Query em `users.ts` selecionava `tu.scope` de `tenant_users`, mas esta coluna não existe. `scope` é calculado dinamicamente pela função `get_tenant_user_auth`.
+- Correção: Substituir `tu.scope` por `CASE WHEN tu.role LIKE 'global:%' THEN 'global' ELSE 'tenant' END AS scope` em ambas queries (`/users` e `/users/all`).
+- Arquivos: `apps/api/src/routes/users.ts:31, 76`
+
+**Bug 2: Route shadowing — `/stats` capturado por `/:id` em 5 route files**
+
+- Causa: Em Hono, a ordem de registro das rotas importa. `GET /:id` registrado antes de `GET /stats` faz com que `stats` seja tratado como `id`.
+- Correção: Mover handlers `GET /stats` para antes dos handlers `GET /:id` em:
+  - `apps/api/src/routes/tickets.ts` (/:id na linha 225, /stats na 573 → movido)
+  - `apps/api/src/routes/changes.ts` (/:changeId na linha 56, /stats na 602 → movido)
+  - `apps/api/src/routes/api-keys.ts` (/:id/usage na linha 287, /stats na 304 → movido)
+  - `apps/api/src/routes/assets.ts` (/:id na linha 76, /stats na 463 → movido)
+  - `apps/api/src/routes/tasks.ts` (/:id/runs na linha 516, /stats na 543 → movido)
+
+**Não-bugs (comportamento esperado):**
+
+- 404s em rotas sem `GET /` root (backup, notifications, compliance, kb, capacity, sla, apm, anomaly, finops, marketplace, discovery, drift, itsm, chatops, billing, correlation, mfa, logs) — estas rotas só têm sub-rotas (`/jobs`, `/channels`, `/policies`, etc.)
+- 403 MODULE_DISABLED em firewall, scripts, audit, client-portal, escalation, patches, security-audit — feature flags desativadas para o tenant
+- RLS cross-tenant: admin (global:admin) vê `/admin/tenants`, tenant user recebe 403 — isolamento funcionando corretamente
+
 ## DECISÕES TÉCNICAS
 
 - Correções devem ser na causa raiz (schema/permissões/middleware), nunca workaround pontual em uma rota isolada.

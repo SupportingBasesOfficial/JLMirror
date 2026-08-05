@@ -511,33 +511,6 @@ taskRoute.post("/:id/run", requirePermission("tasks:write"), async (c) => {
   });
 });
 
-// ========== Runs (History) ==========
-
-taskRoute.get("/:id/runs", requirePermission("tasks:read"), async (c) => {
-  const taskId = c.req.param("id");
-  const user = c.get("user");
-  const status = c.req.query("status");
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
-
-  const conditions: string[] = ["task_id = $1", "tenant_id = $2"];
-  const params: unknown[] = [taskId, user?.tenant_id ?? null];
-  let paramIdx = 3;
-
-  if (status) {
-    conditions.push(`status = $${paramIdx++}`);
-    params.push(status);
-  }
-  params.push(limit);
-
-  const result = await query(
-    `SELECT * FROM public.scheduled_task_runs WHERE ${conditions.join(" AND ")}
-     ORDER BY started_at DESC LIMIT $${paramIdx++}`,
-    params,
-  );
-
-  return c.json({ runs: result.data?.rows ?? [] });
-});
-
 // ========== Stats ==========
 
 taskRoute.get("/stats", requirePermission("tasks:read"), async (c) => {
@@ -596,4 +569,31 @@ taskRoute.get("/stats", requirePermission("tasks:read"), async (c) => {
     recent_runs: recentRuns.data?.rows ?? [],
     upcoming: upcomingTasks.data?.rows ?? [],
   });
+});
+
+// ========== Runs (History) ==========
+
+taskRoute.get("/:id/runs", requirePermission("tasks:read"), async (c) => {
+  const taskId = c.req.param("id");
+  const user = c.get("user");
+  const status = c.req.query("status");
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+
+  const conditions: string[] = ["task_id = $1", "tenant_id = $2"];
+  const params: unknown[] = [taskId, user?.tenant_id ?? null];
+  let paramIdx = 3;
+
+  if (status) {
+    conditions.push(`status = $${paramIdx++}`);
+    params.push(status);
+  }
+  params.push(limit);
+
+  const result = await query(
+    `SELECT * FROM public.scheduled_task_runs WHERE ${conditions.join(" AND ")}
+     ORDER BY started_at DESC LIMIT $${paramIdx++}`,
+    params,
+  );
+
+  return c.json({ runs: result.data?.rows ?? [] });
 });
