@@ -21,7 +21,7 @@ Auditoria profunda e correção sistemática (sem workarounds) de:
 7. Corrigir tudo na raiz, sem downstream workarounds
 8. Lint + check-types + testes + commit/push incremental
 
-## STATUS GERAL: EM ANDAMENTO
+## STATUS GERAL: COMPLETA
 
 ---
 
@@ -69,8 +69,16 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
 
 ## PENDENTE (ordem de execução)
 
-- [ ] 1. Auditoria de permissões: comparar TODAS as chaves `requirePermission()` no código vs seed no banco (parcialmente feito — 99 permissions seedadas, tenant:admin/operator/viewer parecem bem cobertos; falta verificar rotas menos comuns)
-- [ ] 2. Auditoria de módulos: comparar TODAS as chaves `requireModule()` no código vs feature_flags seedados (53 module_* flags existem — falta cruzar com todos os requireModule() no index.ts)
+- [x] 1. Auditoria de permissões — COMPLETA:
+  - 86 chaves `requirePermission()` extraídas do código (routes + index.ts)
+  - 122 permissões seedadas nas migrations (4 arquivos de seed)
+  - 0 permissões faltantes no banco (todas as 86 do código estão seedadas)
+  - 36 permissões no banco não referenciadas no código (aliases, features futuras, permissões granulares de Zabbix — não causam problemas)
+- [x] 2. Auditoria de módulos — COMPLETA:
+  - 44 chaves `requireModule()` extraídas do código (apps/api/src)
+  - 53 feature_flags seedados nas migrations
+  - 0 módulos faltantes no banco (todas as 44 do código estão seedados)
+  - 9 feature_flags no banco não referenciados por requireModule() (módulos base como auth, dashboard, monitoring, profile, settings, zabbix — controlados via sidebar/permissões, não requireModule)
 - [x] 3. Auditoria de rotas frontend vs backend (mismatches de URL) — Stats endpoints corrigidos (commit 55ea5a1). Mismatches não-stats corrigidos: firewall, backups/restore, feature-flags/overrides (commit 76344cd). Auditoria completa — todos os 58 useApi calls e todos os fetch calls verificados contra as 931 rotas backend.
 - [x] 4. Auditoria RLS — COMPLETA (commit 63970d0):
   - 126 tabelas non-partition auditadas: 124 com RLS + policies, 2 sem RLS (pgmigrations, schema_migrations — tabelas de controle, OK)
@@ -90,9 +98,9 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
   - 71 links verificados (admin sidebar + client sidebar) contra page.tsx no Next.js app router
   - 1 link morto encontrado e corrigido: `/status` no client-sidebar apontava para rota sem `page.tsx` (só existia `/status/[slug]`) — criado `app/status/page.tsx` que lista páginas de status do tenant via API
   - 0 links mortos restantes
-- [ ] 7. Aplicar correções + migration se necessário
-- [ ] 8. pnpm lint && pnpm check-types && pnpm test:run
-- [ ] 9. git add -A && commit && push (incremental, a cada categoria fechada)
+- [x] 7. Aplicar correções + migration se necessário — Nenhuma correção adicional necessária. Todas as correções foram aplicadas incrementalmente nos itens 3-6.
+- [x] 8. pnpm lint && pnpm check-types && pnpm test:run — Tudo passa: lint 2/2 OK, check-types 2/2 OK, 215/215 testes OK
+- [x] 9. git add -A && commit && push — Commitado e pushed incrementalmente em cada item
 
 ## ACHADOS (issues encontrados, preencher com file:line)
 
