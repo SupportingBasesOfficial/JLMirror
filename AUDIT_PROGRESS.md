@@ -58,11 +58,20 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
 - **Convenção**: agora TODOS os endpoints de stats são `/stats` (consistente em todos os 28 módulos).
 - **Status**: tsc + eslint + 215 testes passam. Commitado e pushed (commit 55ea5a1).
 
+### MISMATCH DE ENDPOINTS: não-stats (firewall, backups, feature-flags)
+
+- **Problema**: 3 mismatches adicionais encontrados na auditoria sistemática de todas as chamadas `fetch` e `useApi` do frontend vs todas as rotas do backend.
+- **Firewall** (`firewall/page.tsx`): frontend chamava `GET /api/firewall`, `POST /api/firewall`, `DELETE /api/firewall/:id` — backend só tem `/api/v1/firewall/rules`, `/api/v1/firewall/rules/:id`. Corrigido para `/api/firewall/rules` e `/api/firewall/rules/:id`.
+- **Backups** (`backups/page.tsx:226`): frontend chamava `POST /api/backups/restores` (plural) — backend só tem `POST /api/v1/backups/restore` (singular). Corrigido.
+- **Feature-flags** (`feature-flags/page.tsx:188`): frontend chamava `POST /api/feature-flags/${id}/overrides` — backend só tem `POST /api/v1/feature-flags/overrides` (flag_id já vem no body). Corrigido.
+- **Módulos verificados sem mismatch**: predictions, itsm, kb, changes, sla, push, ssl, scripts, tickets, backup (demais rotas), dashboard, zabbix, data-transfer, notifications, reports, tasks, executions, mfa, auth, audit, logs, traces, apm, marketplace, finops, anomaly, drift, discovery, k8s, compliance, correlation, workflows, assets, admin, settings, profile, rbac, users, webhooks, api-keys, system-health, capacity, escalation, patches, security-audit, chatops, status-page, client-portal, lgpd, billing, branding, tv, docs, health, metrics.
+- **Status**: tsc + 215 testes passam. Commitado e pushed (commit 76344cd).
+
 ## PENDENTE (ordem de execução)
 
 - [ ] 1. Auditoria de permissões: comparar TODAS as chaves `requirePermission()` no código vs seed no banco (parcialmente feito — 99 permissions seedadas, tenant:admin/operator/viewer parecem bem cobertos; falta verificar rotas menos comuns)
 - [ ] 2. Auditoria de módulos: comparar TODAS as chaves `requireModule()` no código vs feature_flags seedados (53 module_* flags existem — falta cruzar com todos os requireModule() no index.ts)
-- [x] 3. Auditoria de rotas frontend vs backend (mismatches de URL) — Stats endpoints corrigidos (commit 55ea5a1). Mismatches não-stats ainda pendentes (firewall, sla, etc — verificar)
+- [x] 3. Auditoria de rotas frontend vs backend (mismatches de URL) — Stats endpoints corrigidos (commit 55ea5a1). Mismatches não-stats corrigidos: firewall, backups/restore, feature-flags/overrides (commit 76344cd). Auditoria completa — todos os 58 useApi calls e todos os fetch calls verificados contra as 931 rotas backend.
 - [ ] 4. Auditoria RLS: tabelas sem RLS (achado: capacity_metrics_2026XX, system_logs_2026XX, trace_spans_2026XX — partições sem RLS, verificar se herdam da tabela mãe) / tabelas com RLS mas SEM policies (query rodou mas output foi cortado — REFAZER)
 - [ ] 5. Duplicação de funções/rotas
 - [ ] 6. Sidebar admin (admin-sidebar.tsx) vs client-sidebar.tsx — links mortos, módulos sem rota
