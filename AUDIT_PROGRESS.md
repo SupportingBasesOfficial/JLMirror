@@ -27,7 +27,7 @@ Auditoria profunda e correção sistemática (sem workarounds) de:
 
 ## JÁ CORRIGIDO (sessões anteriores, commits já no main)
 
-- `apps/web/app/(admin)/assets/page.tsx`: URL `/api/assets/stats` → `/api/assets/stats/overview` (commit 6a5546e)
+- `apps/web/app/(admin)/assets/page.tsx`: URL `/api/assets/stats` → `/api/assets/stats/overview` (commit 6a5546e) — **REVERTIDO**: padronizado para `/api/assets/stats` (commit 55ea5a1)
 - `migrations/20260804210000_add_missing_permissions.sql`: +60 permissões faltantes no RBAC seed (assets, devices, tickets, compliance, etc) atribuídas a tenant:admin/operator/viewer (commit 6a5546e)
 - `apps/api/src/middleware/require-module.ts`: `isModuleEnabled` agora considera `client_enabled=true` (não só `default_value`) — corrige 403 quando cliente ativa módulo (commit 2b1567b)
 
@@ -48,13 +48,21 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
 - **Migration de dados**: `migrations/20260804220000_fix_tenant_flag_isolation.sql`
   — backfill de override por tenant preservando estado atual (sem regressão) +
   reset do template global (`client_enabled=false`) para tenants futuros começarem limpos.
-- **Status**: aplicado no banco, tsc/eslint OK. Pendente commit.
+- **Status**: aplicado no banco, tsc/eslint OK, commitado e pushed (commit 2b1567b).
+
+### MISMATCH DE ENDPOINTS: /stats vs /stats/overview
+
+- **Problema**: 10 rotas backend usavam `/stats/overview` enquanto o frontend chamava `/stats`. 8 mismatches diretos (frontend chamava `/stats`, backend só tinha `/stats/overview`) + 2 casos onde ambos usavam `/stats/overview` (admin, assets).
+- **Rotas backend corrigidas** (10): `api-keys`, `webhooks`, `tasks`, `tickets`, `changes`, `data-transfer`, `feature-flags`, `reports`, `admin`, `assets` — todas de `/stats/overview` para `/stats`.
+- **Rotas frontend corrigidas** (2): `admin/page.tsx` e `assets/page.tsx` — de `/api/.../stats/overview` para `/api/.../stats`.
+- **Convenção**: agora TODOS os endpoints de stats são `/stats` (consistente em todos os 28 módulos).
+- **Status**: tsc + eslint + 215 testes passam. Commitado e pushed (commit 55ea5a1).
 
 ## PENDENTE (ordem de execução)
 
 - [ ] 1. Auditoria de permissões: comparar TODAS as chaves `requirePermission()` no código vs seed no banco (parcialmente feito — 99 permissions seedadas, tenant:admin/operator/viewer parecem bem cobertos; falta verificar rotas menos comuns)
 - [ ] 2. Auditoria de módulos: comparar TODAS as chaves `requireModule()` no código vs feature_flags seedados (53 module_* flags existem — falta cruzar com todos os requireModule() no index.ts)
-- [ ] 3. Auditoria de rotas frontend vs backend (mismatches de URL como o caso assets/stats) — PRIORIDADE ALTA, provável fonte de mais bugs
+- [x] 3. Auditoria de rotas frontend vs backend (mismatches de URL) — Stats endpoints corrigidos (commit 55ea5a1). Mismatches não-stats ainda pendentes (firewall, sla, etc — verificar)
 - [ ] 4. Auditoria RLS: tabelas sem RLS (achado: capacity_metrics_2026XX, system_logs_2026XX, trace_spans_2026XX — partições sem RLS, verificar se herdam da tabela mãe) / tabelas com RLS mas SEM policies (query rodou mas output foi cortado — REFAZER)
 - [ ] 5. Duplicação de funções/rotas
 - [ ] 6. Sidebar admin (admin-sidebar.tsx) vs client-sidebar.tsx — links mortos, módulos sem rota
