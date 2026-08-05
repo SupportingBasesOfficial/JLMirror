@@ -23,10 +23,12 @@ interface NavItem {
   icon: React.ReactNode;
   flagKey?: string;
   external?: boolean;
+  tooltip?: string;
 }
 
 interface NavSection {
   title: string;
+  icon: React.ReactNode;
   items: NavItem[];
 }
 
@@ -53,171 +55,163 @@ function sectionHasActive(
   return section.items.some((item) => isActive(pathname, item));
 }
 
+// Ícones reutilizáveis (SVG inline 16x16)
+const icon = (paths: string) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d={paths} />
+  </svg>
+);
+
+const iconMulti = (children: React.ReactNode) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {children}
+  </svg>
+);
+
 const CLIENT_NAV_SECTIONS: NavSection[] = [
   {
-    title: "Monitoramento",
+    title: "Meu Ambiente",
+    icon: iconMulti(
+      <>
+        <rect width="7" height="9" x="3" y="3" rx="1" />
+        <rect width="7" height="5" x="14" y="3" rx="1" />
+        <rect width="7" height="9" x="14" y="12" rx="1" />
+        <rect width="7" height="5" x="3" y="16" rx="1" />
+      </>,
+    ),
     items: [
       {
         label: "Dashboard",
         href: "/dashboard",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Visão geral do seu ambiente com indicadores e gráficos",
+        icon: iconMulti(
+          <>
             <rect width="7" height="9" x="3" y="3" rx="1" />
             <rect width="7" height="5" x="14" y="3" rx="1" />
             <rect width="7" height="9" x="14" y="12" rx="1" />
             <rect width="7" height="5" x="3" y="16" rx="1" />
-          </svg>
+          </>,
         ),
       },
       {
         label: "Problemas",
         href: "/dashboard/problems",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <path d="M12 9v4" />
-            <path d="M12 17h.01" />
-          </svg>
+        tooltip: "Alertas e problemas ativos nos seus dispositivos",
+        icon: icon(
+          "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z M12 9v4 M12 17h.01",
         ),
       },
       {
         label: "Eventos",
         href: "/dashboard/events",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Histórico de eventos e ocorrências do sistema",
+        icon: iconMulti(
+          <>
             <path d="M8 2v4" />
             <path d="M16 2v4" />
             <rect width="18" height="18" x="3" y="4" rx="2" />
             <path d="M3 10h18" />
-          </svg>
+          </>,
         ),
       },
       {
         label: "Dispositivos",
         href: "/dashboard/devices",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Lista de servidores, equipamentos e dispositivos monitorados",
+        icon: iconMulti(
+          <>
             <rect width="20" height="14" x="2" y="3" rx="2" />
             <line x1="8" x2="16" y1="21" y2="21" />
             <line x1="12" x2="12" y1="17" y2="21" />
-          </svg>
+          </>,
         ),
       },
       {
         label: "Gráficos",
         href: "/dashboard/graphs",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip:
+          "Visualize gráficos de desempenho e métricas dos seus dispositivos",
+        icon: iconMulti(
+          <>
             <path d="M3 3v18h18" />
             <path d="m19 9-5 5-4-4-3 3" />
-          </svg>
+          </>,
         ),
+      },
+      {
+        label: "Saúde do Sistema",
+        href: "/system-health",
+        tooltip: "Indicadores de saúde e disponibilidade dos seus serviços",
+        flagKey: "module_system_health",
+        icon: icon("M22 12h-4l-3 9L9 3l-3 9H2"),
+      },
+      {
+        label: "Score de Saúde",
+        href: "/health-score",
+        tooltip:
+          "Nota geral de saúde do seu ambiente baseada em múltiplos fatores",
+        icon: icon("M22 12h-4l-3 9L9 3l-3 9H2"),
       },
     ],
   },
   {
-    title: "Operações",
+    title: "Suporte",
+    icon: iconMulti(
+      <>
+        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
+      </>,
+    ),
     items: [
       {
-        label: "Tickets",
+        label: "Chamados",
         href: "/tickets",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Abra e acompanhe chamados de suporte técnico",
+        flagKey: "module_tickets",
+        icon: iconMulti(
+          <>
             <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
             <path d="M13 5v2" />
             <path d="M13 17v2" />
             <path d="M13 11v2" />
-          </svg>
+          </>,
         ),
-        flagKey: "module_tickets",
       },
       {
         label: "Base de Conhecimento",
         href: "/knowledge-base",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-          </svg>
-        ),
+        tooltip: "Artigos, tutoriais e documentação para ajudar você",
         flagKey: "module_kb",
+        icon: iconMulti(
+          <>
+            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+          </>,
+        ),
       },
       {
-        label: "SLA Dashboard",
+        label: "SLA",
         href: "/sla-dashboard",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Acompanhe os acordos de nível de serviço e seus indicadores",
+        flagKey: "module_sla",
+        icon: iconMulti(
+          <>
             <path d="M12 2v4" />
             <path d="m6 6 3 3" />
             <path d="M18 6l-3 3" />
@@ -227,89 +221,488 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
             <path d="m6 18 3-3" />
             <path d="m18 18-3-3" />
             <circle cx="12" cy="12" r="2" />
-          </svg>
+          </>,
         ),
       },
       {
-        label: "Health Score",
-        href: "/health-score",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        label: "Mudanças",
+        href: "/changes",
+        tooltip: "Solicite e acompanhe mudanças no seu ambiente",
+        flagKey: "module_changes",
+        icon: iconMulti(
+          <>
+            <path d="M12 2v4" />
+            <path d="M12 18v4" />
+            <path d="M4.93 4.93l2.83 2.83" />
+            <path d="M16.24 16.24l2.83 2.83" />
+            <path d="M2 12h4" />
+            <path d="M18 12h4" />
+            <path d="M4.93 19.07l2.83-2.83" />
+            <path d="M16.24 7.76l2.83-2.83" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    title: "Infraestrutura",
+    icon: iconMulti(
+      <>
+        <rect width="20" height="14" x="2" y="3" rx="2" />
+        <line x1="8" x2="16" y1="21" y2="21" />
+        <line x1="12" x2="12" y1="17" y2="21" />
+      </>,
+    ),
+    items: [
+      {
+        label: "Ativos",
+        href: "/assets",
+        tooltip: "Inventário completo de equipamentos e ativos de TI",
+        flagKey: "module_assets",
+        icon: iconMulti(
+          <>
+            <path d="M20 7h-9" />
+            <path d="M14 17H5" />
+            <circle cx="17" cy="17" r="3" />
+            <circle cx="7" cy="7" r="3" />
+          </>,
+        ),
+      },
+      {
+        label: "Backups",
+        href: "/backups",
+        tooltip: "Gerencie cópias de segurança e restaurações",
+        flagKey: "module_backup",
+        icon: iconMulti(
+          <>
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+          </>,
+        ),
+      },
+      {
+        label: "Certificados SSL",
+        href: "/ssl",
+        tooltip: "Gerencie certificados de segurança dos seus sites",
+        flagKey: "module_ssl",
+        icon: iconMulti(
+          <>
+            <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </>,
+        ),
+      },
+      {
+        label: "Capacidade",
+        href: "/capacity",
+        tooltip: "Planejamento de capacidade de storage, CPU e memória",
+        flagKey: "module_capacity",
+        icon: iconMulti(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="M7 16v-5" />
+            <path d="M12 16v-10" />
+            <path d="M17 16v-3" />
+          </>,
+        ),
+      },
+      {
+        label: "Auto-Descoberta",
+        href: "/auto-discovery",
+        tooltip: "Descoberta automática de novos dispositivos na rede",
+        flagKey: "module_discovery",
+        icon: iconMulti(
+          <>
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+            <path d="M11 8v6" />
+            <path d="M8 11h6" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    title: "Inteligência",
+    icon: iconMulti(
+      <>
+        <path d="M12 2a10 10 0 1 0 10 10 10 10 0 0 0-10-10z" />
+        <path d="M12 6v6l4 2" />
+      </>,
+    ),
+    items: [
+      {
+        label: "Dashboard Executivo",
+        href: "/executive-dashboard",
+        tooltip: "Visão executiva com KPIs de negócio e resumo gerencial",
+        flagKey: "module_executive_dashboard",
+        icon: iconMulti(
+          <>
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M3 9h18" />
+            <path d="M9 21V9" />
+          </>,
+        ),
+      },
+      {
+        label: "Anomalias IA",
+        href: "/anomaly-detection",
+        tooltip: "Detecção automática de comportamentos anormais com IA",
+        flagKey: "module_anomaly",
+        icon: iconMulti(
+          <>
+            <path d="M12 2v4" />
+            <path d="M12 18v4" />
+            <path d="M4.93 4.93l2.83 2.83" />
+            <path d="M16.24 16.24l2.83 2.83" />
+            <path d="M2 12h4" />
+            <path d="M18 12h4" />
+            <path d="M4.93 19.07l2.83-2.83" />
+            <path d="M16.24 7.76l2.83-2.83" />
+          </>,
+        ),
+      },
+      {
+        label: "Predições",
+        href: "/predictive-failure",
+        tooltip: "Previsão de falhas antes que aconteçam, com IA",
+        flagKey: "module_predictions",
+        icon: iconMulti(
+          <>
             <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-          </svg>
+          </>,
+        ),
+      },
+      {
+        label: "Correlação",
+        href: "/correlation",
+        tooltip: "Correlação de eventos para identificar causas raiz",
+        flagKey: "module_correlation",
+        icon: iconMulti(
+          <>
+            <circle cx="6" cy="6" r="3" />
+            <circle cx="18" cy="18" r="3" />
+            <path d="M6 9v6" />
+            <path d="M18 15V9" />
+            <path d="M9 6h6" />
+            <path d="M15 18H9" />
+          </>,
+        ),
+      },
+      {
+        label: "Drift de Config",
+        href: "/config-drift",
+        tooltip: "Detecta mudanças não autorizadas na configuração",
+        flagKey: "module_drift",
+        icon: iconMulti(
+          <>
+            <path d="M3 12h4l3 8 4-16 3 8h4" />
+          </>,
+        ),
+      },
+      {
+        label: "Logs",
+        href: "/logs",
+        tooltip: "Busca e análise de logs do sistema",
+        flagKey: "module_logs",
+        icon: iconMulti(
+          <>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <path d="M16 13H8" />
+            <path d="M16 17H8" />
+            <path d="M10 9H8" />
+          </>,
+        ),
+      },
+      {
+        label: "Traces",
+        href: "/traces",
+        tooltip: "Rastreamento distribuído de requisições entre serviços",
+        flagKey: "module_traces",
+        icon: iconMulti(
+          <>
+            <path d="M3 12h4l3 8 4-16 3 8h4" />
+          </>,
+        ),
+      },
+      {
+        label: "APM",
+        href: "/apm",
+        tooltip: "Monitoramento de performance de aplicações",
+        flagKey: "module_apm",
+        icon: iconMulti(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="m19 9-5 5-4-4-3 3" />
+          </>,
+        ),
+      },
+      {
+        label: "Relatórios",
+        href: "/reports",
+        tooltip: "Relatórios agendados e exportação de dados",
+        flagKey: "module_reports",
+        icon: iconMulti(
+          <>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <path d="M16 13H8" />
+            <path d="M16 17H8" />
+            <path d="M10 9H8" />
+          </>,
+        ),
+      },
+      {
+        label: "FinOps",
+        href: "/finops",
+        tooltip: "Gestão financeira de TI — custos de cloud e infraestrutura",
+        flagKey: "module_finops",
+        icon: iconMulti(
+          <>
+            <line x1="12" x2="12" y1="2" y2="22" />
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    title: "Automação",
+    icon: iconMulti(
+      <>
+        <path d="M12 2v4" />
+        <path d="M12 18v4" />
+        <path d="M4.93 4.93l2.83 2.83" />
+        <path d="M16.24 16.24l2.83 2.83" />
+        <path d="M2 12h4" />
+        <path d="M18 12h4" />
+        <path d="M4.93 19.07l2.83-2.83" />
+        <path d="M16.24 7.76l2.83-2.83" />
+      </>,
+    ),
+    items: [
+      {
+        label: "Tarefas Agendadas",
+        href: "/scheduled-tasks",
+        tooltip: "Tarefas automáticas e cron jobs do sistema",
+        flagKey: "module_tasks",
+        icon: iconMulti(
+          <>
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </>,
+        ),
+      },
+      {
+        label: "Workflows",
+        href: "/workflows",
+        tooltip: "Crie fluxos de automação entre sistemas",
+        flagKey: "module_workflows",
+        icon: iconMulti(
+          <>
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M9 3v18" />
+            <path d="M15 3v18" />
+          </>,
+        ),
+      },
+      {
+        label: "Webhooks",
+        href: "/webhooks",
+        tooltip:
+          "Integrações que enviam dados automaticamente para outros sistemas",
+        flagKey: "module_webhooks",
+        icon: iconMulti(
+          <>
+            <path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2" />
+            <path d="m6.17 17.83-5.7 5.7" />
+            <path d="M12 16.98v-3.3c0-1.1.94-1.94 1.9-2.48A4 4 0 0 0 14 6.8c-.7 0-1.4.2-2 .57" />
+            <path d="M8.17 5.83l5.7-5.7" />
+            <circle cx="6" cy="6" r="3" />
+            <circle cx="18" cy="18" r="3" />
+          </>,
+        ),
+      },
+      {
+        label: "Notificações",
+        href: "/notifications",
+        tooltip: "Central de notificações e alertas do sistema",
+        flagKey: "module_notifications",
+        icon: iconMulti(
+          <>
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </>,
+        ),
+      },
+      {
+        label: "Notificações Push",
+        href: "/push-settings",
+        tooltip: "Configurar alertas push no navegador e dispositivos",
+        flagKey: "module_push",
+        icon: iconMulti(
+          <>
+            <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0 1 18 14.158V11a6.002 6.002 0 0 0-4-5.659V5a2 2 0 1 0-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5" />
+            <path d="M10 21a2 2 0 0 0 4 0" />
+          </>,
+        ),
+      },
+      {
+        label: "ChatOps",
+        href: "/chatops",
+        tooltip: "Integração com Slack, Teams e outras plataformas de chat",
+        flagKey: "module_chatops",
+        icon: iconMulti(
+          <>
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    title: "Integrações",
+    icon: iconMulti(
+      <>
+        <path d="M4 7h16" />
+        <path d="M4 17h16" />
+        <path d="M4 12h16" />
+        <circle cx="8" cy="7" r="2" />
+        <circle cx="16" cy="17" r="2" />
+      </>,
+    ),
+    items: [
+      {
+        label: "Chaves de API",
+        href: "/api-keys",
+        tooltip: "Gerencie chaves de acesso para integrações via API",
+        flagKey: "module_api_keys",
+        icon: iconMulti(
+          <>
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+          </>,
+        ),
+      },
+      {
+        label: "ITSM",
+        href: "/itsm",
+        tooltip:
+          "Integração com sistemas de gestão de TI (ServiceNow, Jira, etc)",
+        flagKey: "module_itsm",
+        icon: iconMulti(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="M7 16v-5" />
+            <path d="M12 16v-10" />
+            <path d="M17 16v-3" />
+          </>,
+        ),
+      },
+      {
+        label: "Marketplace",
+        href: "/marketplace",
+        tooltip: "Extensões e add-ons para expandir o sistema",
+        flagKey: "module_marketplace",
+        icon: iconMulti(
+          <>
+            <path d="M3 3v18h18" />
+            <path d="M7 16v-5" />
+            <path d="M12 16v-10" />
+            <path d="M17 16v-3" />
+          </>,
+        ),
+      },
+      {
+        label: "Transferência de Dados",
+        href: "/data-transfer",
+        tooltip: "Exportação e migração de dados entre sistemas",
+        flagKey: "module_data_transfer",
+        icon: iconMulti(
+          <>
+            <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+          </>,
+        ),
+      },
+      {
+        label: "Página de Status",
+        href: "/status",
+        tooltip: "Página pública de status dos seus serviços",
+        flagKey: "module_status_page",
+        icon: iconMulti(
+          <>
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+          </>,
+        ),
+      },
+    ],
+  },
+  {
+    title: "Conformidade",
+    icon: iconMulti(
+      <>
+        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
+      </>,
+    ),
+    items: [
+      {
+        label: "Auditoria",
+        href: "/compliance",
+        tooltip: "Relatórios de conformidade e auditoria de segurança",
+        flagKey: "module_compliance",
+        icon: iconMulti(
+          <>
+            <path d="M9 12l2 2 4-4" />
+            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
+          </>,
         ),
       },
     ],
   },
   {
     title: "Conta",
+    icon: iconMulti(
+      <>
+        <circle cx="12" cy="8" r="5" />
+        <path d="M20 21a8 8 0 0 0-16 0" />
+      </>,
+    ),
     items: [
       {
         label: "Meu Perfil",
         href: "/profile",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Edite seus dados pessoais e preferências",
+        flagKey: "module_profile",
+        icon: iconMulti(
+          <>
             <circle cx="12" cy="8" r="5" />
             <path d="M20 21a8 8 0 0 0-16 0" />
-          </svg>
+          </>,
         ),
-        flagKey: "module_profile",
       },
       {
         label: "Sessões & Segurança",
         href: "/sessions",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
-          </svg>
-        ),
+        tooltip: "Gerencie sessões ativas, MFA e segurança da sua conta",
         flagKey: "module_auth",
+        icon: iconMulti(
+          <>
+            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
+          </>,
+        ),
       },
       {
         label: "Meus Módulos",
         href: "/settings/modules-client",
-        icon: (
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
+        tooltip: "Ative ou desative os módulos disponíveis para você",
+        icon: iconMulti(
+          <>
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
             <path d="M3.27 6.96 12 12.01l8.73-5.05" />
             <path d="M12 22.08V12" />
-          </svg>
+          </>,
         ),
       },
     ],
@@ -556,13 +949,16 @@ export function ClientSidebar() {
                   {!collapsed && (
                     <button
                       onClick={() => toggleSection(section.title)}
-                      className="flex items-center justify-between w-full px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors group"
+                      className="flex items-center gap-1.5 w-full px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors group"
                       style={{
                         color: hasActive
                           ? "var(--brand-secondary)"
                           : "var(--text-muted)",
                       }}
                     >
+                      <span className="shrink-0 opacity-70">
+                        {section.icon}
+                      </span>
                       <span>{section.title}</span>
                       <ChevronDown
                         size={12}
@@ -611,7 +1007,11 @@ export function ClientSidebar() {
                             justifyContent: collapsed ? "center" : "flex-start",
                             position: "relative",
                           }}
-                          title={collapsed ? item.label : undefined}
+                          title={
+                            collapsed
+                              ? item.label
+                              : (item.tooltip ?? item.label)
+                          }
                         >
                           {active && !collapsed && (
                             <span
