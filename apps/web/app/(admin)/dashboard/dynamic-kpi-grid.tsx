@@ -43,6 +43,7 @@ interface DashboardData {
 interface KpiConfig {
   key: string;
   label: string;
+  tooltip: string;
   moduleFlag?: string;
   render: (k: DashboardData["kpis"]) => {
     value: string | number;
@@ -56,6 +57,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "devices",
     label: "Devices",
+    tooltip: "Dispositivos monitorados online vs total cadastrado",
     render: (k) => ({
       value: `${k.devices.online}/${k.devices.total}`,
       sub: "online",
@@ -66,6 +68,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "tickets",
     label: "Tickets",
+    tooltip: "Chamados abertos e críticos aguardando atendimento",
     moduleFlag: "module_tickets",
     render: (k) => ({
       value: k.tickets.open,
@@ -78,6 +81,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "compliance",
     label: "Compliance",
+    tooltip: "Percentual de conformidade com normas e políticas de segurança",
     moduleFlag: "module_compliance",
     render: (k) => ({
       value: `${k.compliance.rate}%`,
@@ -89,6 +93,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "ssl",
     label: "SSL",
+    tooltip: "Certificados SSL/TLS expirando nos próximos 30 dias",
     moduleFlag: "module_ssl",
     render: (k) => ({
       value: k.ssl.expiring,
@@ -100,6 +105,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "backups",
     label: "Backups",
+    tooltip: "Taxa de sucesso dos backups realizados",
     moduleFlag: "module_backup",
     render: (k) => ({
       value: `${k.backups.rate}%`,
@@ -111,6 +117,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "firewall",
     label: "Firewall",
+    tooltip: "Regras de firewall ativas vs total cadastrado",
     render: (k) => ({
       value: k.firewall.active,
       sub: `de ${k.firewall.total} regras`,
@@ -121,6 +128,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "changes",
     label: "Changes",
+    tooltip: "Requisições de mudança pendentes e em execução",
     moduleFlag: "module_changes",
     render: (k) => ({
       value: k.changes.pending,
@@ -132,6 +140,8 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "assets",
     label: "Assets",
+    tooltip:
+      "Total de ativos de TI inventariados (servidores, equipamentos, licenças)",
     moduleFlag: "module_assets",
     render: (k) => ({
       value: k.assets.total,
@@ -143,6 +153,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "scripts",
     label: "Scripts",
+    tooltip: "Scripts de automação cadastrados no sistema",
     render: (k) => ({
       value: k.scripts.total,
       sub: "scripts",
@@ -153,6 +164,7 @@ const KPI_CONFIG: KpiConfig[] = [
   {
     key: "notifications",
     label: "Notif.",
+    tooltip: "Notificações enviadas nas últimas 24 horas",
     moduleFlag: "module_notifications",
     render: (k) => ({
       value: k.notifications.unread,
@@ -221,6 +233,7 @@ export function DynamicKpiGrid({ kpis }: { kpis: DashboardData["kpis"] }) {
           <a
             key={kpi.key}
             href={href}
+            title={kpi.tooltip}
             className="block p-3 rounded-xl transition-all no-underline hover:opacity-80"
             style={{
               background: "var(--surface-2)",
