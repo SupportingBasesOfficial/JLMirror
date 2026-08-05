@@ -1,0 +1,199 @@
+﻿C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\onboarding\page.tsx:158: const res = await fetch("/api/admin/zabbix/test-connection", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\onboarding\page.tsx:193: const res = await fetch("/api/admin/zabbix/host-groups", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\onboarding\page.tsx:218: const res = await fetch("/api/admin/zabbix/preview-hosts", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\onboarding\page.tsx:300: const tenantRes = await fetch("/api/admin/tenants", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\onboarding\page.tsx:362: await fetch(`/api/admin/tenants/${tenantId}/company`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\users\page.tsx:106: const res = await fetch("/api/v1/users", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\users\page.tsx:143: const res = await fetch(`/api/v1/users/${editUser.id}/role`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\users\page.tsx:167: const res = await fetch(`/api/v1/users/${user.id}/status`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\users\page.tsx:186: const res = await fetch(`/api/v1/users/${user.id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:194: const res = await fetch("/api/admin/tenants", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:250: const res = await fetch(`/api/admin/tenants/${editTenant.id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:274: const res = await fetch(`/api/admin/tenants/${tenantId}/${action}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:298: const res = await fetch(`/api/admin/tenants/${t.id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:319: const res = await fetch(`/api/admin/tenants/${t.id}/users`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\admin\page.tsx:381: const res = await fetch(`/api/admin/tenants/${t.id}/contacts`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\anomaly-detection\page.tsx:76: await fetch(`/api/v1/anomaly/detections/${id}/acknowledge`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\anomaly-detection\page.tsx:82: await fetch(`/api/v1/anomaly/detections/${id}/resolve`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\anomaly-detection\page.tsx:88: await fetch(`/api/v1/anomaly/detections/${id}/false-positive`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\api-keys\page.tsx:115: const res = await fetch("/api/api-keys", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\api-keys\page.tsx:154: const res = await fetch(`/api/api-keys/${id}/rotate`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\api-keys\page.tsx:172: const res = await fetch(`/api/api-keys/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\api-keys\page.tsx:189: const res = await fetch(`/api/api-keys/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\assets\page.tsx:220: const res = await fetch("/api/assets", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\assets\page.tsx:266: const res = await fetch(`/api/assets/${assetId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\assets\page.tsx:282: const res = await fetch(`/api/assets/${asset.id}/licenses`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\assets\page.tsx:298: const res = await fetch(`/api/assets/${selectedAsset.id}/licenses`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\auto-discovery\page.tsx:102: const res = await fetch("/api/v1/discovery/sessions", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\auto-discovery\page.tsx:135: const res = await fetch(`/api/v1/discovery/sessions/${id}/run`, { method: "POST", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\auto-discovery\page.tsx:151: await fetch(`/api/v1/discovery/sessions/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\auto-discovery\page.tsx:301: await fetch(`/api/v1/discovery/devices/${deviceId}/import`, { method: "POST", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\automation\scripts\page.tsx:130: const res = await fetch("/api/scripts", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\automation\scripts\page.tsx:162: const res = await fetch(`/api/scripts/${executeScript.id}/execute`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\automation\scripts\page.tsx:185: const res = await fetch(`/api/executions/${executionId}/approve`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\backups\page.tsx:145: const res = await fetch("/api/backups/jobs", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\backups\page.tsx:180: const res = await fetch(`/api/backups/jobs/${jobId}/run`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\backups\page.tsx:195: const res = await fetch(`/api/backups/jobs/${jobId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\backups\page.tsx:209: const res = await fetch(`/api/backups/snapshots/${snapshotId}/verify`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\backups\page.tsx:226: const res = await fetch("/api/backups/restores", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\capacity\page.tsx:211: const res = await fetch("/api/capacity/thresholds", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\capacity\page.tsx:241: const res = await fetch(`/api/capacity/thresholds/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\capacity\page.tsx:260: const res = await fetch(`/api/capacity/forecast?${params.toString()}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\capacity\page.tsx:278: const res = await fetch("/api/capacity/reports", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\capacity\page.tsx:306: const res = await fetch(`/api/capacity/reports/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\changes\page.tsx:223: const res = await fetch(`/api/changes/${changeId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\changes\page.tsx:245: const res = await fetch("/api/changes", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\changes\page.tsx:321: await fetch(`/api/changes/${changeId}/tasks`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\chatops\page.tsx:125: const res = await fetch("/api/v1/chatops/config", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\client-portal\page.tsx:120: const res = await fetch("/api/v1/client-portal/users", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\client-portal\page.tsx:160: await fetch(`/api/v1/client-portal/users/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\compliance\page.tsx:210: const res = await fetch("/api/compliance/policies", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\compliance\page.tsx:245: const res = await fetch("/api/compliance/scans", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\compliance\page.tsx:269: const res = await fetch(`/api/compliance/policies/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\compliance\page.tsx:284: const res = await fetch(`/api/compliance/violations/${violationId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\config-drift\page.tsx:97: const res = await fetch("/api/v1/drift/baselines", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\config-drift\page.tsx:123: await fetch(`/api/v1/drift/events/${id}/resolve`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\config-drift\page.tsx:129: await fetch(`/api/v1/drift/events/${id}/acknowledge`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\correlation\page.tsx:195: const res = await fetch(`/api/v1/correlation/groups/${groupId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\correlation\page.tsx:243: const res = await fetch("/api/v1/correlation/rules", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\correlation\page.tsx:265: const res = await fetch(`/api/v1/correlation/rules/${ruleId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\host-groups\page.tsx:24: await apiFetch("/api/zabbix/host-groups", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\host-groups\page.tsx:40: await apiFetch(`/api/zabbix/host-groups/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\host-groups\page.tsx:55: await apiFetch(`/api/zabbix/host-groups/${id}`, { method: "DELETE" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\maintenance\page.tsx:20: await apiFetch(`/api/zabbix/maintenances/${id}`, { method: "DELETE" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\problems\page.tsx:58: await apiFetch("/api/zabbix/acknowledge", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\slas\page.tsx:158: await apiFetch(`/api/sla/services/${id}`, { method: "DELETE" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\slas\page.tsx:178: await apiFetch("/api/sla/incidents", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\slas\page.tsx:197: await apiFetch(`/api/sla/incidents/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\slas\page.tsx:212: await apiFetch("/api/sla/maintenance", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\slas\page.tsx:233: await apiFetch(`/api/sla/maintenance/${id}`, { method: "DELETE" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\dashboard\device-sync-trigger.tsx:16: fetch("/api/v1/dashboard/sync-devices", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:140: const res = await fetch("/api/data-transfer/exports", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:161: const res = await fetch("/api/data-transfer/imports", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:196: const res = await fetch(`/api/data-transfer/imports/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:216: const res = await fetch("/api/data-transfer/templates", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:233: const res = await fetch(`/api/data-transfer/exports/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:240: const res = await fetch(`/api/data-transfer/imports/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\data-transfer\page.tsx:247: const res = await fetch(`/api/data-transfer/templates/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:114: const res = await fetch(`/api/feature-flags/${flagId}/overrides`, { credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:121: const res = await fetch(`/api/feature-flags/${flagId}/events?limit=20`, { credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:130: const res = await fetch("/api/feature-flags", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:150: const res = await fetch(`/api/feature-flags/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:162: const res = await fetch(`/api/feature-flags/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:169: const res = await fetch("/api/feature-flags/evaluate", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:188: const res = await fetch(`/api/feature-flags/${selectedFlag}/overrides`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\feature-flags\page.tsx:207: const res = await fetch(`/api/feature-flags/overrides/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\finops\page.tsx:121: const res = await fetch("/api/v1/finops/optimizations", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\finops\page.tsx:153: await fetch(`/api/v1/finops/optimizations/${id}/status`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\firewall\page.tsx:135: const res = await fetch("/api/firewall/rules", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\firewall\page.tsx:170: const res = await fetch(`/api/firewall/rules/${ruleId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\firewall\page.tsx:194: const res = await fetch("/api/firewall/dry-run", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\firewall\page.tsx:219: const res = await fetch("/api/firewall/apply", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\itsm\page.tsx:147: const res = await fetch("/api/v1/itsm/connectors", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\itsm\page.tsx:187: const res = await fetch(`/api/v1/itsm/connectors/${id}/test`, { method: "POST", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\itsm\page.tsx:203: await fetch(`/api/v1/itsm/connectors/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\k8s\page.tsx:214: const res = await fetch("/api/k8s/clusters", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:199: const res = await fetch(`/api/kb/articles/${article.id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:218: const res = await fetch("/api/kb/articles", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:253: const res = await fetch(`/api/kb/articles/${articleId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:273: await fetch(`/api/kb/articles/${articleId}/feedback`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:286: const res = await fetch(`/api/kb/articles/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:302: const res = await fetch("/api/kb/categories", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\knowledge-base\page.tsx:325: const res = await fetch(`/api/kb/categories/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\lgpd\page.tsx:93: const res = await fetch("/api/v1/lgpd/requests/export", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\lgpd\page.tsx:128: const res = await fetch("/api/v1/lgpd/requests/delete", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\marketplace\page.tsx:132: const res = await fetch(`/api/v1/marketplace/apps/${appId}/install`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\marketplace\page.tsx:155: await fetch(`/api/v1/marketplace/installs/${installId}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\marketplace\page.tsx:164: await fetch(`/api/v1/marketplace/installs/${installId}/${action}`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\notifications\page.tsx:170: const res = await fetch("/api/notifications/channels", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\notifications\page.tsx:193: const res = await fetch(`/api/notifications/channels/${channelId}/test`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\notifications\page.tsx:209: const res = await fetch(`/api/notifications/channels/${channelId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\notifications\page.tsx:229: const res = await fetch("/api/notifications/rules", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\notifications\page.tsx:263: const res = await fetch(`/api/notifications/rules/${ruleId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\patches\page.tsx:151: const res = await fetch(`/api/v1/patches/${patchId}/${action}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\predictive-failure\page.tsx:79: await fetch(`/api/v1/predictions/${id}/acknowledge`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\predictive-failure\page.tsx:85: await fetch(`/api/v1/predictions/${id}/mitigate`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\predictive-failure\page.tsx:91: await fetch(`/api/v1/predictions/${id}/occurred`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\predictive-failure\page.tsx:97: await fetch(`/api/v1/predictions/${id}/false-positive`, { method: "PUT", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\profile\page.tsx:195: const res = await fetch("/api/v1/profile", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\profile\page.tsx:222: const res = await fetch("/api/v1/profile/avatar", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\profile\page.tsx:243: const res = await fetch("/api/v1/profile/preferences", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\profile\page.tsx:270: const res = await fetch(`/api/v1/profile/sessions/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\profile\page.tsx:285: const res = await fetch("/api/v1/profile/sessions", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\push-settings\page.tsx:72: await fetch(`/api/push/subscriptions/${subId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\reports\page.tsx:144: const res = await fetch(`/api/reports/${reportId}/deliveries`, { credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\reports\page.tsx:157: const res = await fetch("/api/reports", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\reports\page.tsx:178: const res = await fetch(`/api/reports/${reportId}/run`, { method: "POST", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\reports\page.tsx:190: await fetch(`/api/reports/${reportId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\reports\page.tsx:202: await fetch(`/api/reports/${reportId}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\scheduled-tasks\page.tsx:121: const res = await fetch("/api/tasks", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\scheduled-tasks\page.tsx:142: const res = await fetch(`/api/tasks/${id}/run`, { method: "POST", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\scheduled-tasks\page.tsx:154: const res = await fetch(`/api/tasks/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\scheduled-tasks\page.tsx:166: const res = await fetch(`/api/tasks/${id}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\scheduled-tasks\page.tsx:173: const res = await fetch(`/api/tasks/${taskId}/runs?limit=20`, { credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\security\mfa\page.tsx:48: const res = await fetch("/api/mfa/setup", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\security\mfa\page.tsx:70: const res = await fetch("/api/mfa/setup/verify", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\security\mfa\page.tsx:98: const res = await fetch("/api/mfa/disable", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\security-audit\page.tsx:115: const res = await fetch("/api/v1/security-audit/scan", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\service-tree\page.tsx:71: const res = await fetch("/api/v1/zabbix/services", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\sessions\page.tsx:99: const res = await fetch(`/api/v1/auth/sessions/${sessionId}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\sessions\page.tsx:117: const res = await fetch("/api/v1/auth/sessions", { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\sessions\page.tsx:135: const res = await fetch(`/api/v1/auth/devices/${deviceId}`, { method: "DELETE", credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\modules\page.tsx:161: await apiFetch(`/api/v1/settings/modules/${key}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\modules\page.tsx:178: await apiFetch(`/api/v1/settings/modules/${key}/visibility`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\modules-client\page.tsx:139: await apiFetch(`/api/v1/settings/modules/${key}/client`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:225: const res = await fetch("/api/settings", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:248: const res = await fetch("/api/settings", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:263: const res = await fetch("/api/settings/test-smtp", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:293: const res = await fetch("/api/settings", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:306: const res = await fetch("/api/settings", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\settings\page.tsx:327: const res = await fetch("/api/settings", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\ssl\page.tsx:115: const res = await fetch("/api/ssl/certificates", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\ssl\page.tsx:144: const res = await fetch(`/api/ssl/check/${certId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\ssl\page.tsx:158: const res = await fetch("/api/ssl/check-all", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\ssl\page.tsx:173: const res = await fetch(`/api/ssl/certificates/${certId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\ssl\page.tsx:187: const res = await fetch(`/api/ssl/alerts/${alertId}/acknowledge`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\status-page-admin\page.tsx:87: const res = await fetch("/api/v1/status-page/admin/config", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\system-health\page.tsx:240: const res = await fetch("/api/system-health/checks", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\system-health\page.tsx:271: const res = await fetch(`/api/system-health/checks/${checkId}/run`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\system-health\page.tsx:291: const res = await fetch(`/api/system-health/checks/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\system-health\page.tsx:311: const res = await fetch("/api/system-health/incidents", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\system-health\page.tsx:341: const res = await fetch(`/api/system-health/incidents/${incidentId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:182: const res = await fetch("/api/tickets", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:219: const res = await fetch(`/api/tickets/${ticket.id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:233: const res = await fetch(`/api/tickets/${ticketId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:254: const res = await fetch(`/api/tickets/${selectedTicket.id}/comments`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:276: const res = await fetch("/api/tickets/categories", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\tickets\page.tsx:306: const res = await fetch(`/api/tickets/categories/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\traces\page.tsx:125: const res = await fetch(`/api/traces/${traceId}`, { credentials: "include" });
+C:\Projects\JLMIRROR\apps\web\app\(admin)\webhooks\page.tsx:128: const res = await fetch("/api/webhooks", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\webhooks\page.tsx:163: const res = await fetch(`/api/webhooks/${id}/test`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\webhooks\page.tsx:182: const res = await fetch(`/api/webhooks/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\webhooks\page.tsx:199: const res = await fetch(`/api/webhooks/${id}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\white-label\page.tsx:172: const res = await fetch("/api/v1/reports/branding", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\white-label\page.tsx:202: const res = await fetch("/api/v1/reports/delivery-config", {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\workflows\page.tsx:218: const res = await fetch(`/api/v1/workflows/${workflowId}/execute`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\workflows\page.tsx:246: const res = await fetch(`/api/v1/workflows/${workflowId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\workflows\page.tsx:269: const res = await fetch(`/api/v1/workflows/${workflowId}/clone`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\workflows\page.tsx:307: const res = await fetch(`/api/v1/workflows/executions/${executionId}`, {
+C:\Projects\JLMIRROR\apps\web\app\(admin)\workflows\page.tsx:736: const res = await fetch("/api/v1/workflows", {
+C:\Projects\JLMIRROR\apps\web\app\api\auth\login\route.ts:24: res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+C:\Projects\JLMIRROR\apps\web\app\api\auth\logout\route.ts:12: await fetch(`${API_BASE_URL}/api/v1/auth/revoke`, {
+C:\Projects\JLMIRROR\apps\web\app\api\auth\mfa-verify\route.ts:11: const res = await fetch(`${API_BASE_URL}/api/v1/mfa/verify`, {
+C:\Projects\JLMIRROR\apps\web\app\api\auth\oauth\callback\route.ts:12: const res = await fetch(`${API_BASE_URL}/api/v1/auth/oauth/callback`, {
+C:\Projects\JLMIRROR\apps\web\app\api\auth\oauth\google\route.ts:13: const res = await fetch(`${API_BASE_URL}/api/v1/auth/oauth/google`, {
+C:\Projects\JLMIRROR\apps\web\app\api\branding\route.ts:10: const res = await fetch(`${API_BASE_URL}/api/v1/branding`, {
+C:\Projects\JLMIRROR\apps\web\app\api\ws-token\route.ts:19: const refreshRes = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+C:\Projects\JLMIRROR\apps\web\app\api\zabbix\ping\route.ts:15: const refreshRes = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+C:\Projects\JLMIRROR\apps\web\app\api\zabbix\ping\route.ts:35: let res = await fetch(`${API_BASE_URL}/api/v1/zabbix/ping`, {
+C:\Projects\JLMIRROR\apps\web\app\api\zabbix\ping\route.ts:43: const refreshRes = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+C:\Projects\JLMIRROR\apps\web\app\api\zabbix\ping\route.ts:54: res = await fetch(`${API_BASE_URL}/api/v1/zabbix/ping`, {
+C:\Projects\JLMIRROR\apps\web\app\api\[...path]\route.ts:43: const res = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+C:\Projects\JLMIRROR\apps\web\app\auth\change-password\page.tsx:40: const res = await fetch("/api/v1/auth/change-password", {
+C:\Projects\JLMIRROR\apps\web\app\auth\forgot-password\page.tsx:26: const res = await fetch("/api/v1/auth/forgot-password", {
+C:\Projects\JLMIRROR\apps\web\app\auth\login\page.tsx:40: const res = await fetch("/api/auth/login", {
+C:\Projects\JLMIRROR\apps\web\app\auth\login\page.tsx:89: const res = await fetch("/api/auth/mfa-verify", {
+C:\Projects\JLMIRROR\apps\web\app\auth\oauth\callback\page.tsx:30: const res = await fetch("/api/auth/oauth/callback", {
+C:\Projects\JLMIRROR\apps\web\app\auth\reset-password\page.tsx:53: const res = await fetch("/api/v1/auth/reset-password", {
+C:\Projects\JLMIRROR\apps\web\app\status\[slug]\page.tsx:52: const res = await fetch(`/api/v1/status-page/${params.slug}`);
+C:\Projects\JLMIRROR\apps\web\app\tv\page.tsx:95: const res = await fetch("/api/tv/data", {
