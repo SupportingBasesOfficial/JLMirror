@@ -72,7 +72,15 @@ tenant_id NULLS LAST` para não duplicar linhas quando o override existir.
 - [ ] 1. Auditoria de permissões: comparar TODAS as chaves `requirePermission()` no código vs seed no banco (parcialmente feito — 99 permissions seedadas, tenant:admin/operator/viewer parecem bem cobertos; falta verificar rotas menos comuns)
 - [ ] 2. Auditoria de módulos: comparar TODAS as chaves `requireModule()` no código vs feature_flags seedados (53 module_* flags existem — falta cruzar com todos os requireModule() no index.ts)
 - [x] 3. Auditoria de rotas frontend vs backend (mismatches de URL) — Stats endpoints corrigidos (commit 55ea5a1). Mismatches não-stats corrigidos: firewall, backups/restore, feature-flags/overrides (commit 76344cd). Auditoria completa — todos os 58 useApi calls e todos os fetch calls verificados contra as 931 rotas backend.
-- [ ] 4. Auditoria RLS: tabelas sem RLS (achado: capacity_metrics_2026XX, system_logs_2026XX, trace_spans_2026XX — partições sem RLS, verificar se herdam da tabela mãe) / tabelas com RLS mas SEM policies (query rodou mas output foi cortado — REFAZER)
+- [x] 4. Auditoria RLS — COMPLETA (commit 63970d0):
+  - 126 tabelas non-partition auditadas: 124 com RLS + policies, 2 sem RLS (pgmigrations, schema_migrations — tabelas de controle, OK)
+  - 0 tabelas com RLS sem policies
+  - 0 tabelas com tenant_id sem RLS
+  - 15 tabelas com tenant_id mas policies fracas (USING: true → vazamento cross-tenant) — CORRIGIDAS com migration `20260805120000_fix_rls_weak_policies_and_partitions.sql`:
+    - 12 tabelas tenant-scoped: alert_escalation_instances, alert_escalation_policies, audit_log, client_companies, client_contacts, lgpd_requests, patch_deployment_jobs, patch_scans, patches, security_audit_findings, security_audit_rules, security_audit_scans — substituídas policies `USING: true` por `global_admin + tenant_isolation`
+    - 3 tabelas global admin: sso_providers, tenant_routes, tenant_users — restritas a `global_admin_role`/`app_runtime` (sem tenant_isolation pois são B2B)
+  - 12 partições sem RLS — CORRIGIDAS: capacity_metrics_202607-10, system_logs_202607-10, trace_spans_202607-10 — RLS habilitado + policy tenant_isolation
+  - Pós-migration: 0 partições sem RLS, 0 tabelas com policies fracas (exceto 3 globais intencionais)
 - [ ] 5. Duplicação de funções/rotas
 - [ ] 6. Sidebar admin (admin-sidebar.tsx) vs client-sidebar.tsx — links mortos, módulos sem rota
 - [ ] 7. Aplicar correções + migration se necessário
