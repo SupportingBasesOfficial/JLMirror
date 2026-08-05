@@ -4,7 +4,7 @@
 -- O admin pode desativar por tenant via /settings/modules quando necessario.
 
 UPDATE public.feature_flags
-SET default_value = to_jsonb(true)
+SET default_value = 'true'::jsonb
 WHERE key IN (
   'module_audit',
   'module_client_portal',
