@@ -888,6 +888,7 @@ export function DeviceDetailClient({
         serviceItems={serviceItems}
         procItems={procItems}
         items={items}
+        triggers={triggers}
       />
 
       <ItemsTable

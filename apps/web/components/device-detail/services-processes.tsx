@@ -4,18 +4,66 @@
 
 "use client";
 
-import { COLORS, CHART_COLORS, type ZabbixItem } from "./types";
+import {
+  COLORS,
+  CHART_COLORS,
+  TRIGGER_PRIORITY_COLORS,
+  TRIGGER_PRIORITY_LABELS,
+  triggerTimeAgo,
+  type ZabbixItem,
+  type ZabbixTrigger,
+} from "./types";
 
 interface ServicesProcessesProps {
   serviceItems: ZabbixItem[];
   procItems: ZabbixItem[];
   items: ZabbixItem[];
+  triggers: ZabbixTrigger[];
+}
+
+// Mapeia descrição amigável para serviços conhecidos do Windows
+const WINDOWS_SERVICE_DESCRIPTIONS: Record<string, string> = {
+  Spooler: "Gerenciador de fila de impressão",
+  W3SVC: "Serviço de Publicação na Web (IIS)",
+  MSSQLSERVER: "Microsoft SQL Server",
+  MySQL: "MySQL Database Server",
+  Apache2: "Apache HTTP Server",
+  EventLog: "Log de Eventos do Windows",
+  Winmgmt: "Instrumentação de Gerenciamento do Windows (WMI)",
+  RpcSs: "Chamada de Procedimento Remoto (RPC)",
+  LanmanServer: "Servidor (compartilhamento de arquivos)",
+  LanmanWorkstation: "Estação de Trabalho (cliente de rede)",
+  Schedule: "Agendador de Tarefas",
+  BITS: "Serviço de Transferência Inteligente em Segundo Plano",
+  wuauserv: "Windows Update",
+  Audiosrv: "Áudio do Windows",
+  Dhcp: "Cliente DHCP",
+  Dnscache: "Cliente DNS (Cache)",
+  Netlogon: "Logon de Rede (autenticação de domínio)",
+  W32Time: "Sincronização de Hora do Windows",
+};
+
+// Cruza serviços parados com triggers do Zabbix para encontrar detalhes do problema
+function findTriggerForService(
+  serviceName: string,
+  triggers: ZabbixTrigger[],
+): ZabbixTrigger | undefined {
+  return triggers.find((t) => {
+    const desc = t.description.toLowerCase();
+    const name = serviceName.toLowerCase();
+    return (
+      desc.includes(name) ||
+      desc.includes(`{SERVICE.NAME}`) ||
+      desc.includes("service")
+    );
+  });
 }
 
 export function ServicesProcesses({
   serviceItems,
   procItems,
   items,
+  triggers,
 }: ServicesProcessesProps) {
   return (
     <>
@@ -109,12 +157,12 @@ export function ServicesProcesses({
                     className="text-[11px] mb-2"
                     style={{ color: COLORS.muted }}
                   >
-                    Serviços que Precisam de Atenção
+                    Serviços que Precisam de Atenção ({stopped.length})
                   </div>
                   <div
                     className="grid gap-2"
                     style={{
-                      gridTemplateColumns: "1fr 80px",
+                      gridTemplateColumns: "1fr 90px 90px 70px",
                       paddingBottom: 4,
                       borderBottom: `1px solid ${COLORS.border}`,
                       marginBottom: 4,
@@ -130,6 +178,18 @@ export function ServicesProcesses({
                       className="text-[11px] font-bold"
                       style={{ color: COLORS.muted }}
                     >
+                      SEVERIDADE
+                    </span>
+                    <span
+                      className="text-[11px] font-bold"
+                      style={{ color: COLORS.muted }}
+                    >
+                      DESDE
+                    </span>
+                    <span
+                      className="text-[11px] font-bold text-right"
+                      style={{ color: COLORS.muted }}
+                    >
                       STATUS
                     </span>
                   </div>
@@ -138,32 +198,81 @@ export function ServicesProcesses({
                       /service\.info\[([^\],]+)/,
                     );
                     const svcName = nameMatch ? nameMatch[1] : svc.name;
+                    const trigger = findTriggerForService(svcName, triggers);
+                    const description =
+                      WINDOWS_SERVICE_DESCRIPTIONS[svcName] ??
+                      (trigger?.description && trigger.description !== svcName
+                        ? trigger.description
+                        : "Serviço do sistema");
+                    const severity = trigger?.priority ?? "0";
+                    const severityColor =
+                      TRIGGER_PRIORITY_COLORS[severity] ?? CHART_COLORS.red;
+                    const severityLabel =
+                      TRIGGER_PRIORITY_LABELS[severity] ?? "Aviso";
+                    const timeAgo = trigger?.lastchange
+                      ? triggerTimeAgo(trigger.lastchange)
+                      : "—";
                     return (
                       <div
                         key={svc.itemid}
-                        className="grid gap-2 items-center py-1.5"
-                        style={{ gridTemplateColumns: "1fr 80px" }}
+                        className="py-2 border-b last:border-0"
+                        style={{ borderColor: COLORS.border }}
                       >
-                        <span
-                          className="flex items-center gap-2 text-[13px]"
-                          style={{ color: COLORS.text }}
+                        <div
+                          className="grid gap-2 items-center"
+                          style={{ gridTemplateColumns: "1fr 90px 90px 70px" }}
                         >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="rounded-full shrink-0"
+                              style={{
+                                width: 8,
+                                height: 8,
+                                background: severityColor,
+                              }}
+                            />
+                            <div className="flex flex-col">
+                              <span
+                                className="text-[13px] font-semibold"
+                                style={{ color: COLORS.text }}
+                              >
+                                {svcName}
+                              </span>
+                              <span
+                                className="text-[10px]"
+                                style={{ color: COLORS.muted }}
+                              >
+                                {description}
+                              </span>
+                            </div>
+                          </div>
                           <span
-                            className="rounded-full shrink-0"
-                            style={{
-                              width: 8,
-                              height: 8,
-                              background: CHART_COLORS.red,
-                            }}
-                          />
-                          {svcName}
-                        </span>
-                        <span
-                          className="text-[13px] font-bold"
-                          style={{ color: CHART_COLORS.red }}
-                        >
-                          Parado
-                        </span>
+                            className="text-[11px] font-bold"
+                            style={{ color: severityColor }}
+                          >
+                            {severityLabel}
+                          </span>
+                          <span
+                            className="text-[11px]"
+                            style={{ color: COLORS.muted }}
+                          >
+                            {timeAgo}
+                          </span>
+                          <span
+                            className="text-[13px] font-bold text-right"
+                            style={{ color: CHART_COLORS.red }}
+                          >
+                            Parado
+                          </span>
+                        </div>
+                        {trigger?.description && (
+                          <div
+                            className="text-[10px] mt-1.5 ml-5"
+                            style={{ color: COLORS.muted }}
+                          >
+                            Trigger: {trigger.description}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

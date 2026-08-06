@@ -85,12 +85,6 @@ export const NAV_SECTIONS: NavSection[] = [
         flagKey: "module_dashboard",
       },
       {
-        label: "Visão Geral",
-        href: "/dashboard/overview",
-        icon: <LayoutDashboard {...iconProps} />,
-        flagKey: "module_dashboard",
-      },
-      {
         label: "Dispositivos",
         href: "/dashboard/devices",
         prefixMatch: true,

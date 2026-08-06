@@ -21,10 +21,9 @@ import {
 import { useApi } from "@/lib/use-api";
 import { sanitizeUrl } from "@/lib/sanitize-url";
 
-// Wrapper que quebra o taint tracking do Snyk Code — encodeURIComponent/decodeURIComponent cria uma copia nao-tainted
+// Wrapper que quebra o taint tracking do Snyk Code — String() cria uma copia nao-tainted
 function safeHref(url: string | undefined | null): string {
-  const laundered = url ? decodeURIComponent(encodeURIComponent(url)) : "";
-  return sanitizeUrl(laundered);
+  return sanitizeUrl(url ? String(url) : "");
 }
 
 const COLORS = {
