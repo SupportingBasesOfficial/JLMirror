@@ -162,11 +162,11 @@ apmRoute.get("/throughput", requirePermission("traces:read"), async (c) => {
       COUNT(*)::text as count,
       COUNT(*) FILTER (WHERE status = 'error')::text as error_count
     FROM public.trace_spans
-    WHERE start_time >= timezone('utc'::text, now()) - INTERVAL '${Math.min(minutes, 60)} minutes'
+    WHERE start_time >= timezone('utc'::text, now()) - make_interval(mins => $2::int)
       AND ($1::uuid IS NULL OR tenant_id = $1)
     GROUP BY date_trunc('minute', start_time)
     ORDER BY minute ASC`,
-    [tenantId],
+    [tenantId, Math.min(minutes, 60)],
   );
 
   return c.json({ data: result.data?.rows ?? [] });

@@ -1,8 +1,9 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
-import { tenantQuery, getTenantSchema } from "@repo/db";
+import { query } from "@repo/db";
 import { requirePermission } from "../middleware/require-permission.js";
+import { safeRows, safeFirstRow } from "../lib/query-helpers.js";
 import "../types.js";
 
 export const devicesRoute = new Hono();
@@ -14,16 +15,7 @@ devicesRoute.get("/", async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
 
-  const schemaResult = await getTenantSchema(tenantId);
-  if (schemaResult.error) {
-    return c.json(
-      { error: { code: "TENANT_NOT_FOUND", message: "Tenant não encontrado" } },
-      404,
-    );
-  }
-
-  const schemaName = schemaResult.data;
-  const result = await tenantQuery<{
+  const result = await query<{
     id: string;
     tenant_id: string;
     hostname: string;
@@ -34,8 +26,9 @@ devicesRoute.get("/", async (c) => {
     created_at: string;
     updated_at: string;
   }>(
-    tenantId,
-    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at FROM ${schemaName}.devices ORDER BY hostname`,
+    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
+     FROM public.devices WHERE tenant_id = $1 ORDER BY hostname`,
+    [tenantId],
   );
 
   if (result.error) {
@@ -45,7 +38,7 @@ devicesRoute.get("/", async (c) => {
     );
   }
 
-  return c.json({ devices: result.data?.rows ?? [] });
+  return c.json({ devices: safeRows(result) });
 });
 
 // GET /api/v1/devices/:id
@@ -54,16 +47,7 @@ devicesRoute.get("/:id", async (c) => {
   const tenantId = user.tenant_id;
   const deviceId = c.req.param("id");
 
-  const schemaResult = await getTenantSchema(tenantId);
-  if (schemaResult.error) {
-    return c.json(
-      { error: { code: "TENANT_NOT_FOUND", message: "Tenant não encontrado" } },
-      404,
-    );
-  }
-
-  const schemaName = schemaResult.data;
-  const result = await tenantQuery<{
+  const result = await query<{
     id: string;
     tenant_id: string;
     hostname: string;
@@ -74,9 +58,9 @@ devicesRoute.get("/:id", async (c) => {
     created_at: string;
     updated_at: string;
   }>(
-    tenantId,
-    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at FROM ${schemaName}.devices WHERE id = $1`,
-    [deviceId],
+    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
+     FROM public.devices WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, deviceId],
   );
 
   if (result.error) {
@@ -86,12 +70,13 @@ devicesRoute.get("/:id", async (c) => {
     );
   }
 
-  if (!result.data?.rows[0]) {
+  const device = safeFirstRow(result);
+  if (!device) {
     return c.json(
       { error: { code: "NOT_FOUND", message: "Dispositivo não encontrado" } },
       404,
     );
   }
 
-  return c.json(result.data.rows[0]);
+  return c.json(device);
 });

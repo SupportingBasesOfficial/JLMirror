@@ -230,8 +230,8 @@ export default function ChangesPage() {
         setApprovals(data.approvals ?? []);
         setTab("details");
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -325,8 +325,8 @@ export default function ChangesPage() {
         body: JSON.stringify({ status: newStatus }),
       });
       fetchDetail(changeId);
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

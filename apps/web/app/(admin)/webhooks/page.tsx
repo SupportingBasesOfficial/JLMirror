@@ -172,8 +172,8 @@ export default function WebhooksPage() {
         mutateWebhooks();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -189,8 +189,8 @@ export default function WebhooksPage() {
         mutateWebhooks();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -204,8 +204,8 @@ export default function WebhooksPage() {
         mutateWebhooks();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -222,8 +222,8 @@ export default function WebhooksPage() {
         );
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

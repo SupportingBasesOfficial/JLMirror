@@ -281,8 +281,8 @@ export default function SystemHealthPage() {
         mutateIncidents();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -296,8 +296,8 @@ export default function SystemHealthPage() {
         mutateChecks();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -348,8 +348,8 @@ export default function SystemHealthPage() {
         mutateIncidents();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

@@ -151,8 +151,8 @@ export default function FeatureFlagsPage() {
         const data = await res.json();
         setOverrides(data.overrides ?? []);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -165,8 +165,8 @@ export default function FeatureFlagsPage() {
         const data = await res.json();
         setEvents(data.events ?? []);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -219,8 +219,8 @@ export default function FeatureFlagsPage() {
         mutateFlags();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -234,8 +234,8 @@ export default function FeatureFlagsPage() {
         mutateFlags();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -255,8 +255,8 @@ export default function FeatureFlagsPage() {
         mutateFlags();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -303,8 +303,8 @@ export default function FeatureFlagsPage() {
         fetchOverrides(selectedFlag);
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

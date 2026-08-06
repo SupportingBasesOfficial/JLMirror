@@ -275,8 +275,8 @@ export default function ProfilePage() {
         mutateSessions();
         mutateSecurityLog();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -291,8 +291,8 @@ export default function ProfilePage() {
         mutateSessions();
         mutateSecurityLog();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

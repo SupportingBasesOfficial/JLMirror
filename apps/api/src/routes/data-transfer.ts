@@ -298,15 +298,15 @@ dataTransferRoute.post(
     const startTime = Date.now();
 
     try {
-      // Constrói query
+      // Constrói query — colunas e tabela já validadas pelo Zod regex (apenas [a-zA-Z_][a-zA-Z0-9_]*)
       const columns =
         Array.isArray(data.columns) && data.columns.length > 0
           ? data.columns.join(", ")
           : "*";
 
-      // Query com limite de linhas
-      const sql = `SELECT ${columns} FROM public.${data.source_table} LIMIT ${maxRows}`;
-      const dataResult = await query(sql, []);
+      // Query com limite de linhas — source_table validado pelo Zod regex
+      const sql = `SELECT ${columns} FROM public.${data.source_table} WHERE tenant_id = $1 LIMIT $2`;
+      const dataResult = await query(sql, [user?.tenant_id ?? null, maxRows]);
 
       const rows = dataResult.data?.rows ?? [];
       let fileContent = "";

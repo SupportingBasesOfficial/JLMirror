@@ -223,8 +223,8 @@ export default function TicketsPage() {
         const data = await res.json();
         setComments(data.comments ?? []);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -243,8 +243,8 @@ export default function TicketsPage() {
         mutateTickets();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -265,8 +265,8 @@ export default function TicketsPage() {
         setCommentInternal(false);
         handleSelectTicket(selectedTicket);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -308,8 +308,8 @@ export default function TicketsPage() {
         credentials: "include",
       });
       if (res.ok) mutateCategories();
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

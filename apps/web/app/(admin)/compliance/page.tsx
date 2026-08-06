@@ -274,8 +274,8 @@ export default function CompliancePage() {
         mutatePolicies();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -291,8 +291,8 @@ export default function CompliancePage() {
         mutateViolations();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

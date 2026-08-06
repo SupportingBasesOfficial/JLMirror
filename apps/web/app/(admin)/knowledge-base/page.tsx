@@ -188,8 +188,8 @@ export default function KnowledgeBasePage() {
         const data = await res.json();
         setSearchResults(data.results ?? []);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -203,8 +203,8 @@ export default function KnowledgeBasePage() {
         const data = await res.json();
         setVersions(data.versions ?? []);
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -263,8 +263,8 @@ export default function KnowledgeBasePage() {
         mutateArticles();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -276,8 +276,8 @@ export default function KnowledgeBasePage() {
         credentials: "include",
         body: JSON.stringify({ helpful }),
       });
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -291,8 +291,8 @@ export default function KnowledgeBasePage() {
         mutateArticles();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -327,8 +327,8 @@ export default function KnowledgeBasePage() {
         credentials: "include",
       });
       if (res.ok) mutateCategories();
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

@@ -162,8 +162,8 @@ export default function ApiKeysPage() {
         mutateKeys();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -179,8 +179,8 @@ export default function ApiKeysPage() {
         mutateKeys();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 
@@ -194,8 +194,8 @@ export default function ApiKeysPage() {
         mutateKeys();
         mutateStats();
       }
-    } catch {
-      /* Ignora */
+    } catch (err) {
+      console.error("Operacao falhou:", err);
     }
   }
 

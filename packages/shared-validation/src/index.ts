@@ -834,23 +834,47 @@ export const createOverrideSchema = z.object({
 export type CreateOverrideInput = z.infer<typeof createOverrideSchema>;
 
 // ========== Firewall Schemas ==========
+// Regex segura: hostname/IP/porta/interface sem metacaracteres shell
+const SAFE_HOSTNAME = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9.\-_]+$/,
+    "Host inválido: apenas letras, números, pontos, hífens e underscores",
+  );
+const SAFE_IP = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9.\-_/]+$/,
+    "IP inválido: apenas letras, números, pontos, hífens, underscores e barras",
+  );
+const SAFE_PORT = z
+  .string()
+  .regex(/^[0-9]+(:[0-9]+)?$/, "Porta inválida: apenas números ou intervalo");
+const SAFE_INTERFACE = z
+  .string()
+  .regex(/^[a-zA-Z0-9.+\-_]+$/, "Interface inválida");
+const SAFE_BACKEND = z.enum(["iptables", "nftables", "ufw"]);
+
 export const createFirewallRuleSchema = z.object({
   name: z.string().min(1),
   action: z.enum(["allow", "deny", "reject"]),
   protocol: z.enum(["tcp", "udp", "icmp", "any"]),
-  source: z.string().optional(),
-  destination: z.string().optional(),
-  port: z.string().optional(),
-  host: z.string().min(1),
-  backend: z.string().min(1),
+  source: SAFE_IP.optional(),
+  destination: SAFE_IP.optional(),
+  port: SAFE_PORT.optional(),
+  host: SAFE_HOSTNAME.min(1),
+  backend: SAFE_BACKEND,
   chain: z.enum(["INPUT", "OUTPUT", "FORWARD"]).default("INPUT"),
-  source_ip: z.string().optional(),
-  source_port: z.string().optional(),
-  destination_ip: z.string().optional(),
-  destination_port: z.string().optional(),
-  interface_in: z.string().optional(),
-  interface_out: z.string().optional(),
-  state: z.string().optional(),
+  source_ip: SAFE_IP.optional(),
+  source_port: SAFE_PORT.optional(),
+  destination_ip: SAFE_IP.optional(),
+  destination_port: SAFE_PORT.optional(),
+  interface_in: SAFE_INTERFACE.optional(),
+  interface_out: SAFE_INTERFACE.optional(),
+  state: z
+    .string()
+    .regex(/^[A-Z_,]+$/)
+    .optional(),
   priority: z.number().int().default(100),
   description: z.string().optional(),
 });
@@ -860,11 +884,11 @@ export const updateFirewallRuleSchema = z.object({
   name: z.string().optional(),
   action: z.enum(["allow", "deny", "reject"]).optional(),
   protocol: z.enum(["tcp", "udp", "icmp", "any"]).optional(),
-  source: z.string().optional(),
-  destination: z.string().optional(),
-  port: z.string().optional(),
+  source: SAFE_IP.optional(),
+  destination: SAFE_IP.optional(),
+  port: SAFE_PORT.optional(),
   is_active: z.boolean().optional(),
-  host: z.string().optional(),
+  host: SAFE_HOSTNAME.optional(),
   chain: z.enum(["INPUT", "OUTPUT", "FORWARD"]).optional(),
   description: z.string().optional(),
 });
@@ -873,12 +897,22 @@ export type UpdateFirewallRuleInput = z.infer<typeof updateFirewallRuleSchema>;
 export const applyFirewallSchema = z.object({
   device_id: z.string().min(1),
   rule_ids: z.array(z.string()).min(1),
-  host: z.string().optional(),
+  host: SAFE_HOSTNAME.optional(),
   dry_run: z.boolean().default(false),
 });
 export type ApplyFirewallInput = z.infer<typeof applyFirewallSchema>;
 
 // ========== K8s Schemas ==========
+const SAFE_PATH = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9.\-_/]+$/,
+    "Caminho inválido: apenas letras, números, pontos, hífens, underscores e barras",
+  );
+const SAFE_CONTEXT = z
+  .string()
+  .regex(/^[a-zA-Z0-9.\-_]+$/, "Contexto inválido");
+
 export const createK8sClusterSchema = z.object({
   name: z.string().min(1),
   api_server: z.string().url(),
@@ -886,9 +920,12 @@ export const createK8sClusterSchema = z.object({
   ca_cert: z.string().optional(),
   display_name: z.string().optional(),
   api_server_url: z.string().url().optional(),
-  context: z.string().optional(),
-  namespace: z.string().optional(),
-  kubeconfig_path: z.string().optional(),
+  context: SAFE_CONTEXT.optional(),
+  namespace: z
+    .string()
+    .regex(/^[a-zA-Z0-9.\-_]+$/)
+    .optional(),
+  kubeconfig_path: SAFE_PATH.optional(),
 });
 export type CreateK8sClusterInput = z.infer<typeof createK8sClusterSchema>;
 
@@ -1147,9 +1184,15 @@ export type UpdateExportTemplateInput = z.infer<
 export const createDataExportSchema = z.object({
   template_id: z.string().uuid().optional(),
   name: z.string().min(1),
-  source_table: z.string().min(1),
+  source_table: z
+    .string()
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de tabela inválido"),
   format: z.enum(["csv", "json", "sql"]).default("csv"),
-  columns: z.array(z.string()).default([]),
+  columns: z
+    .array(
+      z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de coluna inválido"),
+    )
+    .default([]),
   filters: z.record(z.unknown()).default({}),
 });
 export type CreateDataExportInput = z.infer<typeof createDataExportSchema>;
@@ -1158,7 +1201,9 @@ export const createDataImportSchema = z.object({
   format: z.enum(["csv", "json", "xml"]),
   data: z.string().min(1),
   merge: z.boolean().default(false),
-  target_table: z.string().min(1),
+  target_table: z
+    .string()
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de tabela inválido"),
   name: z.string().optional(),
   file_path: z.string().optional(),
   column_mapping: z.record(z.unknown()).optional(),
@@ -1218,14 +1263,21 @@ export const updateApiKeySchema = z.object({
 export type UpdateApiKeyInput = z.infer<typeof updateApiKeySchema>;
 
 // ========== Backup Schemas ==========
+const SAFE_HOST_PATH = z
+  .string()
+  .regex(
+    /^[a-zA-Z0-9.\-_/]+$/,
+    "Caminho/host inválido: apenas letras, números, pontos, hífens, underscores e barras",
+  );
+
 export const createBackupJobSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  target_host: z.string().min(1),
+  target_host: SAFE_HOST_PATH.min(1),
   backup_type: z.enum(["full", "incremental", "differential"]),
-  source_path: z.string().min(1),
+  source_path: SAFE_HOST_PATH.min(1),
   destination_type: z.enum(["local", "s3", "sftp", "nfs"]),
-  destination_path: z.string().min(1),
+  destination_path: SAFE_HOST_PATH.min(1),
   retention_count: z.number().int().min(1).default(7),
   retention_days: z.number().int().min(1).default(30),
   compression: z.boolean().default(true),
@@ -1239,11 +1291,11 @@ export type CreateBackupJobInput = z.infer<typeof createBackupJobSchema>;
 export const updateBackupJobSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
-  target_host: z.string().optional(),
+  target_host: SAFE_HOST_PATH.optional(),
   backup_type: z.enum(["full", "incremental", "differential"]).optional(),
-  source_path: z.string().optional(),
+  source_path: SAFE_HOST_PATH.optional(),
   destination_type: z.enum(["local", "s3", "sftp", "nfs"]).optional(),
-  destination_path: z.string().optional(),
+  destination_path: SAFE_HOST_PATH.optional(),
   retention_count: z.number().int().min(1).optional(),
   retention_days: z.number().int().min(1).optional(),
   compression: z.boolean().optional(),
@@ -1257,9 +1309,9 @@ export type UpdateBackupJobInput = z.infer<typeof updateBackupJobSchema>;
 export const createRestoreSchema = z.object({
   job_id: z.string().uuid(),
   snapshot_id: z.string().optional(),
-  restore_path: z.string().optional(),
-  target_host: z.string().optional(),
-  target_path: z.string().optional(),
+  restore_path: SAFE_HOST_PATH.optional(),
+  target_host: SAFE_HOST_PATH.optional(),
+  target_path: SAFE_HOST_PATH.optional(),
   overwrite_existing: z.boolean().default(false),
 });
 export type CreateRestoreInput = z.infer<typeof createRestoreSchema>;
