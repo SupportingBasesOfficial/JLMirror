@@ -9,7 +9,10 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { StateDisplay } from "@/components/ui/state-display";
 
 function timeAgo(timestamp: string): string {
-  const diff = Math.floor(Date.now() / 1000) - parseInt(timestamp);
+  const ts = Number.parseInt(timestamp);
+  if (!ts || ts <= 0) return "—";
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 0) return "agora";
   if (diff < 60) return "agora";
   if (diff < 3600) return Math.floor(diff / 60) + "min";
   if (diff < 86400) return Math.floor(diff / 3600) + "h";
