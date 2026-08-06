@@ -120,7 +120,7 @@ export function AlertsTab({
                   const color =
                     TRIGGER_PRIORITY_COLORS[t.priority] ?? COLORS.green;
                   const label = TRIGGER_PRIORITY_LABELS[t.priority] ?? "Info";
-                  const ago = triggerTimeAgo(t.lastchange);
+                  const ago = triggerTimeAgo(t.lastchange, t.lastEvent?.clock);
                   return (
                     <div
                       key={t.triggerid}

@@ -38,10 +38,12 @@ async function getZabbixTriggers(accessToken: string, refreshToken?: string) {
   return result;
 }
 
-function timeAgo(timestamp: string): string {
+function timeAgo(timestamp: string, fallbackClock?: number): string {
   const ts = Number.parseInt(timestamp);
-  if (!ts || ts <= 0) return "—";
-  const diff = Math.floor(Date.now() / 1000) - ts;
+  const effectiveTs =
+    (!ts || ts <= 0) && fallbackClock && fallbackClock > 0 ? fallbackClock : ts;
+  if (!effectiveTs || effectiveTs <= 0) return "—";
+  const diff = Math.floor(Date.now() / 1000) - effectiveTs;
   if (diff < 0) return "agora";
   if (diff < 60) return "agora";
   if (diff < 3600) return Math.floor(diff / 60) + "min";
@@ -257,7 +259,8 @@ export default async function DashboardPage() {
                               className="text-xs mt-0.5"
                               style={{ color: "var(--text-muted)" }}
                             >
-                              {hostName} · há {timeAgo(t.lastchange)}
+                              {hostName} · há{" "}
+                              {timeAgo(t.lastchange, t.lastEvent?.clock)}
                             </div>
                           </div>
                           <StatusBadge variant="error">Crítico</StatusBadge>
@@ -348,7 +351,8 @@ export default async function DashboardPage() {
                               className="text-xs mt-0.5"
                               style={{ color: "var(--text-muted)" }}
                             >
-                              {hostName} · há {timeAgo(t.lastchange)}
+                              {hostName} · há{" "}
+                              {timeAgo(t.lastchange, t.lastEvent?.clock)}
                             </div>
                           </div>
                           <StatusBadge variant="warning">Aviso</StatusBadge>
@@ -437,7 +441,8 @@ export default async function DashboardPage() {
                               className="text-xs mt-0.5"
                               style={{ color: "var(--text-muted)" }}
                             >
-                              {hostName} · há {timeAgo(t.lastchange)}
+                              {hostName} · há{" "}
+                              {timeAgo(t.lastchange, t.lastEvent?.clock)}
                             </div>
                           </div>
                           <StatusBadge variant="neutral">Info</StatusBadge>

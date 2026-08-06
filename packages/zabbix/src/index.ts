@@ -609,6 +609,7 @@ export class BlindedZabbixClient {
       output: "extend",
       selectHosts: ["hostid", "host", "name"],
       selectItems: ["itemid", "name", "key_"],
+      selectLastEvent: "extend",
     };
     if (hostIds) params.hostids = hostIds;
     return this.rpc<ZabbixTrigger[]>("trigger.get", params);

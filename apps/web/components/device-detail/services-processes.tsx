@@ -213,7 +213,10 @@ export function ServicesProcesses({
                     const severityLabel =
                       TRIGGER_PRIORITY_LABELS[severity] ?? "Aviso";
                     const timeAgo = trigger?.lastchange
-                      ? triggerTimeAgo(trigger.lastchange)
+                      ? triggerTimeAgo(
+                          trigger.lastchange,
+                          trigger.lastEvent?.clock,
+                        )
                       : "—";
                     return (
                       <div

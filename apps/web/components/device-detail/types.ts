@@ -24,7 +24,13 @@ export interface HistoryEntry {
 
 export type ZabbixTrigger = Pick<
   ZabbixTriggerZabbix,
-  "triggerid" | "description" | "priority" | "value" | "lastchange" | "hosts"
+  | "triggerid"
+  | "description"
+  | "priority"
+  | "value"
+  | "lastchange"
+  | "hosts"
+  | "lastEvent"
 >;
 
 export interface DeviceDetailClientProps {
@@ -259,10 +265,15 @@ export function formatMetricValue(value: string, units: string): string {
   return num.toFixed(2) + units;
 }
 
-export function triggerTimeAgo(lastchange: string): string {
+export function triggerTimeAgo(
+  lastchange: string,
+  fallbackClock?: number,
+): string {
   const ts = Number.parseInt(lastchange);
-  if (!ts || ts <= 0) return "—";
-  const diff = Math.floor(Date.now() / 1000) - ts;
+  const effectiveTs =
+    (!ts || ts <= 0) && fallbackClock && fallbackClock > 0 ? fallbackClock : ts;
+  if (!effectiveTs || effectiveTs <= 0) return "—";
+  const diff = Math.floor(Date.now() / 1000) - effectiveTs;
   if (diff < 0) return "agora";
   if (diff < 60) return "agora";
   if (diff < 3600) return Math.floor(diff / 60) + "min";
