@@ -267,11 +267,15 @@ export function formatMetricValue(value: string, units: string): string {
 
 export function triggerTimeAgo(
   lastchange: string,
-  fallbackClock?: number,
+  fallbackClock?: number | string,
 ): string {
   const ts = Number.parseInt(lastchange);
+  const fallback =
+    typeof fallbackClock === "string"
+      ? Number.parseInt(fallbackClock)
+      : fallbackClock;
   const effectiveTs =
-    (!ts || ts <= 0) && fallbackClock && fallbackClock > 0 ? fallbackClock : ts;
+    (!ts || ts <= 0) && fallback && fallback > 0 ? fallback : ts;
   if (!effectiveTs || effectiveTs <= 0) return "—";
   const diff = Math.floor(Date.now() / 1000) - effectiveTs;
   if (diff < 0) return "agora";

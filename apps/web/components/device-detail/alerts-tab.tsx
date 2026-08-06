@@ -25,13 +25,16 @@ export function AlertsTab({
 }: AlertsTabProps) {
   if (triggers.length === 0) return null;
 
-  const criticalTriggers = triggers.filter(
+  // Filtra apenas triggers ativas (problemas em andamento)
+  const activeTriggers = triggers.filter((t) => t.value === "1");
+
+  const criticalTriggers = activeTriggers.filter(
     (t) => t.priority === "4" || t.priority === "5",
   );
-  const warningTriggers = triggers.filter(
+  const warningTriggers = activeTriggers.filter(
     (t) => t.priority === "2" || t.priority === "3",
   );
-  const infoTriggers = triggers.filter(
+  const infoTriggers = activeTriggers.filter(
     (t) => t.priority === "0" || t.priority === "1",
   );
 
@@ -67,7 +70,7 @@ export function AlertsTab({
         className="text-[13px] font-bold tracking-wide"
         style={{ color: COLORS.muted }}
       >
-        ALERTAS ATIVOS ({triggers.length})
+        ALERTAS ATIVOS ({activeTriggers.length})
       </div>
       {groups.map((g) => {
         const isCollapsed = collapsedCategories.includes(g.key);
