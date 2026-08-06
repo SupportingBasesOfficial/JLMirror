@@ -144,7 +144,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 // Message handler — para comunicacao com a pagina
-self.addEventListener("message", (event) => {
+self.addEventListener("message", (event) => { // NOSONAR — origin validada abaixo
   // Valida origin para prevenir mensagens cross-origin maliciosas
   if (event.origin !== self.location.origin) return;
   if (event.data?.type === "SKIP_WAITING") {

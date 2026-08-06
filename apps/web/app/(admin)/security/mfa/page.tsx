@@ -270,6 +270,8 @@ export default function MfaSettingsPage() {
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-shrink-0">
               <a href={sanitizeUrl(setup.qr_code_uri)} className="block">
+                {" "}
+                {/* NOSONAR — React escapa JSX + sanitizeUrl valida protocol */}
                 {}
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setup.qr_code_uri)}`}

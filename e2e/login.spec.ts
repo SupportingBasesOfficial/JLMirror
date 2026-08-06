@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 // Credenciais unificadas para todos os testes E2E
-const ADMIN_EMAIL = "admin@jlmirror.com";
-const ADMIN_PASSWORD = "admin123";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
 
 test("página de login carrega e exibe formulário", async ({ page }) => {
   await page.goto("/auth/login");

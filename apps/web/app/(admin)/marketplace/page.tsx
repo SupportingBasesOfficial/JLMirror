@@ -215,6 +215,7 @@ export default function MarketplacePage() {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => {
             mutateApps();
             mutateInstalls();
@@ -284,6 +285,7 @@ export default function MarketplacePage() {
       {/* Tabs */}
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={() => setTab("catalog")}
           className="px-4 py-1.5 rounded text-[12px] font-bold"
           style={{
@@ -296,6 +298,7 @@ export default function MarketplacePage() {
           Catálogo
         </button>
         <button
+          type="button"
           onClick={() => setTab("installed")}
           className="px-4 py-1.5 rounded text-[12px] font-bold"
           style={{
@@ -433,6 +436,7 @@ export default function MarketplacePage() {
                       </span>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => handleInstall(app.id, app.name)}
                         disabled={installing === app.id}
                         className="px-3 py-1 rounded text-[11px] font-bold flex items-center gap-1"
@@ -453,7 +457,7 @@ export default function MarketplacePage() {
                     )}
                     {app.docs_url && (
                       <a
-                        href={sanitizeUrl(app.docs_url)}
+                        href={sanitizeUrl(app.docs_url)} // NOSONAR — React escapa JSX + sanitizeUrl valida protocol
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px]"
@@ -535,6 +539,7 @@ export default function MarketplacePage() {
                         {statusConfig.label}
                       </span>
                       <button
+                        type="button"
                         onClick={() => handleToggle(inst.id, inst.status)}
                         className="px-2 py-1 rounded text-[10px] font-bold"
                         style={{
@@ -558,6 +563,7 @@ export default function MarketplacePage() {
                         {inst.status === "active" ? " Desativar" : " Ativar"}
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleUninstall(inst.id, inst.name)}
                         className="px-2 py-1 rounded text-[10px] font-bold"
                         style={{
@@ -597,6 +603,7 @@ export default function MarketplacePage() {
                   Nenhuma integração instalada
                 </p>
                 <button
+                  type="button"
                   onClick={() => setTab("catalog")}
                   className="mt-2 text-[11px]"
                   style={{ color: COLORS.teal, cursor: "pointer" }}
@@ -617,12 +624,12 @@ function StatCard({
   value,
   color,
   icon,
-}: {
+}: Readonly<{
   label: string;
   value: number;
   color: string;
   icon?: React.ReactNode;
-}) {
+}>) {
   return (
     <div
       className="rounded-xl p-4"

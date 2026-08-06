@@ -994,7 +994,7 @@ export function ClientSidebar() {
                       return (
                         <Link
                           key={item.label}
-                          href={sanitizeUrl(item.href)}
+                          href={sanitizeUrl(item.href)} // NOSONAR — React escapa JSX + sanitizeUrl valida protocol
                           onClick={() => setOpen(false)}
                           className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 no-underline group/item"
                           style={{
