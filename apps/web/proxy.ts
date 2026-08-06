@@ -12,7 +12,7 @@ const ADMIN_ONLY_PREFIXES = ["/admin", "/white-label", "/status-page-admin"];
 const ADMIN_ONLY_EXACT = ["/settings/modules"];
 
 // Decodifica o payload de um JWT sem verificar assinatura.
-// Usado apenas para bloqueio precoce no middleware (edge).
+// Usado apenas para bloqueio precoce no proxy (Node.js runtime).
 // O backend valida criptograficamente via jwtAuth + RS256.
 function decodeJwtPayload(
   token: string,
@@ -29,7 +29,7 @@ function decodeJwtPayload(
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname, origin } = request.nextUrl;
   const isPublicRoute = publicRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),

@@ -38,30 +38,28 @@ interface GaugesProps {
   systemObjectIdItem: ZabbixItem | undefined;
 }
 
-export function Gauges(props: GaugesProps) {
-  const {
-    kpiCards,
-    cpuItem,
-    cpuValue,
-    cpuIdleItem,
-    cpuNumItem,
-    cpuLoadItem,
-    interruptsItem,
-    contextSwitchesItem,
-    memItem,
-    memUtilItem,
-    memTotalItem,
-    memFreeItem,
-    swapFreeItem,
-    swapPfreeItem,
-    cpuBreakdownItems,
-    systemNameItem,
-    systemDescrItem,
-    systemLocationItem,
-    systemContactItem,
-    systemObjectIdItem,
-  } = props;
-
+export function Gauges({
+  kpiCards,
+  cpuItem,
+  cpuValue,
+  cpuIdleItem,
+  cpuNumItem,
+  cpuLoadItem,
+  interruptsItem,
+  contextSwitchesItem,
+  memItem,
+  memUtilItem,
+  memTotalItem,
+  memFreeItem,
+  swapFreeItem,
+  swapPfreeItem,
+  cpuBreakdownItems,
+  systemNameItem,
+  systemDescrItem,
+  systemLocationItem,
+  systemContactItem,
+  systemObjectIdItem,
+}: Readonly<GaugesProps>) {
   return (
     <>
       {/* INFORMAÇÕES DO SISTEMA */}
@@ -116,12 +114,13 @@ export function Gauges(props: GaugesProps) {
                 </div>
                 {(() => {
                   const descr = systemDescrItem.lastvalue;
-                  const osMatch = descr.match(
-                    /^(Linux|Windows|FreeBSD|OpenBSD|SunOS|AIX|HP-UX|Darwin)/i,
-                  );
-                  const kernelMatch = descr.match(/(\d+\.\d+\.\d+[\w.\-]*)/);
-                  const archMatch = descr.match(
-                    /(x86_64|i386|i686|armv\w+|aarch64)/i,
+                  const osMatch =
+                    /^(Linux|Windows|FreeBSD|OpenBSD|SunOS|AIX|HP-UX|Darwin)/i.exec(
+                      descr,
+                    );
+                  const kernelMatch = /(\d+\.\d+\.\d+[\w.-]*)/.exec(descr);
+                  const archMatch = /(x86_64|i386|i686|armv\w+|aarch64)/i.exec(
+                    descr,
                   );
                   const osName = osMatch ? osMatch[1] : "Desconhecido";
                   const kernel = kernelMatch ? kernelMatch[1] : null;
@@ -328,19 +327,19 @@ export function Gauges(props: GaugesProps) {
               lines: [
                 `Em uso: <b style="color:${CHART_COLORS.teal}">${cpuValue.toFixed(2)}%</b>`,
                 cpuIdleItem
-                  ? `Ocioso: <b style="color:${CHART_COLORS.green}">${parseFloat(cpuIdleItem.lastvalue).toFixed(2)}%</b>`
+                  ? `Ocioso: <b style="color:${CHART_COLORS.green}">${Number.parseFloat(cpuIdleItem.lastvalue).toFixed(2)}%</b>`
                   : "",
                 cpuNumItem
-                  ? `Núcleos: <b style="color:${CHART_COLORS.teal}">${parseFloat(cpuNumItem.lastvalue).toFixed(0)}</b>`
+                  ? `Núcleos: <b style="color:${CHART_COLORS.teal}">${Number.parseFloat(cpuNumItem.lastvalue).toFixed(0)}</b>`
                   : "",
                 cpuLoadItem
-                  ? `Load avg (1m): <b style="color:${CHART_COLORS.teal}">${parseFloat(cpuLoadItem.lastvalue).toFixed(2)}</b>`
+                  ? `Load avg (1m): <b style="color:${CHART_COLORS.teal}">${Number.parseFloat(cpuLoadItem.lastvalue).toFixed(2)}</b>`
                   : "",
                 interruptsItem
-                  ? `Interrupts: <b style="color:${CHART_COLORS.teal}">${parseFloat(interruptsItem.lastvalue).toFixed(0)}/s</b>`
+                  ? `Interrupts: <b style="color:${CHART_COLORS.teal}">${Number.parseFloat(interruptsItem.lastvalue).toFixed(0)}/s</b>`
                   : "",
                 contextSwitchesItem
-                  ? `Context switches: <b style="color:${CHART_COLORS.teal}">${parseFloat(contextSwitchesItem.lastvalue).toFixed(0)}/s</b>`
+                  ? `Context switches: <b style="color:${CHART_COLORS.teal}">${Number.parseFloat(contextSwitchesItem.lastvalue).toFixed(0)}/s</b>`
                   : "",
               ].filter(Boolean),
             }}
@@ -350,11 +349,11 @@ export function Gauges(props: GaugesProps) {
           <Gauge
             value={
               memUtilItem
-                ? parseFloat(memUtilItem.lastvalue)
+                ? Number.parseFloat(memUtilItem.lastvalue)
                 : memTotalItem
                   ? 100 -
-                    (parseFloat(memItem.lastvalue) /
-                      parseFloat(memTotalItem.lastvalue)) *
+                    (Number.parseFloat(memItem.lastvalue) /
+                      Number.parseFloat(memTotalItem.lastvalue)) *
                       100
                   : 0
             }
@@ -365,12 +364,12 @@ export function Gauges(props: GaugesProps) {
             tooltip={{
               title: "UTILIZAÇÃO DE RAM",
               lines: [
-                `Disponível: <b style="color:${CHART_COLORS.cyan}">${formatBytes(parseFloat(memItem.lastvalue))}</b>`,
+                `Disponível: <b style="color:${CHART_COLORS.cyan}">${formatBytes(Number.parseFloat(memItem.lastvalue))}</b>`,
                 memTotalItem
-                  ? `Total: <b style="color:${CHART_COLORS.cyan}">${formatBytes(parseFloat(memTotalItem.lastvalue))}</b>`
+                  ? `Total: <b style="color:${CHART_COLORS.cyan}">${formatBytes(Number.parseFloat(memTotalItem.lastvalue))}</b>`
                   : "",
                 memUtilItem
-                  ? `Em uso: <b style="color:${CHART_COLORS.cyan}">${parseFloat(memUtilItem.lastvalue).toFixed(1)}%</b>`
+                  ? `Em uso: <b style="color:${CHART_COLORS.cyan}">${Number.parseFloat(memUtilItem.lastvalue).toFixed(1)}%</b>`
                   : "",
               ].filter(Boolean),
             }}
@@ -409,7 +408,7 @@ export function Gauges(props: GaugesProps) {
                   className="text-[14px] font-bold"
                   style={{ color: COLORS.green }}
                 >
-                  {parseFloat(cpuIdleItem.lastvalue).toFixed(2)}%
+                  {Number.parseFloat(cpuIdleItem.lastvalue).toFixed(2)}%
                   <span
                     className="text-[11px] font-normal ml-1.5"
                     style={{ color: COLORS.muted }}
@@ -423,14 +422,16 @@ export function Gauges(props: GaugesProps) {
               {cpuBreakdownItems
                 .filter((cpu) => !cpu.name.toLowerCase().includes("idle"))
                 .sort(
-                  (a, b) => parseFloat(b.lastvalue) - parseFloat(a.lastvalue),
+                  (a, b) =>
+                    Number.parseFloat(b.lastvalue) -
+                    Number.parseFloat(a.lastvalue),
                 )
                 .map((cpu) => {
-                  const labelMatch = cpu.name.match(/CPU\s+(.+?)\s+time/i);
+                  const labelMatch = /CPU\s+(.+?)\s+time/i.exec(cpu.name);
                   const label = labelMatch
                     ? labelMatch[1]
                     : cpu.name.replace("CPU ", "");
-                  const val = parseFloat(cpu.lastvalue);
+                  const val = Number.parseFloat(cpu.lastvalue);
                   const barColor =
                     val > 50
                       ? CHART_COLORS.red
@@ -517,7 +518,7 @@ export function Gauges(props: GaugesProps) {
                     <div className="flex justify-between text-[12px]">
                       <span style={{ color: COLORS.muted }}>Total</span>
                       <span style={{ color: COLORS.text, fontWeight: "bold" }}>
-                        {formatBytes(parseFloat(memTotalItem.lastvalue))}
+                        {formatBytes(Number.parseFloat(memTotalItem.lastvalue))}
                       </span>
                     </div>
                   )}
@@ -526,7 +527,7 @@ export function Gauges(props: GaugesProps) {
                     <span
                       style={{ color: CHART_COLORS.cyan, fontWeight: "bold" }}
                     >
-                      {formatBytes(parseFloat(memItem.lastvalue))}
+                      {formatBytes(Number.parseFloat(memItem.lastvalue))}
                     </span>
                   </div>
                   {memFreeItem && (
@@ -538,7 +539,7 @@ export function Gauges(props: GaugesProps) {
                           fontWeight: "bold",
                         }}
                       >
-                        {formatBytes(parseFloat(memFreeItem.lastvalue))}
+                        {formatBytes(Number.parseFloat(memFreeItem.lastvalue))}
                       </span>
                     </div>
                   )}
@@ -552,8 +553,8 @@ export function Gauges(props: GaugesProps) {
                         }}
                       >
                         {formatBytes(
-                          parseFloat(memTotalItem.lastvalue) -
-                            parseFloat(memItem.lastvalue),
+                          Number.parseFloat(memTotalItem.lastvalue) -
+                            Number.parseFloat(memItem.lastvalue),
                         )}
                       </span>
                     </div>
@@ -567,7 +568,7 @@ export function Gauges(props: GaugesProps) {
                         <div
                           className="h-1.5 rounded-full"
                           style={{
-                            width: `${parseFloat(memUtilItem.lastvalue)}%`,
+                            width: `${Number.parseFloat(memUtilItem.lastvalue)}%`,
                             background: CHART_COLORS.cyan,
                           }}
                         />
@@ -602,9 +603,9 @@ export function Gauges(props: GaugesProps) {
                             fontWeight: "bold",
                           }}
                         >
-                          {(100 - parseFloat(swapPfreeItem.lastvalue)).toFixed(
-                            1,
-                          )}
+                          {(
+                            100 - Number.parseFloat(swapPfreeItem.lastvalue)
+                          ).toFixed(1)}
                           %
                         </span>
                       </div>
@@ -616,7 +617,10 @@ export function Gauges(props: GaugesProps) {
                             fontWeight: "bold",
                           }}
                         >
-                          {parseFloat(swapPfreeItem.lastvalue).toFixed(1)}%
+                          {Number.parseFloat(swapPfreeItem.lastvalue).toFixed(
+                            1,
+                          )}
+                          %
                         </span>
                       </div>
                       <div className="mt-1">
@@ -627,7 +631,7 @@ export function Gauges(props: GaugesProps) {
                           <div
                             className="h-1.5 rounded-full"
                             style={{
-                              width: `${100 - parseFloat(swapPfreeItem.lastvalue)}%`,
+                              width: `${100 - Number.parseFloat(swapPfreeItem.lastvalue)}%`,
                               background: CHART_COLORS.purple,
                             }}
                           />
@@ -644,7 +648,7 @@ export function Gauges(props: GaugesProps) {
                           fontWeight: "bold",
                         }}
                       >
-                        {formatBytes(parseFloat(swapFreeItem.lastvalue))}
+                        {formatBytes(Number.parseFloat(swapFreeItem.lastvalue))}
                       </span>
                     </div>
                   )}
