@@ -5,18 +5,18 @@
 import { useEffect } from "react";
 import { logger } from "@repo/logger";
 
-export default function Error({
+export default function ErrorBoundary({
   error,
   reset,
-}: {
+}: Readonly<{
   error: Error & { digest?: string };
   reset: () => void;
-}) {
+}>) {
   useEffect(() => {
-    logger.error(
-      "Error boundary capturou erro de runtime",
-      { err: error, digest: error.digest },
-    );
+    logger.error("Error boundary capturou erro de runtime", {
+      err: error,
+      digest: error.digest,
+    });
   }, [error]);
 
   return (
@@ -45,12 +45,25 @@ export default function Error({
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          background: "radial-gradient(circle, rgba(229, 72, 77, 0.08) 0%, transparent 70%)",
+          background:
+            "radial-gradient(circle, rgba(229, 72, 77, 0.08) 0%, transparent 70%)",
         }}
       />
-      <div className="relative z-10 w-full max-w-md text-center space-y-6" style={{ animation: "fadeIn 0.3s ease-out" }}>
+      <div
+        className="relative z-10 w-full max-w-md text-center space-y-6"
+        style={{ animation: "fadeIn 0.3s ease-out" }}
+      >
         <div className="flex justify-center">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#E5484D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#E5484D"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -65,6 +78,7 @@ export default function Error({
           </p>
         </div>
         <button
+          type="button"
           onClick={reset}
           className="px-4 py-2 rounded-md text-sm font-bold transition-all hover:scale-105"
           style={{

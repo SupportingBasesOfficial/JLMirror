@@ -99,6 +99,7 @@ export function PwaInstallPrompt() {
           </p>
           <div className="flex items-center gap-2 mt-3">
             <button
+              type="button"
               onClick={handleInstall}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-bold"
               style={{
@@ -111,6 +112,7 @@ export function PwaInstallPrompt() {
               Instalar
             </button>
             <button
+              type="button"
               onClick={handleDismiss}
               className="px-3 py-1.5 rounded-md text-[12px]"
               style={{
@@ -123,6 +125,7 @@ export function PwaInstallPrompt() {
           </div>
         </div>
         <button
+          type="button"
           onClick={handleDismiss}
           className="shrink-0"
           style={{ color: "var(--text-muted)", cursor: "pointer" }}

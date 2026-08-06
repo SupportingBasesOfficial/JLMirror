@@ -14,7 +14,7 @@ export function MegaLoader({
   fullscreen = false,
   label,
   progress,
-}: MegaLoaderProps) {
+}: Readonly<MegaLoaderProps>) {
   const hasProgress =
     progress !== null && progress !== undefined && progress >= 0;
   const pct = hasProgress ? Math.min(100, Math.max(0, progress!)) : null;
