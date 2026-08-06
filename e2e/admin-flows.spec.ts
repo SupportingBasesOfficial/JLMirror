@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
-const ADMIN_EMAIL = "admin@jlmirror.com";
-const ADMIN_PASSWORD = "admin123";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
 
 test("dashboard carrega KPIs após login admin", async ({ page }) => {
   await page.goto("/auth/login");

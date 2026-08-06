@@ -145,6 +145,8 @@ self.addEventListener("fetch", (event) => {
 
 // Message handler — para comunicacao com a pagina
 self.addEventListener("message", (event) => {
+  // Valida origin para prevenir mensagens cross-origin maliciosas
+  if (event.origin !== self.location.origin) return;
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }

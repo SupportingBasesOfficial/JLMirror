@@ -4,6 +4,7 @@
 
 import { useState } from "react";
 import { useApi } from "@/lib/use-api";
+import { sanitizeUrl } from "@/lib/sanitize-url";
 
 const COLORS = {
   bg: "var(--surface-0)",
@@ -268,7 +269,7 @@ export default function MfaSettingsPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-5">
             <div className="flex-shrink-0">
-              <a href={setup.qr_code_uri} className="block">
+              <a href={sanitizeUrl(setup.qr_code_uri)} className="block">
                 {}
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(setup.qr_code_uri)}`}

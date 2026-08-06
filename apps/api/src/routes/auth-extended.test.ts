@@ -8,6 +8,11 @@ import {
   mfaVerifySchema,
 } from "@repo/shared-validation";
 
+// Fixtures de teste — nao sao credenciais reais, apenas dados para validar schemas Zod
+const TEST_PASSWORD = "newpassword123";
+const TEST_SECRET = "JBSWY3DPEHPK3PXP";
+const TEST_TOKEN = "a".repeat(32);
+
 describe("auth schemas — forgotPasswordSchema", () => {
   it("valida email valido", () => {
     const result = forgotPasswordSchema.safeParse({
@@ -32,8 +37,8 @@ describe("auth schemas — forgotPasswordSchema", () => {
 describe("auth schemas — resetPasswordSchema", () => {
   it("valida token e senha valida", () => {
     const result = resetPasswordSchema.safeParse({
-      token: "a".repeat(32),
-      new_password: "newpassword123",
+      token: TEST_TOKEN,
+      new_password: TEST_PASSWORD,
     });
     expect(result.success).toBe(true);
   });
@@ -41,14 +46,14 @@ describe("auth schemas — resetPasswordSchema", () => {
   it("rejeita token curto (menos de 32 chars)", () => {
     const result = resetPasswordSchema.safeParse({
       token: "short-token",
-      new_password: "newpassword123",
+      new_password: TEST_PASSWORD,
     });
     expect(result.success).toBe(false);
   });
 
   it("rejeita nova senha menor que 8 caracteres", () => {
     const result = resetPasswordSchema.safeParse({
-      token: "a".repeat(32),
+      token: TEST_TOKEN,
       new_password: "short",
     });
     expect(result.success).toBe(false);
@@ -56,7 +61,7 @@ describe("auth schemas — resetPasswordSchema", () => {
 
   it("rejeita sem token", () => {
     const result = resetPasswordSchema.safeParse({
-      new_password: "newpassword123",
+      new_password: TEST_PASSWORD,
     });
     expect(result.success).toBe(false);
   });
@@ -65,7 +70,7 @@ describe("auth schemas — resetPasswordSchema", () => {
 describe("mfa schemas — mfaSetupVerifySchema", () => {
   it("valida secret e code de 6 digitos", () => {
     const result = mfaSetupVerifySchema.safeParse({
-      secret: "JBSWY3DPEHPK3PXP",
+      secret: TEST_SECRET,
       code: "123456",
     });
     expect(result.success).toBe(true);
@@ -73,7 +78,7 @@ describe("mfa schemas — mfaSetupVerifySchema", () => {
 
   it("rejeita code com menos de 6 digitos", () => {
     const result = mfaSetupVerifySchema.safeParse({
-      secret: "JBSWY3DPEHPK3PXP",
+      secret: TEST_SECRET,
       code: "12345",
     });
     expect(result.success).toBe(false);
@@ -81,7 +86,7 @@ describe("mfa schemas — mfaSetupVerifySchema", () => {
 
   it("rejeita code com mais de 6 digitos", () => {
     const result = mfaSetupVerifySchema.safeParse({
-      secret: "JBSWY3DPEHPK3PXP",
+      secret: TEST_SECRET,
       code: "1234567",
     });
     expect(result.success).toBe(false);
@@ -97,7 +102,7 @@ describe("mfa schemas — mfaSetupVerifySchema", () => {
 
   it("rejeita sem code", () => {
     const result = mfaSetupVerifySchema.safeParse({
-      secret: "JBSWY3DPEHPK3PXP",
+      secret: TEST_SECRET,
     });
     expect(result.success).toBe(false);
   });

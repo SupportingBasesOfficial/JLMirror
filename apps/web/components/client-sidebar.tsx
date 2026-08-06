@@ -5,6 +5,7 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { sanitizeUrl } from "@/lib/sanitize-url";
 import {
   ChevronDown,
   PanelLeftClose,
@@ -993,7 +994,7 @@ export function ClientSidebar() {
                       return (
                         <Link
                           key={item.label}
-                          href={item.href}
+                          href={sanitizeUrl(item.href)}
                           onClick={() => setOpen(false)}
                           className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all duration-150 no-underline group/item"
                           style={{

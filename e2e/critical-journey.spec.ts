@@ -8,10 +8,10 @@ import { test, expect } from "@playwright/test";
 // 5. Indicador WebSocket presente no TopBar
 // 6. ThemeToggle presente e funcional
 
-const ADMIN_EMAIL = "admin@jlmirror.com";
-const ADMIN_PASSWORD = "admin123";
-const CLIENT_EMAIL = "client@jlmirror.com";
-const CLIENT_PASSWORD = "client123";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
+const CLIENT_EMAIL = process.env.E2E_CLIENT_EMAIL ?? "client@jlmirror.com";
+const CLIENT_PASSWORD = process.env.E2E_CLIENT_PASSWORD ?? "client123";
 
 test.describe("Jornada Crítica — Smoke Test", () => {
   test("página de login tem link para forgot-password", async ({ page }) => {

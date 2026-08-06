@@ -4,8 +4,8 @@ import { test, expect } from "@playwright/test";
 // Requer: API em localhost:3001, Web em localhost:3000, banco com seed de cliente
 
 // Credenciais de cliente — ajustar conforme seed do banco
-const CLIENT_EMAIL = "client@jlmirror.com";
-const CLIENT_PASSWORD = "client123";
+const CLIENT_EMAIL = process.env.E2E_CLIENT_EMAIL ?? "client@jlmirror.com";
+const CLIENT_PASSWORD = process.env.E2E_CLIENT_PASSWORD ?? "client123";
 
 test.describe("Fluxo Cliente (Tenant User)", () => {
   test("cliente é redirecionado para /dashboard após login", async ({

@@ -7,11 +7,16 @@ import {
   changePasswordSchema,
 } from "@repo/shared-validation";
 
+// Fixtures de teste — nao sao credenciais reais, apenas dados para validar schemas Zod
+const TEST_PASSWORD = "secret123";
+const TEST_NEW_PASSWORD = "newpassword123";
+const TEST_CURRENT_PASSWORD = "old123";
+
 describe("auth schemas — loginInputSchema", () => {
   it("valida login com email e senha", () => {
     const result = loginInputSchema.safeParse({
       email: "user@example.com",
-      password: "secret123",
+      password: TEST_PASSWORD,
     });
     expect(result.success).toBe(true);
   });
@@ -19,7 +24,7 @@ describe("auth schemas — loginInputSchema", () => {
   it("valida login com device_fingerprint opcional", () => {
     const result = loginInputSchema.safeParse({
       email: "user@example.com",
-      password: "secret123",
+      password: TEST_PASSWORD,
       device_fingerprint: "abc-123",
     });
     expect(result.success).toBe(true);
@@ -28,7 +33,7 @@ describe("auth schemas — loginInputSchema", () => {
   it("rejeita email invalido", () => {
     const result = loginInputSchema.safeParse({
       email: "not-an-email",
-      password: "secret123",
+      password: TEST_PASSWORD,
     });
     expect(result.success).toBe(false);
   });
@@ -43,7 +48,7 @@ describe("auth schemas — loginInputSchema", () => {
 
   it("rejeita sem email", () => {
     const result = loginInputSchema.safeParse({
-      password: "secret123",
+      password: TEST_PASSWORD,
     });
     expect(result.success).toBe(false);
   });
@@ -68,15 +73,15 @@ describe("auth schemas — refreshTokenSchema", () => {
 describe("auth schemas — changePasswordSchema", () => {
   it("valida troca de senha", () => {
     const result = changePasswordSchema.safeParse({
-      current_password: "old123",
-      new_password: "newpassword123",
+      current_password: TEST_CURRENT_PASSWORD,
+      new_password: TEST_NEW_PASSWORD,
     });
     expect(result.success).toBe(true);
   });
 
   it("rejeita nova senha menor que 8 caracteres", () => {
     const result = changePasswordSchema.safeParse({
-      current_password: "old123",
+      current_password: TEST_CURRENT_PASSWORD,
       new_password: "short",
     });
     expect(result.success).toBe(false);
@@ -84,7 +89,7 @@ describe("auth schemas — changePasswordSchema", () => {
 
   it("rejeita sem senha atual", () => {
     const result = changePasswordSchema.safeParse({
-      new_password: "newpassword123",
+      new_password: TEST_NEW_PASSWORD,
     });
     expect(result.success).toBe(false);
   });

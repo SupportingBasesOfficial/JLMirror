@@ -118,7 +118,7 @@ export default function TvModePage() {
   useEffect(() => {
     if (!authed) return;
     fetchData();
-    intervalRef.current = setInterval(fetchData, 30_000);
+    intervalRef.current = setInterval(() => fetchData(), 30_000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };

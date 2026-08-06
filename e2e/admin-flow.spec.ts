@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 // Testes E2E do fluxo admin completo
 // Requer: API em localhost:3001, Web em localhost:3000, banco com seed
 
-const ADMIN_EMAIL = "admin@jlmirror.com";
-const ADMIN_PASSWORD = "admin123";
+const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
 
 test.describe("Fluxo Admin Completo", () => {
   test.beforeEach(async ({ page }) => {
