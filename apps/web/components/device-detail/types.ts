@@ -240,8 +240,8 @@ export function findItem(
 }
 
 export function formatMetricValue(value: string, units: string): string {
-  const num = parseFloat(value);
-  if (isNaN(num)) return value + units;
+  const num = Number.parseFloat(value);
+  if (Number.isNaN(num)) return value + units;
   if (units === "B") {
     if (num >= 1073741824) return (num / 1073741824).toFixed(2) + " GB";
     if (num >= 1048576) return (num / 1048576).toFixed(1) + " MB";
@@ -260,7 +260,10 @@ export function formatMetricValue(value: string, units: string): string {
 }
 
 export function triggerTimeAgo(lastchange: string): string {
-  const diff = Math.floor(Date.now() / 1000) - parseInt(lastchange);
+  const ts = Number.parseInt(lastchange);
+  if (!ts || ts <= 0) return "—";
+  const diff = Math.floor(Date.now() / 1000) - ts;
+  if (diff < 0) return "agora";
   if (diff < 60) return "agora";
   if (diff < 3600) return Math.floor(diff / 60) + "min";
   if (diff < 86400) return Math.floor(diff / 3600) + "h";

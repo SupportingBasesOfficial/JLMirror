@@ -354,9 +354,7 @@ export function DeviceDetailClient({
   );
 
   const serviceItems = items.filter(
-    (i) =>
-      (i.key_.startsWith("service.info[") && i.key_.endsWith(",state]")) ||
-      (i.key_.startsWith("proc.num[") && !i.key_.includes("zabbix")),
+    (i) => i.key_.startsWith("service.info[") && i.key_.endsWith(",state]"),
   );
 
   const procItems = items.filter(

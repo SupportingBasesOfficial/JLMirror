@@ -48,15 +48,19 @@ function findTriggerForService(
   serviceName: string,
   triggers: ZabbixTrigger[],
 ): ZabbixTrigger | undefined {
+  const name = serviceName.toLowerCase();
   return triggers.find((t) => {
     const desc = t.description.toLowerCase();
-    const name = serviceName.toLowerCase();
-    return (
-      desc.includes(name) ||
-      desc.includes(`{SERVICE.NAME}`) ||
-      desc.includes("service")
-    );
+    // Zabbix templates usam {SERVICE.NAME} ou o nome direto entre aspas
+    return desc.includes(`"${name}"`) || desc.includes(`(${name})`);
   });
+}
+
+// Retorna cor baseada no uso de CPU
+function getCpuColor(cpu: number): string {
+  if (cpu > 50) return CHART_COLORS.red;
+  if (cpu > 20) return CHART_COLORS.amber;
+  return CHART_COLORS.teal;
 }
 
 export function ServicesProcesses({
@@ -64,7 +68,7 @@ export function ServicesProcesses({
   procItems,
   items,
   triggers,
-}: ServicesProcessesProps) {
+}: Readonly<ServicesProcessesProps>) {
   return (
     <>
       {/* SERVIÇOS DO WINDOWS */}
@@ -87,7 +91,7 @@ export function ServicesProcesses({
               style={{
                 background: COLORS.card,
                 border: `1px solid ${
-                  serviceItems.some((s) => parseFloat(s.lastvalue) !== 0)
+                  serviceItems.some((s) => Number.parseFloat(s.lastvalue) !== 0)
                     ? "var(--status-error-border)"
                     : "var(--status-ok-border)"
                 }`,
@@ -101,7 +105,7 @@ export function ServicesProcesses({
               </div>
               {(() => {
                 const stopped = serviceItems.filter(
-                  (s) => parseFloat(s.lastvalue) !== 0,
+                  (s) => Number.parseFloat(s.lastvalue) !== 0,
                 );
                 const isAllRunning = stopped.length === 0;
                 return (
@@ -134,15 +138,16 @@ export function ServicesProcesses({
               })()}
               <div className="text-[12px] mt-3" style={{ color: COLORS.muted }}>
                 {
-                  serviceItems.filter((s) => parseFloat(s.lastvalue) === 0)
-                    .length
+                  serviceItems.filter(
+                    (s) => Number.parseFloat(s.lastvalue) === 0,
+                  ).length
                 }{" "}
                 de {serviceItems.length} serviço(s) ativo(s)
               </div>
             </div>
             {(() => {
               const stopped = serviceItems.filter(
-                (s) => parseFloat(s.lastvalue) !== 0,
+                (s) => Number.parseFloat(s.lastvalue) !== 0,
               );
               if (stopped.length === 0) return null;
               return (
@@ -194,9 +199,7 @@ export function ServicesProcesses({
                     </span>
                   </div>
                   {stopped.map((svc) => {
-                    const nameMatch = svc.key_.match(
-                      /service\.info\[([^\],]+)/,
-                    );
+                    const nameMatch = /service\.info\[([^\],]+)/.exec(svc.key_);
                     const svcName = nameMatch ? nameMatch[1] : svc.name;
                     const trigger = findTriggerForService(svcName, triggers);
                     const description =
@@ -343,17 +346,17 @@ export function ServicesProcesses({
                 { name: string; cpu: number; mem: number }
               >();
               for (const cpu of cpuProcs) {
-                const nameMatch = cpu.key_.match(/proc\.cpu\.util\[([^\],]+)/);
+                const nameMatch = /proc\.cpu\.util\[([^\],]+)/.exec(cpu.key_);
                 const name = nameMatch ? nameMatch[1] : cpu.name;
                 const existing = procMap.get(name) ?? { name, cpu: 0, mem: 0 };
-                existing.cpu = parseFloat(cpu.lastvalue);
+                existing.cpu = Number.parseFloat(cpu.lastvalue);
                 procMap.set(name, existing);
               }
               for (const mem of memProcs) {
-                const nameMatch = mem.key_.match(/proc\.mem\[([^\],]+)/);
+                const nameMatch = /proc\.mem\[([^\],]+)/.exec(mem.key_);
                 const name = nameMatch ? nameMatch[1] : mem.name;
                 const existing = procMap.get(name) ?? { name, cpu: 0, mem: 0 };
-                existing.mem = parseFloat(mem.lastvalue);
+                existing.mem = Number.parseFloat(mem.lastvalue);
                 procMap.set(name, existing);
               }
               const sorted = Array.from(procMap.values())
@@ -361,7 +364,7 @@ export function ServicesProcesses({
                 .slice(0, 10);
               return sorted.map((proc, i) => (
                 <div
-                  key={i}
+                  key={proc.name}
                   className="grid gap-2 py-1.5"
                   style={{ gridTemplateColumns: "60px 1fr 70px 80px" }}
                 >
@@ -374,12 +377,7 @@ export function ServicesProcesses({
                   <span
                     className="text-[12px] font-bold text-right"
                     style={{
-                      color:
-                        proc.cpu > 50
-                          ? CHART_COLORS.red
-                          : proc.cpu > 20
-                            ? CHART_COLORS.amber
-                            : CHART_COLORS.teal,
+                      color: getCpuColor(proc.cpu),
                     }}
                   >
                     {proc.cpu.toFixed(1)}
