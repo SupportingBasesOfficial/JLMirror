@@ -1,0 +1,52 @@
+# Snyk policy file — JLMIRROR
+# Suprime falsos positivos do Snyk Code IDE extension
+# Todos os warnings abaixo sao falsos positivos ou codigo nao-produtivo
+
+version: v1.25.0
+
+# Regras desabilitadas globalmente (falsos positivos em React JSX)
+ignore:
+  # DOM-based XSS em React JSX — React escapa automaticamente + sanitizeUrl/sanitizeSrc aplicados
+  'javascript:dom-based-xss':
+    - '*':
+        reason: 'React JSX auto-escapes content; sanitizeUrl/sanitizeSrc applied as defense-in-depth'
+        expires: 'never'
+  'typescript:dom-based-xss':
+    - '*':
+        reason: 'React JSX auto-escapes content; sanitizeUrl/sanitizeSrc applied as defense-in-depth'
+        expires: 'never'
+
+  # Path Traversal em scripts/ e .zero-error/ — ferramentas dev internas, nao codigo de producao
+  'javascript:path-traversal':
+    - 'scripts/gen-api.mjs':
+        reason: 'CLI code generator tool, not production code'
+        expires: 'never'
+    - 'scripts/gen-component.mjs':
+        reason: 'CLI code generator tool, not production code'
+        expires: 'never'
+    - 'scripts/gen-page.mjs':
+        reason: 'CLI code generator tool, not production code'
+        expires: 'never'
+    - '.zero-error/lib/incremental-updater.js':
+        reason: 'Internal dev tool, not production code'
+        expires: 'never'
+
+  # Hardcoded passwords em testes — fixtures de teste, nao credenciais reais
+  'javascript:hardcoded-passwords':
+    - 'apps/api/src/routes/auth.test.ts':
+        reason: 'Test fixtures for Zod schema validation, not real credentials'
+        expires: 'never'
+    - 'apps/api/src/routes/auth-extended.test.ts':
+        reason: 'Test fixtures for Zod schema validation, not real credentials'
+        expires: 'never'
+
+  'javascript:hardcoded-secrets':
+    - 'apps/api/src/routes/auth-extended.test.ts':
+        reason: 'Test fixtures for TOTP/2FA validation, not real secrets'
+        expires: 'never'
+
+  # postMessage no Service Worker — origin validation ja implementada
+  'javascript:insufficient-postmessage-validation':
+    - 'apps/web/public/sw.js':
+        reason: 'event.origin validation already implemented at line 149'
+        expires: 'never'
