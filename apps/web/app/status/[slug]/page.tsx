@@ -203,12 +203,11 @@ export default function PublicStatusPage() {
             <div className="space-y-3">
               {data.active_incidents.map((inc: Record<string, unknown>) => {
                 const severity = (inc.severity as string) ?? "warning";
-                const sevColor =
-                  severity === "critical"
-                    ? "#dc2626"
-                    : severity === "warning"
-                      ? "#d97706"
-                      : "#2563eb";
+                const SEVERITY_COLORS: Record<string, string> = {
+                  critical: "#dc2626",
+                  warning: "#d97706",
+                };
+                const sevColor = SEVERITY_COLORS[severity] ?? "#2563eb";
                 return (
                   <div
                     key={inc.id as string}
@@ -381,7 +380,9 @@ export default function PublicStatusPage() {
                       {inc.status as string}
                     </span>
                     <p className="text-[10px]" style={{ color: "#666" }}>
-                      {parseFloat(inc.duration_minutes as string).toFixed(0)}{" "}
+                      {Number.parseFloat(
+                        inc.duration_minutes as string,
+                      ).toFixed(0)}{" "}
                       min
                     </p>
                   </div>

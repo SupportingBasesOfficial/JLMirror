@@ -238,6 +238,7 @@ export default function MfaSettingsPage() {
             code.
           </p>
           <button
+            type="button"
             onClick={handleSetup}
             disabled={loading}
             className="px-4 py-2 rounded-md text-sm font-bold transition-opacity disabled:opacity-50"
@@ -310,6 +311,7 @@ export default function MfaSettingsPage() {
                   Códigos de recuperação
                 </div>
                 <button
+                  type="button"
                   onClick={() => setShowRecoveryCodes(!showRecoveryCodes)}
                   className="text-[12px]"
                   style={{ color: COLORS.amber, cursor: "pointer" }}
@@ -324,9 +326,9 @@ export default function MfaSettingsPage() {
                       border: `1px solid ${COLORS.border}`,
                     }}
                   >
-                    {setup.recovery_codes.map((code, i) => (
+                    {setup.recovery_codes.map((code) => (
                       <code
-                        key={i}
+                        key={code}
                         className="text-[12px]"
                         style={{ color: COLORS.amber }}
                       >
@@ -368,6 +370,7 @@ export default function MfaSettingsPage() {
                 }}
               />
               <button
+                type="button"
                 onClick={handleVerifySetup}
                 disabled={loading || verifyCode.length !== 6}
                 className="px-4 py-2 rounded-md text-sm font-bold disabled:opacity-50"
@@ -380,6 +383,7 @@ export default function MfaSettingsPage() {
                 {loading ? "Verificando..." : "Confirmar"}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setSetup(null);
                   setVerifyCode("");
@@ -433,6 +437,7 @@ export default function MfaSettingsPage() {
               }}
             />
             <button
+              type="button"
               onClick={handleDisable}
               disabled={loading || disableCode.length !== 6}
               className="px-4 py-2 rounded-md text-sm font-bold disabled:opacity-50"

@@ -176,9 +176,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
   {
     title: "Suporte",
     icon: iconMulti(
-      <>
-        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-      </>,
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />,
     ),
     items: [
       {
@@ -201,9 +199,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         tooltip: "Artigos, tutoriais e documentação para ajudar você",
         flagKey: "module_kb",
         icon: iconMulti(
-          <>
-            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-          </>,
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />,
         ),
       },
       {
@@ -368,11 +364,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         href: "/predictive-failure",
         tooltip: "Previsão de falhas antes que aconteçam, com IA",
         flagKey: "module_predictions",
-        icon: iconMulti(
-          <>
-            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-          </>,
-        ),
+        icon: iconMulti(<path d="M22 12h-4l-3 9L9 3l-3 9H2" />),
       },
       {
         label: "Correlação",
@@ -395,11 +387,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         href: "/config-drift",
         tooltip: "Detecta mudanças não autorizadas na configuração",
         flagKey: "module_drift",
-        icon: iconMulti(
-          <>
-            <path d="M3 12h4l3 8 4-16 3 8h4" />
-          </>,
-        ),
+        icon: iconMulti(<path d="M3 12h4l3 8 4-16 3 8h4" />),
       },
       {
         label: "Logs",
@@ -421,11 +409,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         href: "/traces",
         tooltip: "Rastreamento distribuído de requisições entre serviços",
         flagKey: "module_traces",
-        icon: iconMulti(
-          <>
-            <path d="M3 12h4l3 8 4-16 3 8h4" />
-          </>,
-        ),
+        icon: iconMulti(<path d="M3 12h4l3 8 4-16 3 8h4" />),
       },
       {
         label: "APM",
@@ -555,9 +539,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         tooltip: "Integração com Slack, Teams e outras plataformas de chat",
         flagKey: "module_chatops",
         icon: iconMulti(
-          <>
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </>,
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
         ),
       },
     ],
@@ -580,9 +562,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         tooltip: "Gerencie chaves de acesso para integrações via API",
         flagKey: "module_api_keys",
         icon: iconMulti(
-          <>
-            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
-          </>,
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />,
         ),
       },
       {
@@ -643,9 +623,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
   {
     title: "Conformidade",
     icon: iconMulti(
-      <>
-        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
-      </>,
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />,
     ),
     items: [
       {
@@ -689,9 +667,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
         tooltip: "Gerencie sessões ativas, MFA e segurança da sua conta",
         flagKey: "module_auth",
         icon: iconMulti(
-          <>
-            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />
-          </>,
+          <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" />,
         ),
       },
       {
@@ -710,7 +686,7 @@ const CLIENT_NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function LogoMark({ size }: { size: number }) {
+function LogoMark({ size }: Readonly<{ size: number }>) {
   return (
     <svg
       width={size}
@@ -793,6 +769,7 @@ export function ClientSidebar() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="fixed top-3 left-3 z-50 rounded-lg p-2 transition-colors md:hidden"
         style={{
@@ -809,13 +786,11 @@ export function ClientSidebar() {
         <div
           className="fixed inset-0 z-30 md:hidden"
           style={{ background: "rgba(0,0,0,0.6)" }}
-          role="button"
-          tabIndex={0}
-          aria-label="Fechar menu"
           onClick={() => setOpen(false)}
           onKeyDown={(e) => {
             if (e.key === "Escape") setOpen(false);
           }}
+          aria-label="Fechar menu"
         />
       )}
 
@@ -868,6 +843,7 @@ export function ClientSidebar() {
           </div>
 
           <button
+            type="button"
             onClick={() => setCollapsed((v) => !v)}
             className="hidden md:flex items-center justify-center rounded-lg p-1.5 transition-all shrink-0 hover:scale-105"
             style={{
@@ -912,6 +888,7 @@ export function ClientSidebar() {
               />
               {query && (
                 <button
+                  type="button"
                   onClick={() => setQuery("")}
                   className="absolute right-1.5 rounded p-0.5 transition-colors"
                   style={{ color: "var(--text-muted)" }}
@@ -949,6 +926,7 @@ export function ClientSidebar() {
                 <div key={section.title} className="mb-1">
                   {!collapsed && (
                     <button
+                      type="button"
                       onClick={() => toggleSection(section.title)}
                       className="flex items-center gap-1.5 w-full px-3 pt-3 pb-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors group"
                       style={{

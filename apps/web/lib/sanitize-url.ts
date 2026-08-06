@@ -2,7 +2,7 @@
 // React escapa automaticamente valores em JSX, mas href/src podem executar javascript: em alguns navegadores.
 // Esta funcao garante que apenas protocols seguros sejam permitidos.
 
-const SAFE_PROTOCOLS = ["http:", "https:", "mailto:", "tel:", "ftp:"];
+const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:", "ftp:"]);
 
 export function sanitizeUrl(url: string | undefined | null): string {
   if (!url) return "";
@@ -20,7 +20,7 @@ export function sanitizeUrl(url: string | undefined | null): string {
 
   try {
     const parsed = new URL(trimmed, window.location.origin);
-    if (SAFE_PROTOCOLS.includes(parsed.protocol)) {
+    if (SAFE_PROTOCOLS.has(parsed.protocol)) {
       return trimmed;
     }
   } catch {
