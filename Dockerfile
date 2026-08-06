@@ -14,13 +14,13 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/cache/package.json ./packages/cache/
 COPY packages/shared-validation/package.json ./packages/shared-validation/
-COPY packages/multi-cluster-router/package.json ./packages/multi-cluster-router/
 COPY packages/zabbix/package.json ./packages/zabbix/
 COPY packages/tailwind-config/package.json ./packages/tailwind-config/
 COPY packages/telemetry/package.json ./packages/telemetry/
 COPY packages/typescript-config/package.json ./packages/typescript-config/
 COPY packages/eslint-config/package.json ./packages/eslint-config/
 COPY packages/logger/package.json ./packages/logger/
+COPY packages/secrets/package.json ./packages/secrets/
 
 RUN pnpm install --frozen-lockfile
 
