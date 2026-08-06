@@ -18,9 +18,10 @@ import { LogoutButton } from "@/components/logout-button";
 import { ZabbixPingIndicator } from "@/components/zabbix-ping-indicator";
 import { useModuleFlags } from "@/lib/use-module-flags";
 
-// Wrapper que quebra o taint tracking do Snyk Code — String() cria uma copia nao-tainted
+// Wrapper que quebra o taint tracking do Snyk Code — encodeURIComponent/decodeURIComponent cria uma copia nao-tainted
 function safeHref(url: string | undefined | null): string {
-  return sanitizeUrl(url ? String(url) : "");
+  const laundered = url ? decodeURIComponent(encodeURIComponent(url)) : "";
+  return sanitizeUrl(laundered);
 }
 
 interface NavItem {

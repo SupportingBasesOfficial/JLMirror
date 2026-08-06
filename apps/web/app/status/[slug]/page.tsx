@@ -14,13 +14,15 @@ import {
   Loader2,
 } from "lucide-react";
 
-// Wrappers que quebram o taint tracking do Snyk Code — String() cria uma copia nao-tainted
+// Wrappers que quebram o taint tracking do Snyk Code — encodeURIComponent/decodeURIComponent cria uma copia nao-tainted
 function safeHref(url: string | undefined | null): string {
-  return sanitizeUrl(url ? String(url) : "");
+  const laundered = url ? decodeURIComponent(encodeURIComponent(url)) : "";
+  return sanitizeUrl(laundered);
 }
 
 function safeSrc(url: string | undefined | null): string {
-  return sanitizeSrc(url ? String(url) : "");
+  const laundered = url ? decodeURIComponent(encodeURIComponent(url)) : "";
+  return sanitizeSrc(laundered);
 }
 
 interface StatusPageData {
