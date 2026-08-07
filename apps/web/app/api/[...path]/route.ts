@@ -135,7 +135,7 @@ async function proxyRequest(
           // Atualiza o cookie do access token para que o retry do client use o token valido
           refreshResponse.cookies.set("access_token", newToken, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
+            secure: process.env.COOKIE_SECURE === "true",
             sameSite: "lax",
             path: "/",
             maxAge: 15 * 60,
@@ -165,7 +165,7 @@ async function proxyRequest(
         });
         nextResponse.cookies.set("access_token", newToken, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
+          secure: process.env.COOKIE_SECURE === "true",
           sameSite: "lax",
           path: "/",
           maxAge: 15 * 60,

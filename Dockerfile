@@ -62,6 +62,8 @@ RUN pnpm --filter @repo/db build && \
 # Build do apps/web (standalone output para Docker)
 ENV BUILD_STANDALONE=true
 ENV SKIP_ENV_VALIDATION=true
+ENV NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+ENV NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
 RUN pnpm --filter @jlmirror/web build
 
 # --- Estágio de produção ---

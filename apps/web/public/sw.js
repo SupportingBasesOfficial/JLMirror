@@ -109,7 +109,12 @@ self.addEventListener("fetch", (event) => {
   // API requests — network-first, sem cache
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request)),
+      fetch(event.request)
+        .catch(() => caches.match(event.request))
+        .then((response) => response || new Response('{"error":{"code":"OFFLINE","message":"Sem conexao"}}', {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        })),
     );
     return;
   }

@@ -31,7 +31,7 @@ const publicKeyBase64 = Buffer.from(publicKey).toString("base64");
 const zabbixKeyHex = randomBytes(32).toString("hex");
 
 const envContent = `# === Database ===
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/jlmirror
+DATABASE_URL=postgresql://postgres:${process.env.POSTGRES_PASSWORD ?? "CHANGE_ME"}@localhost:5432/jlmirror
 
 # === Redis ===
 REDIS_URL=redis://localhost:6379

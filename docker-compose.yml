@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD e obrigatorio no .env}"
       POSTGRES_DB: jlmirror
     ports:
       - "5432:5432"
@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD e obrigatorio no .env}"
       DB_HOST: postgres
       DB_NAME: jlmirror
       POOL_MODE: transaction
@@ -83,17 +83,18 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: "3001"
-      DATABASE_URL: "postgresql://postgres:postgres@pgbouncer:5432/jlmirror"
-      DATABASE_MASTER_URL: "postgresql://postgres:postgres@pgbouncer:5432/jlmirror"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@pgbouncer:5432/jlmirror"
+      DATABASE_MASTER_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@pgbouncer:5432/jlmirror"
       DB_POOL_MAX: "10"
-      # DATABASE_REPLICA_URL: "postgresql://postgres:postgres@postgres-replica:5432/jlmirror"
+      # DATABASE_REPLICA_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres-replica:5432/jlmirror"
       REDIS_URL: "redis://redis:6379"
       JWT_PRIVATE_KEY: "${JWT_PRIVATE_KEY:-}"
       JWT_PUBLIC_KEY: "${JWT_PUBLIC_KEY:-}"
       JWT_ISSUER: "jlmirror"
       JWT_AUDIENCE: "jlmirror-web"
       ZABBIX_API_URL: "https://zabbix.jlinformatica.com.br/api_jsonrpc.php"
-      ZABBIX_ENCRYPTION_KEY_HEX: "${ZABBIX_ENCRYPTION_KEY_HEX:-da1dac0b351f6c0280ab021b566904b61ab4db4f72e09b9eb5873dc427749d03}"
+      ZABBIX_ENCRYPTION_KEY_HEX: "${ZABBIX_ENCRYPTION_KEY_HEX:?ZABBIX_ENCRYPTION_KEY_HEX e obrigatorio no .env}"
+      ENCRYPTION_KEY: "${ZABBIX_ENCRYPTION_KEY_HEX:?ZABBIX_ENCRYPTION_KEY_HEX e obrigatorio no .env}"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       API_INTERNAL_URL: "http://api:3001"
@@ -122,6 +123,8 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      SKIP_ENV_VALIDATION: "true"
+      COOKIE_SECURE: "false"
       NEXT_PUBLIC_API_URL: "http://localhost:3001/api/v1"
       NEXT_PUBLIC_WS_URL: "ws://localhost:3001/ws"
       API_INTERNAL_URL: "http://api:3001"

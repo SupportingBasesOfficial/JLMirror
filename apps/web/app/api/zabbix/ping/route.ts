@@ -47,7 +47,9 @@ export async function GET(request: NextRequest) {
           cache: "no-store",
         });
         if (refreshRes.ok) {
-          const refreshData = (await refreshRes.json()) as { access_token?: string };
+          const refreshData = (await refreshRes.json()) as {
+            access_token?: string;
+          };
           const newToken = refreshData.access_token;
           if (newToken) {
             // Refaz o ping com o novo token
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest) {
               const response = NextResponse.json(data, { status: 200 });
               response.cookies.set("access_token", newToken, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
+                secure: process.env.COOKIE_SECURE === "true",
                 sameSite: "lax",
                 path: "/",
                 maxAge: 15 * 60,

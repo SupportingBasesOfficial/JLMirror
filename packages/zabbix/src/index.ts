@@ -267,8 +267,12 @@ export function encryptTokenParts(
   plaintext: string,
   encryptionKey?: string,
 ): { encrypted: string; iv: string; tag: string } {
-  const key = encryptionKey ?? process.env.ENCRYPTION_KEY ?? "";
-  if (!key) throw new Error("ENCRYPTION_KEY não configurado");
+  const key =
+    encryptionKey ??
+    process.env.ZABBIX_ENCRYPTION_KEY_HEX ??
+    process.env.ENCRYPTION_KEY ??
+    "";
+  if (!key) throw new Error("ZABBIX_ENCRYPTION_KEY_HEX não configurado");
 
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(
@@ -296,8 +300,12 @@ export function decryptTokenParts(
   encryptionKey?: string,
 ): string | null {
   try {
-    const key = encryptionKey ?? process.env.ENCRYPTION_KEY ?? "";
-    if (!key) throw new Error("ENCRYPTION_KEY não configurado");
+    const key =
+      encryptionKey ??
+      process.env.ZABBIX_ENCRYPTION_KEY_HEX ??
+      process.env.ENCRYPTION_KEY ??
+      "";
+    if (!key) throw new Error("ZABBIX_ENCRYPTION_KEY_HEX não configurado");
 
     const decipher = crypto.createDecipheriv(
       "aes-256-gcm",

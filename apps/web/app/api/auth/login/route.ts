@@ -74,12 +74,12 @@ export async function POST(request: NextRequest) {
       false,
   });
 
-  const isProduction = process.env.NODE_ENV === "production";
+  const cookieSecure = process.env.COOKIE_SECURE === "true";
   const maxAge = 30 * 24 * 60 * 60; // 30 dias
 
   response.cookies.set("access_token", data.access_token as string, {
     httpOnly: true,
-    secure: isProduction,
+    secure: cookieSecure,
     sameSite: "lax",
     path: "/",
     maxAge: 15 * 60, // 15 minutos — access token
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   response.cookies.set("refresh_token", data.refresh_token as string, {
     httpOnly: true,
-    secure: isProduction,
+    secure: cookieSecure,
     sameSite: "lax",
     path: "/",
     maxAge,

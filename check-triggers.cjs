@@ -14,14 +14,18 @@ function fetchJson(url, options = {}) {
 }
 
 async function main() {
-  const login = await fetchJson("http://localhost:3001/api/v1/auth/login", {
+  const adminEmail = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
+  const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
+  const apiUrl = process.env.API_URL ?? "http://localhost:3001";
+
+  const login = await fetchJson(`${apiUrl}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: "admin@jlmirror.com", password: "admin123" }),
+    body: JSON.stringify({ email: adminEmail, password: adminPassword }),
   });
   const token = login.access_token;
 
-  const data = await fetchJson("http://localhost:3001/api/v1/zabbix/triggers", {
+  const data = await fetchJson(`${apiUrl}/api/v1/zabbix/triggers`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

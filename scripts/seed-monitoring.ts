@@ -1,4 +1,4 @@
-import { randomBytes, createCipheriv } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import argon2 from "argon2";
 import { config as loadEnv } from "dotenv";
@@ -6,37 +6,12 @@ import { config as loadEnv } from "dotenv";
 loadEnv();
 
 const pool = new Pool({
-  connectionString:
-    process.env.DATABASE_URL ??
-    "postgresql://postgres:postgres@localhost:5432/jlmirror",
+  connectionString: process.env.DATABASE_URL,
 });
 
 const ZABBIX_API_URL =
   process.env.ZABBIX_API_URL ??
   "https://zabbix.jlinformatica.com.br/api_jsonrpc.php";
-
-const ZABBIX_ENCRYPTION_KEY_HEX =
-  process.env.ZABBIX_ENCRYPTION_KEY_HEX ?? randomBytes(32).toString("hex");
-
-// Criptografia AES-256-GCM simples para o token Zabbix do tenant demo
-function encryptToken(
-  plaintext: string,
-  keyHex: string,
-): { encrypted: string; iv: string; tag: string } {
-  const key = Buffer.from(keyHex, "hex");
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, iv);
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final(),
-  ]);
-  const tag = cipher.getAuthTag();
-  return {
-    encrypted: encrypted.toString("base64"),
-    iv: iv.toString("base64"),
-    tag: tag.toString("base64"),
-  };
-}
 
 async function seed() {
   const client = await pool.connect();

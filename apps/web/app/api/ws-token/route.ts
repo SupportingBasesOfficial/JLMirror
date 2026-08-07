@@ -42,10 +42,10 @@ export async function GET(request: NextRequest) {
       }
 
       const response = NextResponse.json({ token: newToken });
-      const isProduction = process.env.NODE_ENV === "production";
+      const cookieSecure = process.env.COOKIE_SECURE === "true";
       response.cookies.set("access_token", newToken, {
         httpOnly: true,
-        secure: isProduction,
+        secure: cookieSecure,
         sameSite: "lax",
         path: "/",
         maxAge: 15 * 60,
