@@ -12,7 +12,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "ioredis": "^5.4.2",
+    "ioredis": "^6.0.0",
     "@repo/db": "workspace:*"
   }
 }
