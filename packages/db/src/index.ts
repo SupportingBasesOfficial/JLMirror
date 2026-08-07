@@ -14,8 +14,6 @@ function getPool(): Pool {
       max: maxConnections,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      statement_timeout: 30_000,
-      query_timeout: 30_000,
     });
     _pool.on("error", (err) => {
       console.error("[db] Pool error:", err.message);

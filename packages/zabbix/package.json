@@ -2,9 +2,15 @@
   "name": "@repo/zabbix",
   "version": "0.0.0",
   "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "files": ["src"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "@repo/cache": "workspace:*"
   }

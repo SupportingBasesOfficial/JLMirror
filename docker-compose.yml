@@ -40,7 +40,7 @@ services:
       RESERVE_POOL_TIMEOUT: "3"
       SERVER_RESET_QUERY: "DISCARD ALL"
       QUERY_WAIT_TIMEOUT: "10"
-      AUTH_TYPE: trust
+      AUTH_TYPE: scram-sha-256
     ports:
       - "6432:5432"
     healthcheck:
@@ -93,6 +93,7 @@ services:
       JWT_ISSUER: "jlmirror"
       JWT_AUDIENCE: "jlmirror-web"
       ZABBIX_API_URL: "https://zabbix.jlinformatica.com.br/api_jsonrpc.php"
+      ZABBIX_ENCRYPTION_KEY_HEX: "${ZABBIX_ENCRYPTION_KEY_HEX:-da1dac0b351f6c0280ab021b566904b61ab4db4f72e09b9eb5873dc427749d03}"
       CORS_ALLOWED_ORIGINS: "http://localhost:3000"
       SENTRY_DSN: "${SENTRY_DSN:-}"
       API_INTERNAL_URL: "http://api:3001"
@@ -102,7 +103,7 @@ services:
     ports:
       - "3001:3001"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/api/v1/health/live"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3001/api/v1/health/live"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -127,7 +128,7 @@ services:
     ports:
       - "3000:3000"
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 10s
       timeout: 5s
       retries: 5
