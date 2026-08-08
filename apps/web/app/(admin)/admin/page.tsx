@@ -522,13 +522,31 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats — reflete hierarquia de tenants */}
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
           <KpiCard
-            label="Tenants"
-            value={stats.total_tenants}
+            label="👑 Proprietário"
+            value={Number(
+              stats.by_type?.find((r) => r.tenant_type === "owner")?.count ?? 0,
+            )}
             color={COLORS.teal}
+          />
+          <KpiCard
+            label="🏢 Gestores"
+            value={Number(
+              stats.by_type?.find((r) => r.tenant_type === "manager")?.count ??
+                0,
+            )}
+            color={COLORS.blue}
+          />
+          <KpiCard
+            label="📦 Clientes"
+            value={Number(
+              stats.by_type?.find((r) => r.tenant_type === "client")?.count ??
+                0,
+            )}
+            color={COLORS.amber}
           />
           <KpiCard
             label="Ativos"
@@ -541,24 +559,15 @@ export default function AdminPage() {
             color={COLORS.red}
           />
           <KpiCard
-            label="Users"
+            label="Usuários"
             value={stats.total_users}
-            color={COLORS.blue}
-          />
-          <KpiCard
-            label="Ativos"
-            value={stats.active_users}
-            color={COLORS.green}
-          />
-          <KpiCard
-            label="Tenant Users"
-            value={stats.total_tenant_users}
             color={COLORS.purple}
+            sub={`${stats.active_users} ativos`}
           />
           <KpiCard
             label="Rotas"
             value={stats.total_routes}
-            color={COLORS.amber}
+            color={COLORS.teal}
           />
         </div>
       )}
