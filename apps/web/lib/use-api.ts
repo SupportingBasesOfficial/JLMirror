@@ -15,33 +15,32 @@ import { apiFetchWithProgress } from "@/lib/zabbix-fetch";
 //   - revalidateOnReconnect: true (revalida ao reconectar a rede)
 //   - dedupingInterval: 2000ms (evita requests duplicados em 2s)
 //   - errorRetryCount: 3
-export function useApi<T>(
-  url: string | null,
-  config?: SWRConfiguration,
-) {
+//   - Nao retenta em 429 (rate limit) — evita retry storm
+export function useApi<T>(url: string | null, config?: SWRConfiguration) {
   const [progress, setProgress] = useState(0);
 
-  const fetcher = useCallback(
-    (u: string) => {
-      setProgress(0);
-      return apiFetchWithProgress<T>(u, undefined, (pct) => {
-        setProgress(pct);
-      });
-    },
-    [],
-  );
+  const fetcher = useCallback((u: string) => {
+    setProgress(0);
+    return apiFetchWithProgress<T>(u, undefined, (pct) => {
+      setProgress(pct);
+    });
+  }, []);
 
-  const { data, error, isLoading, mutate } = useSWR<T>(
-    url,
-    fetcher,
-    {
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      dedupingInterval: 2000,
-      errorRetryCount: 3,
-      ...config,
+  const { data, error, isLoading, mutate } = useSWR<T>(url, fetcher, {
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+    errorRetryCount: 3,
+    // Nao retenta em 429 — evita aggravar rate limiting com retry storm
+    onErrorRetry: (err, _key, _config, revalidate, _opts) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("429") || msg.includes("RATE_LIMIT")) {
+        return; // Nao retenta — aguarda o usuario recarregar manualmente
+      }
+      revalidate(_opts);
     },
-  );
+    ...config,
+  });
 
   return {
     data,

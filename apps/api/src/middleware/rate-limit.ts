@@ -5,7 +5,7 @@
 // Dev: in-memory Map (sem Redis necessário)
 
 import { createMiddleware } from "hono/factory";
-import { cacheGet, cacheSet } from "@repo/cache";
+import { cacheIncr } from "@repo/cache";
 
 interface RateLimitOptions {
   windowMs: number;
@@ -62,16 +62,13 @@ export function rateLimit(options: RateLimitOptions) {
     const now = Date.now();
 
     try {
-      // Tenta Redis primeiro
-      const current = await cacheGet(redisKey);
-      let count: number;
+      // Incremento atomico via Redis INCR + EXPIRE (so na primeira chamada)
+      // Evita race condition e bug de TTL resetado a cada request
+      const count = await cacheIncr(redisKey, windowSeconds);
 
-      if (!current) {
-        count = 1;
-        await cacheSet(redisKey, "1", windowSeconds);
-      } else {
-        count = parseInt(current, 10) + 1;
-        await cacheSet(redisKey, String(count), windowSeconds);
+      if (count === 0) {
+        // Redis indisponivel — fallback in-memory abaixo
+        throw new Error("Redis unavailable");
       }
 
       const remaining = Math.max(0, maxRequests - count);
@@ -138,7 +135,7 @@ export const rateLimitAuth = rateLimit({
 });
 export const rateLimitApi = rateLimit({
   windowMs: 60 * 1000,
-  maxRequests: 300,
+  maxRequests: 600,
   keyPrefix: "api",
 });
 export const rateLimitWrite = rateLimit({

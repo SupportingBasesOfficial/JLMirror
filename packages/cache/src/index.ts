@@ -109,6 +109,28 @@ export async function cacheSet(
   }
 }
 
+// Incremento atomico com TTL fixo — para rate limiting
+// Usa INCR + EXPIRE apenas na primeira chamada (quando retorna 1)
+// Isso evita o bug de resetar o TTL a cada request, que faz o contador
+// nunca expirar enquanto ha trafego continuo
+export async function cacheIncr(
+  key: string,
+  ttlSeconds: number,
+): Promise<number> {
+  try {
+    const client = createCacheClient();
+    // INCR é atomico no Redis — cria a key com valor 1 se nao existe
+    const count = await client.incr(key);
+    // So define TTL na primeira chamada (count === 1) para nao resetar a janela
+    if (count === 1) {
+      await client.expire(key, ttlSeconds);
+    }
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
 // Cache get/set para JSON
 export async function cacheGetJSON<T>(key: string): Promise<T | null> {
   const raw = await cacheGet(key);
