@@ -531,6 +531,17 @@ adminRoute.get("/stats", requirePermission("admin:tenants:read"), async (c) => {
     ),
   );
 
+  // Clients by parent type — diretos (parent=owner) vs de gestores (parent=manager)
+  const clientsByParent = safeRows(
+    await query(
+      `SELECT pt.tenant_type as parent_type, COUNT(*) as count
+       FROM public.tenants t
+       JOIN public.tenants pt ON t.parent_tenant_id = pt.id
+       WHERE t.tenant_type = 'client'
+       GROUP BY pt.tenant_type`,
+    ),
+  );
+
   // Recent tenants
   const recent = safeRows(
     await query(
@@ -555,6 +566,7 @@ adminRoute.get("/stats", requirePermission("admin:tenants:read"), async (c) => {
     total_routes: totalRoutes,
     by_status: byStatus,
     by_type: byType,
+    clients_by_parent: clientsByParent,
     by_role: byRole,
     recent,
   });

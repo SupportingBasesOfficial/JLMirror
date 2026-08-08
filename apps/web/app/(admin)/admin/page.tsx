@@ -100,6 +100,7 @@ interface Stats {
   total_routes: number;
   by_status: Array<Record<string, unknown>>;
   by_type: Array<Record<string, unknown>>;
+  clients_by_parent: Array<Record<string, unknown>>;
   by_role: Array<Record<string, unknown>>;
   recent: Array<Record<string, unknown>>;
 }
@@ -524,7 +525,7 @@ export default function AdminPage() {
 
       {/* Stats — reflete hierarquia de tenants */}
       {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           <KpiCard
             label="👑 Proprietário"
             value={Number(
@@ -541,12 +542,22 @@ export default function AdminPage() {
             color={COLORS.blue}
           />
           <KpiCard
-            label="📦 Clientes"
+            label="📦 Clientes Diretos"
             value={Number(
-              stats.by_type?.find((r) => r.tenant_type === "client")?.count ??
-                0,
+              stats.clients_by_parent?.find((r) => r.parent_type === "owner")
+                ?.count ?? 0,
             )}
             color={COLORS.amber}
+            sub="Gestados por nós"
+          />
+          <KpiCard
+            label="📋 De Gestores"
+            value={Number(
+              stats.clients_by_parent?.find((r) => r.parent_type === "manager")
+                ?.count ?? 0,
+            )}
+            color={COLORS.purple}
+            sub="Gestados por MSPs"
           />
           <KpiCard
             label="Ativos"
