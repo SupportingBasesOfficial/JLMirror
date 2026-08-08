@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import crypto from "node:crypto";
+import { Agent, setGlobalDispatcher } from "undici";
 
 // ========== Tipos Zabbix ==========
 
@@ -261,6 +262,117 @@ export interface ZabbixReport {
   description?: string;
 }
 
+export interface ZabbixTrendEntry {
+  itemid: string;
+  clock: number;
+  num: number;
+  value_min: string;
+  value_avg: string;
+  value_max: string;
+}
+
+export interface ZabbixUserMacro {
+  hostmacroid: string;
+  macro: string;
+  value: string;
+  type: number;
+  hostid?: string;
+}
+
+export interface ZabbixValueMap {
+  valuemapid: string;
+  name: string;
+  mappings: Array<{ type: number; value: string; newvalue: string }>;
+}
+
+export interface ZabbixAlert {
+  alertid: string;
+  actionid: string;
+  eventid: string;
+  userid: string;
+  mediatypeid: string;
+  sendto: string;
+  subject: string;
+  message: string;
+  status: string;
+  clock: number;
+}
+
+export interface ZabbixMediaType {
+  mediatypeid: string;
+  name: string;
+  type: number;
+  status: string;
+  webhook_url?: string;
+}
+
+export interface ZabbixHttpTest {
+  httptestid: string;
+  name: string;
+  hostid: string;
+  status: string;
+  steps?: Array<{ httpstepid: string; name: string; no: number }>;
+}
+
+export interface ZabbixCorrelation {
+  correlationid: string;
+  name: string;
+  status: string;
+  description?: string;
+}
+
+export interface ZabbixDashboard {
+  dashboardid: string;
+  name: string;
+  userid: string;
+  pages?: Array<{ dashboard_pageid: string; name: string }>;
+}
+
+export interface ZabbixProxyGroup {
+  proxy_groupid: string;
+  name: string;
+  failover_delay: string;
+  description?: string;
+}
+
+export interface ZabbixToken {
+  tokenid: string;
+  name: string;
+  description?: string;
+  userid: string;
+  status: string;
+  expires_at?: string;
+}
+
+export interface ZabbixAuditLogEntry {
+  auditid: string;
+  userid: string;
+  username: string;
+  clock: number;
+  action: number;
+  resourcetype: number;
+  resourceid: string;
+  resourcename: string;
+  details: string;
+}
+
+export interface ZabbixHaNode {
+  ha_nodeid: string;
+  name: string;
+  address: string;
+  port: number;
+  status: number;
+  lastaccess: number;
+}
+
+export interface ZabbixConnector {
+  connectorid: string;
+  name: string;
+  url: string;
+  data_type: string;
+  status: string;
+}
+
 // ========== Criptografia AES-256-GCM para tokens ==========
 
 export function encryptTokenParts(
@@ -325,6 +437,29 @@ export function decryptTokenParts(
 
 // ========== BlindedZabbixClient ==========
 
+// Agent HTTP com Keep-Alive para reutilizar conexoes TCP/TLS
+// Reduz latencia em chamadas repetidas a API do Zabbix
+const keepAliveAgent = new Agent({
+  keepAliveTimeout: 30_000,
+  keepAliveMaxTimeout: 120_000,
+  pipelining: 1,
+  headersTimeout: 15_000,
+  bodyTimeout: 15_000,
+});
+setGlobalDispatcher(keepAliveAgent);
+
+// Limpa parametros removendo campos undefined, null e arrays vazios
+// Zabbix 7.4 rejeita parametros inesperados com erro -32602
+function cleanParams(params: Record<string, unknown>): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    cleaned[key] = value;
+  }
+  return cleaned;
+}
+
 interface BlindedZabbixClientOptions {
   apiUrl: string;
   apiToken: string;
@@ -342,7 +477,9 @@ export class BlindedZabbixClient {
   constructor(opts: BlindedZabbixClientOptions) {
     this.apiUrl = opts.apiUrl;
     this.apiToken = opts.apiToken;
-    this.timeout = opts.timeout ?? 30_000;
+    // Timeout padrao 8s — documentacao Zabbix recomenda 5-10s
+    // history.get pode demorar mais, usar timeout maior para esses casos
+    this.timeout = opts.timeout ?? 8_000;
     // Circuit breaker key baseado na URL da API (compartilhado entre tenants do mesmo Zabbix)
     this.circuitKey = opts.circuitKey ?? `zabbix:${this.apiUrl}`;
   }
@@ -363,10 +500,16 @@ export class BlindedZabbixClient {
     }
 
     const id = ++this.requestId;
+    // Limpa params se for objeto (arrays para delete passam direto)
+    const cleanedParams = Array.isArray(params)
+      ? params
+      : params
+        ? cleanParams(params)
+        : {};
     const body = {
       jsonrpc: "2.0",
       method,
-      params: params ?? {},
+      params: cleanedParams,
       id,
     };
 
@@ -385,6 +528,7 @@ export class BlindedZabbixClient {
         headers,
         body: JSON.stringify(body),
         signal: controller.signal,
+        // undici Agent com Keep-Alive ja configurado via setGlobalDispatcher
       });
 
       if (!res.ok) {
@@ -501,6 +645,7 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixHostGroup[]>("hostgroup.get", {
       output: ["groupid", "name"],
       sortfield: "name",
+      limit: 200,
     });
   }
 
@@ -509,6 +654,7 @@ export class BlindedZabbixClient {
       output: ["groupid", "name"],
       selectHosts: ["hostid", "host", "name", "status"],
       sortfield: "name",
+      limit: 200,
     });
   }
 
@@ -614,10 +760,30 @@ export class BlindedZabbixClient {
   // Triggers — expandDescription removido (deprecated no Zabbix 7.x, descriptions sempre expandidas)
   async getTriggers(hostIds?: string[]): Promise<ZabbixTrigger[]> {
     const params: Record<string, unknown> = {
-      output: "extend",
+      output: [
+        "triggerid",
+        "description",
+        "expression",
+        "priority",
+        "value",
+        "state",
+        "status",
+        "url",
+        "comments",
+        "error",
+        "templateid",
+        "lastchange",
+      ],
       selectHosts: ["hostid", "host", "name"],
       selectItems: ["itemid", "name", "key_"],
-      selectLastEvent: "extend",
+      selectLastEvent: [
+        "eventid",
+        "value",
+        "acknowledged",
+        "clock",
+        "severity",
+      ],
+      limit: 200,
     };
     if (hostIds) params.hostids = hostIds;
     return this.rpc<ZabbixTrigger[]>("trigger.get", params);
@@ -662,10 +828,21 @@ export class BlindedZabbixClient {
     },
   ): Promise<ZabbixProblem[]> {
     const params: Record<string, unknown> = {
-      output: "extend",
+      output: [
+        "eventid",
+        "objectid",
+        "source",
+        "object",
+        "acknowledged",
+        "clock",
+        "ns",
+        "name",
+        "severity",
+      ],
       recent: options?.recent ?? false,
       sortfield: ["eventid"],
       sortorder: "DESC",
+      limit: 200,
     };
     if (hostIds) params.hostids = hostIds;
     if (options?.acknowledged !== undefined)
@@ -687,7 +864,18 @@ export class BlindedZabbixClient {
     },
   ): Promise<ZabbixEvent[]> {
     const params: Record<string, unknown> = {
-      output: "extend",
+      output: [
+        "eventid",
+        "objectid",
+        "clock",
+        "ns",
+        "value",
+        "source",
+        "object",
+        "acknowledged",
+        "name",
+        "severity",
+      ],
       sortfield: ["clock", "eventid"],
       sortorder: "DESC",
       limit: options?.limit ?? 100,
@@ -703,6 +891,7 @@ export class BlindedZabbixClient {
   }
 
   // History — valueType opcional (quando undefined, Zabbix busca em todas as tabelas)
+  // Usa timeout maior (15s) pois history.get pode demorar com muitos itens
   async getHistory(
     itemId: string,
     from: number,
@@ -715,11 +904,17 @@ export class BlindedZabbixClient {
       time_till: to,
       sortfield: "clock",
       sortorder: "ASC",
-      output: "extend",
+      output: ["itemid", "clock", "ns", "value"],
       limit: 5000,
     };
     if (valueType !== undefined) params.history = valueType;
-    return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
+    const prevTimeout = this.timeout;
+    this.timeout = 15_000;
+    try {
+      return await this.rpc<ZabbixHistoryEntry[]>("history.get", params);
+    } finally {
+      this.timeout = prevTimeout;
+    }
   }
 
   async getHistoryBatch(
@@ -734,11 +929,17 @@ export class BlindedZabbixClient {
       time_till: to,
       sortfield: "clock",
       sortorder: "ASC",
-      output: "extend",
+      output: ["itemid", "clock", "ns", "value"],
       limit: 10000,
     };
     if (valueType !== undefined) params.history = valueType;
-    return this.rpc<ZabbixHistoryEntry[]>("history.get", params);
+    const prevTimeout = this.timeout;
+    this.timeout = 15_000;
+    try {
+      return await this.rpc<ZabbixHistoryEntry[]>("history.get", params);
+    } finally {
+      this.timeout = prevTimeout;
+    }
   }
 
   // Graphs — hostId opcional (quando undefined, retorna todos os grafos)
@@ -773,6 +974,7 @@ export class BlindedZabbixClient {
   async getTemplates(hostId?: string): Promise<ZabbixTemplate[]> {
     const params: Record<string, unknown> = {
       output: ["templateid", "host", "name"],
+      limit: 200,
     };
     if (hostId) params.hostids = hostId;
     return this.rpc<ZabbixTemplate[]>("template.get", params);
@@ -783,15 +985,25 @@ export class BlindedZabbixClient {
     return this.rpc<ZabbixProxy[]>("proxy.get", {
       output: ["proxyid", "name", "status"],
       selectHosts: ["hostid", "host", "name"],
+      limit: 100,
     });
   }
 
   // Maintenance — selectHostGroups (renamed de selectGroups no Zabbix 7.x)
   async getMaintenances(hostIds?: string[]): Promise<ZabbixMaintenance[]> {
     const params: Record<string, unknown> = {
-      output: "extend",
+      output: [
+        "maintenanceid",
+        "name",
+        "maintenance_type",
+        "state",
+        "description",
+        "active_since",
+        "active_till",
+      ],
       selectHostGroups: ["groupid", "name"],
       selectHosts: ["hostid", "host", "name"],
+      limit: 100,
     };
     if (hostIds) params.hostids = hostIds;
     return this.rpc<ZabbixMaintenance[]>("maintenance.get", params);
@@ -837,14 +1049,25 @@ export class BlindedZabbixClient {
   // Services (SLA)
   async getServices(parentId?: string): Promise<ZabbixService[]> {
     const params: Record<string, unknown> = {
-      output: "extend",
+      output: [
+        "serviceid",
+        "name",
+        "status",
+        "sortorder",
+        "description",
+        "parentid",
+      ],
+      limit: 200,
     };
     if (parentId) params.parentids = parentId;
     return this.rpc<ZabbixService[]>("service.get", params);
   }
 
   async getSlas(): Promise<ZabbixSla[]> {
-    return this.rpc<ZabbixSla[]>("sla.get", { output: "extend" });
+    return this.rpc<ZabbixSla[]>("sla.get", {
+      output: ["slaid", "name", "status", "slo", "period"],
+      limit: 100,
+    });
   }
 
   // Users — Zabbix 7.x usa roleid em vez de role
@@ -906,8 +1129,9 @@ export class BlindedZabbixClient {
   // User Groups
   async getUserGroups(): Promise<ZabbixUserGroup[]> {
     return this.rpc<ZabbixUserGroup[]>("usergroup.get", {
-      output: "extend",
+      output: ["usrgrpid", "name"],
       selectUsers: ["userid", "username", "name", "surname"],
+      limit: 100,
     });
   }
 
@@ -945,6 +1169,7 @@ export class BlindedZabbixClient {
   async getActions(): Promise<ZabbixAction[]> {
     return this.rpc<ZabbixAction[]>("action.get", {
       output: ["actionid", "name", "status", "eventsource"],
+      limit: 100,
     });
   }
 
@@ -952,13 +1177,254 @@ export class BlindedZabbixClient {
   async getDiscoveryRules(): Promise<ZabbixDiscoveryRule[]> {
     return this.rpc<ZabbixDiscoveryRule[]>("discoveryrule.get", {
       output: ["ruleid", "name", "key_", "hostid", "status"],
+      limit: 200,
     });
   }
 
   // Reports
   async getReports(): Promise<ZabbixReport[]> {
     return this.rpc<ZabbixReport[]>("report.get", {
-      output: "extend",
+      output: [
+        "reportid",
+        "name",
+        "status",
+        "userid",
+        "dashboardid",
+        "period",
+        "cycle",
+        "description",
+      ],
+      limit: 100,
+    });
+  }
+
+  // ========== Novos metodos Zabbix 7.4 ==========
+
+  // Trends — dados consolidados por hora (min/max/avg) para graficos de longo prazo
+  async getTrends(
+    itemIds: string[],
+    from: number,
+    to: number,
+    valueType?: number,
+  ): Promise<ZabbixTrendEntry[]> {
+    const params: Record<string, unknown> = {
+      itemids: itemIds,
+      time_from: from,
+      time_till: to,
+      sortfield: "clock",
+      sortorder: "ASC",
+      output: ["itemid", "clock", "num", "value_min", "value_avg", "value_max"],
+      limit: 5000,
+    };
+    if (valueType !== undefined) params.history = valueType;
+    const prevTimeout = this.timeout;
+    this.timeout = 15_000;
+    try {
+      return await this.rpc<ZabbixTrendEntry[]>("trend.get", params);
+    } finally {
+      this.timeout = prevTimeout;
+    }
+  }
+
+  // Script execute — executa comando remoto via Agent/SSH
+  async executeScript(
+    scriptId: string,
+    hostId: string,
+  ): Promise<{ result: string }> {
+    return this.rpc<{ result: string }>("script.execute", {
+      scriptid: scriptId,
+      hostid: hostId,
+    });
+  }
+
+  // Item execute — forca "Check Now" em um item
+  async executeItem(itemId: string): Promise<{ itemids: string[] }> {
+    return this.rpc<{ itemids: string[] }>("item.execute", {
+      itemid: itemId,
+    });
+  }
+
+  // User Macros — macros globais, de template ou de host
+  // Ofusca macros secretas (type=1) no retorno
+  async getUserMacros(hostId?: string): Promise<ZabbixUserMacro[]> {
+    const params: Record<string, unknown> = {
+      output: ["hostmacroid", "macro", "value", "type", "hostid"],
+      limit: 500,
+    };
+    if (hostId) params.hostids = hostId;
+    const macros = await this.rpc<ZabbixUserMacro[]>("usermacro.get", params);
+    // Ofusca macros secretas (type=1) — nao expoe o valor real
+    return macros.map((m) => (m.type === 1 ? { ...m, value: "******" } : m));
+  }
+
+  // Value Maps — tabelas de mapeamento de valores (ex: 0=Down, 1=Up)
+  async getValueMaps(): Promise<ZabbixValueMap[]> {
+    return this.rpc<ZabbixValueMap[]>("valuemap.get", {
+      output: ["valuemapid", "name"],
+      selectMappings: ["type", "value", "newvalue"],
+      limit: 200,
+    });
+  }
+
+  // Alerts — historico de notificacoes disparadas
+  async getAlerts(limit?: number): Promise<ZabbixAlert[]> {
+    return this.rpc<ZabbixAlert[]>("alert.get", {
+      output: [
+        "alertid",
+        "actionid",
+        "eventid",
+        "userid",
+        "mediatypeid",
+        "sendto",
+        "subject",
+        "message",
+        "status",
+        "clock",
+      ],
+      sortfield: "clock",
+      sortorder: "DESC",
+      limit: limit ?? 100,
+    });
+  }
+
+  // Media Types — canais de envio (webhook, email, SMS, Telegram)
+  async getMediaTypes(): Promise<ZabbixMediaType[]> {
+    return this.rpc<ZabbixMediaType[]>("mediatype.get", {
+      output: ["mediatypeid", "name", "type", "status"],
+      limit: 100,
+    });
+  }
+
+  // HTTP Tests — monitoramento de cenarios web
+  async getHttpTests(hostId?: string): Promise<ZabbixHttpTest[]> {
+    const params: Record<string, unknown> = {
+      output: ["httptestid", "name", "hostid", "status"],
+      selectSteps: ["httpstepid", "name", "no"],
+      limit: 200,
+    };
+    if (hostId) params.hostids = hostId;
+    return this.rpc<ZabbixHttpTest[]>("httptest.get", params);
+  }
+
+  // Correlations — regras de correlacao de eventos
+  async getCorrelations(): Promise<ZabbixCorrelation[]> {
+    return this.rpc<ZabbixCorrelation[]>("correlation.get", {
+      output: ["correlationid", "name", "status", "description"],
+      limit: 100,
+    });
+  }
+
+  // Dashboards — dashboards globais do Zabbix
+  async getDashboards(): Promise<ZabbixDashboard[]> {
+    return this.rpc<ZabbixDashboard[]>("dashboard.get", {
+      output: ["dashboardid", "name", "userid"],
+      selectPages: ["dashboard_pageid", "name"],
+      limit: 100,
+    });
+  }
+
+  // Proxy Groups — grupos de proxies para HA e balanceamento
+  async getProxyGroups(): Promise<ZabbixProxyGroup[]> {
+    return this.rpc<ZabbixProxyGroup[]>("proxygroup.get", {
+      output: ["proxy_groupid", "name", "failover_delay", "description"],
+      limit: 100,
+    });
+  }
+
+  // Tokens — tokens de API gerados para integracoes
+  async getTokens(): Promise<ZabbixToken[]> {
+    return this.rpc<ZabbixToken[]>("token.get", {
+      output: [
+        "tokenid",
+        "name",
+        "description",
+        "userid",
+        "status",
+        "expires_at",
+      ],
+      limit: 100,
+    });
+  }
+
+  // Audit Log — logs de auditoria do Zabbix
+  async getAuditLog(limit?: number): Promise<ZabbixAuditLogEntry[]> {
+    return this.rpc<ZabbixAuditLogEntry[]>("auditlog.get", {
+      output: [
+        "auditid",
+        "userid",
+        "username",
+        "clock",
+        "action",
+        "resourcetype",
+        "resourceid",
+        "resourcename",
+        "details",
+      ],
+      sortfield: "clock",
+      sortorder: "DESC",
+      limit: limit ?? 100,
+    });
+  }
+
+  // HA Nodes — estado de Alta Disponibilidade do Zabbix Server
+  async getHaNodes(): Promise<ZabbixHaNode[]> {
+    return this.rpc<ZabbixHaNode[]>("hanode.get", {
+      output: ["ha_nodeid", "name", "address", "port", "status", "lastaccess"],
+      limit: 50,
+    });
+  }
+
+  // Connectors — configuracoes de streaming de dados
+  async getConnectors(): Promise<ZabbixConnector[]> {
+    return this.rpc<ZabbixConnector[]>("connector.get", {
+      output: ["connectorid", "name", "url", "data_type", "status"],
+      limit: 50,
+    });
+  }
+
+  // Criar connector para streaming de history
+  async createConnector(data: {
+    name: string;
+    url: string;
+    data_type: string;
+    token: string;
+  }): Promise<{ connectorids: string[] }> {
+    return this.rpc<{ connectorids: string[] }>("connector.create", {
+      name: data.name,
+      url: data.url,
+      data_type: data.data_type,
+      token: data.token,
+    });
+  }
+
+  // Configuration export — exporta configuracoes (YAML/JSON)
+  async exportConfiguration(options: {
+    hosts?: string[];
+    templates?: string[];
+    format?: string;
+  }): Promise<string> {
+    const params: Record<string, unknown> = {
+      format: options.format ?? "json",
+    };
+    if (options.hosts) params.options = { hosts: options.hosts };
+    if (options.templates) {
+      params.options = {
+        ...(params.options as Record<string, unknown>),
+        templates: options.templates,
+      };
+    }
+    return this.rpc<string>("configuration.export", params);
+  }
+
+  // Configuration import — importa configuracoes (YAML/JSON)
+  async importConfiguration(
+    configString: string,
+    format: string,
+  ): Promise<{ imported: string }> {
+    return this.rpc<{ imported: string }>("configuration.import", {
+      format,
+      rules: {},
+      source: configString,
     });
   }
 

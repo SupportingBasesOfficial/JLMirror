@@ -9,6 +9,8 @@ import {
   zabbixErrorResponse,
   configNotFoundResponse,
   validationErrorResponse,
+  accessDeniedResponse,
+  verifyHostOwnership,
 } from "./shared.js";
 
 export function registerProblemsRoutes(zabbixRoute: Hono) {
@@ -19,17 +21,24 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const hostId = c.req.query("host_id");
     const acknowledged = c.req.query("acknowledged");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
+      // Se hostId informado, verifica posse (IDOR protection)
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
       const hostIds = hostId ? [hostId] : undefined;
       const options: { acknowledged?: boolean } = {};
       if (acknowledged !== undefined)
         options.acknowledged = acknowledged === "true";
-      const problems = await client.getProblems(hostIds, options);
+      const problems = await ctx.client.getProblems(hostIds, options);
       return c.json({ data: problems });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -47,12 +56,19 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const from = c.req.query("from");
     const to = c.req.query("to");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
+      // Se hostId informado, verifica posse (IDOR protection)
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
       const hostIds = hostId ? [hostId] : [];
       const options: {
         value?: number;
@@ -67,7 +83,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
       if (limit) options.limit = Number(limit);
       if (from) options.from = Number(from);
       if (to) options.to = Number(to);
-      const events = await client.getEvents(hostIds, options);
+      const events = await ctx.client.getEvents(hostIds, options);
       return c.json({ data: events });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -79,8 +95,8 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -91,7 +107,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
       const d = parsed.data;
-      const result = await client.acknowledgeEvents(
+      const result = await ctx.client.acknowledgeEvents(
         d.eventids,
         d.message,
         d.action,

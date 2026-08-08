@@ -18,13 +18,26 @@ import { registerHostRoutes } from "./zabbix/hosts.js";
 import { registerHistoryRoutes } from "./zabbix/history.js";
 import { registerProblemsRoutes } from "./zabbix/problems.js";
 import { registerAdminRoutes } from "./zabbix/admin.js";
+import { connectorStreamRoute } from "./zabbix/connector-stream.js";
 
 export const zabbixRoute = new Hono();
 
-// Middlewares globais do módulo Zabbix
-zabbixRoute.use("/*", rateLimitTenant);
-zabbixRoute.use("/*", requirePermission("zabbix:read"));
+// Rota de connector streaming — registrada ANTES dos middlewares de auth
+// pois usa autenticacao propria (connector token via Bearer)
+zabbixRoute.route("/connector", connectorStreamRoute);
+
+// Middlewares globais do módulo Zabbix (nao se aplicam a /connector/*)
 zabbixRoute.use("/*", (c, next) => {
+  // Pula middlewares para rotas de connector
+  if (c.req.path.startsWith("/connector")) return next();
+  return rateLimitTenant(c, next);
+});
+zabbixRoute.use("/*", (c, next) => {
+  if (c.req.path.startsWith("/connector")) return next();
+  return requirePermission("zabbix:read")(c, next);
+});
+zabbixRoute.use("/*", (c, next) => {
+  if (c.req.path.startsWith("/connector")) return next();
   if (c.req.method === "GET") return next();
   return requirePermission("zabbix:write")(c, next);
 });

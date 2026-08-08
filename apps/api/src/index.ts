@@ -92,6 +92,7 @@ import { startDeviceSync } from "./lib/device-sync.js";
 import { startPartitionManager } from "./lib/partition-manager.js";
 import { startCorrelationEngine } from "./lib/correlation-engine.js";
 import { startMetricsCollector } from "./lib/metrics-collector.js";
+import { startZabbixWriteWorker } from "./lib/zabbix-write-processor.js";
 import { initializeSecrets } from "@repo/secrets";
 import {
   validateEnv,
@@ -444,6 +445,7 @@ async function bootstrap(): Promise<void> {
   await startPartitionManager();
   await startCorrelationEngine();
   await startMetricsCollector();
+  await startZabbixWriteWorker();
 }
 
 void bootstrap();

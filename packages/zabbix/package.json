@@ -12,6 +12,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@repo/cache": "workspace:*"
+    "@repo/cache": "workspace:*",
+    "undici": "^8.10.0"
   }
 }

@@ -342,6 +342,29 @@ export type AssignUserHostGroupInput = z.infer<
   typeof assignUserHostGroupSchema
 >;
 
+// ========== Zabbix Script Execute Schema ==========
+export const zabbixScriptExecuteSchema = z.object({
+  hostid: z.string().min(1),
+});
+export type ZabbixScriptExecuteInput = z.infer<
+  typeof zabbixScriptExecuteSchema
+>;
+
+// ========== Zabbix Configuration Export Schema ==========
+export const zabbixConfigExportSchema = z.object({
+  hosts: z.array(z.string()).optional(),
+  templates: z.array(z.string()).optional(),
+  format: z.enum(["json", "yaml", "xml"]).default("json"),
+});
+export type ZabbixConfigExportInput = z.infer<typeof zabbixConfigExportSchema>;
+
+// ========== Zabbix Configuration Import Schema ==========
+export const zabbixConfigImportSchema = z.object({
+  source: z.string().min(1),
+  format: z.enum(["json", "yaml", "xml"]),
+});
+export type ZabbixConfigImportInput = z.infer<typeof zabbixConfigImportSchema>;
+
 // ========== Monitoring Schemas ==========
 export const monitoringHistoryQuerySchema = z.object({
   device_id: z.string().min(1),

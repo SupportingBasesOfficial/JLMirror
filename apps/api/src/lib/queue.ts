@@ -34,6 +34,7 @@ const QUEUE_DEFINITIONS: QueueDefinition[] = [
   { name: "alerting-engine", concurrency: 1 },
   { name: "device-sync", concurrency: 1 },
   { name: "correlation-engine", concurrency: 1 },
+  { name: "zabbix-write", concurrency: 1 },
 ];
 
 const queues = new Map<string, Queue>();
@@ -63,12 +64,15 @@ export async function registerRepeatableJob(
     const existing = await queue.getRepeatableJobs();
     const alreadyRegistered = existing.some((j) => j.name === jobName);
     if (!alreadyRegistered) {
-      await queue.add(
-        jobName,
-        jobData ?? {},
-        { repeat: repeatPattern, removeOnComplete: 100, removeOnFail: 50 },
-      );
-      logger.info("Repeatable job registrado", { queue: queueName, job: jobName });
+      await queue.add(jobName, jobData ?? {}, {
+        repeat: repeatPattern,
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      });
+      logger.info("Repeatable job registrado", {
+        queue: queueName,
+        job: jobName,
+      });
     }
   } finally {
     await lock.release();
@@ -86,11 +90,20 @@ export function startWorker(queueName: string, processor: Processor): Worker {
   });
 
   worker.on("completed", (job) => {
-    logger.info("Job concluido", { queue: queueName, jobId: job.id, jobName: job.name });
+    logger.info("Job concluido", {
+      queue: queueName,
+      jobId: job.id,
+      jobName: job.name,
+    });
   });
 
   worker.on("failed", (job, err) => {
-    logger.error("Job falhou", { queue: queueName, jobId: job?.id, jobName: job?.name, error: err.message });
+    logger.error("Job falhou", {
+      queue: queueName,
+      jobId: job?.id,
+      jobName: job?.name,
+      error: err.message,
+    });
   });
 
   workers.push(worker);

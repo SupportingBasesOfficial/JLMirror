@@ -2,6 +2,9 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 // Rotas de admin Zabbix: templates, maintenance, services, SLA, actions,
 // proxies, discovery, reports, host groups, users, user groups, user-host-groups
+// + novos endpoints: trends, usermacros, valuemaps, alerts, mediatypes,
+//   httptests, correlations, dashboards, proxygroups, tokens, auditlog,
+//   hanodes, connectors, script.execute, configuration import/export
 
 import type { Hono } from "hono";
 import { query } from "@repo/db";
@@ -20,6 +23,9 @@ import {
   zabbixErrorResponse,
   configNotFoundResponse,
   validationErrorResponse,
+  accessDeniedResponse,
+  verifyHostOwnership,
+  redactSensitiveFields,
 } from "./shared.js";
 
 export function registerAdminRoutes(zabbixRoute: Hono) {
@@ -29,13 +35,20 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const templates = await client.getTemplates(hostId);
+      // Se hostId informado, verifica posse (IDOR protection)
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
+      const templates = await ctx.client.getTemplates(hostId);
       return c.json({ data: templates });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -48,14 +61,21 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
+      // Se hostId informado, verifica posse (IDOR protection)
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
       const hostIds = hostId ? [hostId] : undefined;
-      const maintenances = await client.getMaintenances(hostIds);
+      const maintenances = await ctx.client.getMaintenances(hostIds);
       return c.json({ data: maintenances });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -66,8 +86,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -77,7 +97,16 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await client.createMaintenance(parsed.data);
+      // Verifica se os hostids informados pertencem ao tenant (IDOR protection)
+      if (Array.isArray(parsed.data.hostids)) {
+        for (const hid of parsed.data.hostids) {
+          const belongs = await verifyHostOwnership(ctx, hid);
+          if (!belongs) {
+            return c.json(accessDeniedResponse(), 403);
+          }
+        }
+      }
+      const result = await ctx.client.createMaintenance(parsed.data);
       return c.json({ ok: true, maintenanceids: result.maintenanceids });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -89,13 +118,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const maintenanceId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      await client.deleteMaintenance([maintenanceId]);
+      await ctx.client.deleteMaintenance([maintenanceId]);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -108,13 +137,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const parentId = c.req.query("parent_id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const services = await client.getServices(parentId);
+      const services = await ctx.client.getServices(parentId);
       return c.json({ data: services });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -126,13 +155,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const slas = await client.getSlas();
+      const slas = await ctx.client.getSlas();
       return c.json({ data: slas });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -144,14 +173,15 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const users = await client.getUsers();
-      return c.json({ data: users });
+      const users = await ctx.client.getUsers();
+      // Ofusca campos sensiveis (passwd, etc)
+      return c.json({ data: redactSensitiveFields(users) });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -161,8 +191,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -172,7 +202,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await client.createUser(parsed.data);
+      const result = await ctx.client.createUser(parsed.data);
       return c.json({ ok: true, userids: result.userids });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -184,8 +214,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -195,7 +225,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await client.updateUser(userId, parsed.data);
+      await ctx.client.updateUser(userId, parsed.data);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -207,13 +237,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      await client.deleteUser([userId]);
+      await ctx.client.deleteUser([userId]);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -225,13 +255,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const actions = await client.getActions();
+      const actions = await ctx.client.getActions();
       return c.json({ data: actions });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -243,13 +273,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const proxies = await client.getProxies();
+      const proxies = await ctx.client.getProxies();
       return c.json({ data: proxies });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -261,13 +291,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const rules = await client.getDiscoveryRules();
+      const rules = await ctx.client.getDiscoveryRules();
       return c.json({ data: rules });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -279,13 +309,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const reports = await client.getReports();
+      const reports = await ctx.client.getReports();
       return c.json({ data: reports });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -297,13 +327,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const groups = await client.getHostGroupsWithHosts();
+      const groups = await ctx.client.getHostGroupsWithHosts();
       return c.json({ data: groups });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -314,8 +344,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -325,7 +355,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await client.createHostGroup(parsed.data.name);
+      const result = await ctx.client.createHostGroup(parsed.data.name);
       return c.json({ ok: true, groupids: result.groupids });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -337,8 +367,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const groupId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -348,7 +378,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await client.updateHostGroup(groupId, parsed.data.name);
+      await ctx.client.updateHostGroup(groupId, parsed.data.name);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -360,13 +390,25 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const groupId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      await client.deleteHostGroup([groupId]);
+      // Nao permite deletar o proprio host_group_id do tenant
+      if (groupId === ctx.hostGroupId) {
+        return c.json(
+          {
+            error: {
+              code: "CANNOT_DELETE_OWN_GROUP",
+              message: "Não é possível remover o grupo do próprio tenant",
+            },
+          },
+          403,
+        );
+      }
+      await ctx.client.deleteHostGroup([groupId]);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -378,13 +420,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      const groups = await client.getUserGroups();
+      const groups = await ctx.client.getUserGroups();
       return c.json({ data: groups });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -395,8 +437,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -406,7 +448,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await client.createUserGroup(
+      const result = await ctx.client.createUserGroup(
         parsed.data.name,
         parsed.data.permission,
       );
@@ -421,8 +463,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const groupId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
@@ -432,7 +474,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await client.updateUserGroup(groupId, parsed.data);
+      await ctx.client.updateUserGroup(groupId, parsed.data);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -444,13 +486,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const groupId = c.req.param("id");
 
-    const client = await createZabbixClient(tenantId);
-    if (!client) {
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
-      await client.deleteUserGroup([groupId]);
+      await ctx.client.deleteUserGroup([groupId]);
       return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -538,15 +580,344 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
 
     const result = await query(
       `SELECT uhg.id, uhg.user_id, uhg.zabbix_host_group_id, uhg.zabbix_host_group_name, uhg.created_at,
-              u.email, u.full_name, tu.role
+              u.email, u.full_name
        FROM public.user_host_groups uhg
        JOIN public.users u ON uhg.user_id = u.id
-       LEFT JOIN public.tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = uhg.tenant_id
        WHERE uhg.tenant_id = $1 AND uhg.zabbix_host_group_id = $2
        ORDER BY uhg.created_at DESC`,
       [tenantId, groupId],
     );
 
     return c.json({ data: result.data?.rows ?? [] });
+  });
+
+  // ==================== NOVOS ENDPOINTS ZABBIX 7.4 ====================
+
+  // GET /api/v1/zabbix/user-macros?host_id=...
+  zabbixRoute.get("/user-macros", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const hostId = c.req.query("host_id");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
+      const macros = await ctx.client.getUserMacros(hostId);
+      // Macros secretas ja sao ofuscadas no client, mas garantimos aqui tambem
+      return c.json({ data: redactSensitiveFields(macros) });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/value-maps
+  zabbixRoute.get("/value-maps", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const valueMaps = await ctx.client.getValueMaps();
+      return c.json({ data: valueMaps });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/alerts?limit=100
+  zabbixRoute.get("/alerts", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const limitStr = c.req.query("limit");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const limit = limitStr ? Number(limitStr) : undefined;
+      const alerts = await ctx.client.getAlerts(limit);
+      return c.json({ data: alerts });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/media-types
+  zabbixRoute.get("/media-types", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const mediaTypes = await ctx.client.getMediaTypes();
+      return c.json({ data: mediaTypes });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/http-tests?host_id=...
+  zabbixRoute.get("/http-tests", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const hostId = c.req.query("host_id");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
+        }
+      }
+      const httpTests = await ctx.client.getHttpTests(hostId);
+      return c.json({ data: httpTests });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/correlations
+  zabbixRoute.get("/correlations", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const correlations = await ctx.client.getCorrelations();
+      return c.json({ data: correlations });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/dashboards
+  zabbixRoute.get("/dashboards", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const dashboards = await ctx.client.getDashboards();
+      return c.json({ data: dashboards });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/proxy-groups
+  zabbixRoute.get("/proxy-groups", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const proxyGroups = await ctx.client.getProxyGroups();
+      return c.json({ data: proxyGroups });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/tokens
+  zabbixRoute.get("/tokens", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const tokens = await ctx.client.getTokens();
+      return c.json({ data: tokens });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/audit-log?limit=100
+  zabbixRoute.get("/audit-log", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const limitStr = c.req.query("limit");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const limit = limitStr ? Number(limitStr) : undefined;
+      const auditLog = await ctx.client.getAuditLog(limit);
+      return c.json({ data: auditLog });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/ha-nodes
+  zabbixRoute.get("/ha-nodes", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const haNodes = await ctx.client.getHaNodes();
+      return c.json({ data: haNodes });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // GET /api/v1/zabbix/connectors
+  zabbixRoute.get("/connectors", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const connectors = await ctx.client.getConnectors();
+      return c.json({ data: connectors });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // POST /api/v1/zabbix/scripts/:id/execute — executa comando remoto
+  zabbixRoute.post("/scripts/:id/execute", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const scriptId = c.req.param("id");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const hostId = body.hostid as string | undefined;
+      if (!hostId) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "hostid é obrigatório",
+            },
+          },
+          400,
+        );
+      }
+      // Verifica posse do host antes de executar script (IDOR protection)
+      const belongs = await verifyHostOwnership(ctx, hostId);
+      if (!belongs) {
+        return c.json(accessDeniedResponse(), 403);
+      }
+      const result = await ctx.client.executeScript(scriptId, hostId);
+      return c.json({ ok: true, result: result.result });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // POST /api/v1/zabbix/configuration/export — exporta configuracoes
+  zabbixRoute.post("/configuration/export", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const result = await ctx.client.exportConfiguration({
+        hosts: body.hosts,
+        templates: body.templates,
+        format: body.format ?? "json",
+      });
+      return c.json({ data: result });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // POST /api/v1/zabbix/configuration/import — importa configuracoes
+  zabbixRoute.post("/configuration/import", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const body = await c.req.json();
+      if (!body.source || !body.format) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "source e format são obrigatórios",
+            },
+          },
+          400,
+        );
+      }
+      const result = await ctx.client.importConfiguration(
+        body.source,
+        body.format,
+      );
+      return c.json({ ok: true, imported: result.imported });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
   });
 }
