@@ -70,6 +70,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 COPY --from=builder /app/deployed/ ./
 
+# Copia migrations para o container — runMigrations() resolve process.cwd()/migrations
+COPY --chown=hono:nodejs migrations/ ./migrations/
+
 USER hono
 
 EXPOSE 3001

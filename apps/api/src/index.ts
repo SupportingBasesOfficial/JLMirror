@@ -40,7 +40,10 @@ import { workflowRoute } from "./routes/workflows.js";
 import { pushRoute } from "./routes/push.js";
 import { clientPortalRoute } from "./routes/client-portal.js";
 import { chatopsRoute } from "./routes/chatops.js";
-import { statusPageRoute } from "./routes/status-page.js";
+import {
+  statusPageRoute,
+  statusPagePublicRoute,
+} from "./routes/status-page.js";
 import { driftRoute } from "./routes/drift.js";
 import { itsmRoute } from "./routes/itsm.js";
 import { discoveryRoute } from "./routes/discovery.js";
@@ -165,9 +168,9 @@ app.use("*", tracingMiddleware());
 app.use("*", logIngestionMiddleware);
 app.use("*", bodySizeLimit());
 app.use("*", requestTimeout(30_000));
-app.use("*", rateLimitApi);
 
-// Rotas públicas (sem autenticação)
+// Rotas públicas (sem autenticação) — montadas ANTES do rate limit global
+// para que healthchecks do Docker e metricas nao esgotem o bucket
 app.route("/api/v1/health", healthRoute);
 app.route("/api/v1/metrics", metricsRoute);
 app.route("/api/v1/docs", docsRoute);
@@ -183,8 +186,14 @@ app.route("/api/v1/branding", brandingRoute);
 // Billing webhook — public endpoint (Asaas calls this)
 app.route("/api/v1/billing/webhook", billingRoute);
 
+// Status page public endpoint — mounted before JWT auth (public, no auth needed)
+app.route("/api/v1/status-page", statusPagePublicRoute);
+
+// Rate limit global — aplicado apos rotas publicas para nao bloquear healthchecks
+app.use("*", rateLimitApi);
+
 // Middlewares de autenticação e isolamento de tenant — aplicados globalmente
-// Rotas publicas (health, metrics, docs, auth, tv/data) sao montadas ANTES destes middlewares
+// Rotas publicas (health, metrics, docs, auth, tv/data, branding, billing, status-page) sao montadas ANTES destes middlewares
 // e portanto nao sao afetadas. Todas as demais rotas exigem JWT + tenant context.
 app.use("/api/v1/*", jwtAuth);
 app.use("/api/v1/*", tenantContext);

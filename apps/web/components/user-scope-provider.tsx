@@ -43,7 +43,10 @@ export function UserScopeProvider({ children }: { children: ReactNode }) {
         const res = await fetch("/api/v1/auth/me", { credentials: "include" });
         if (res.status === 401) {
           // Token ausente ou expirado — redireciona para login
-          window.location.href = "/auth/login";
+          // Evita redirect se ja estamos na pagina de login (causa reload infinito)
+          if (!window.location.pathname.startsWith("/auth/")) {
+            window.location.href = "/auth/login";
+          }
           return;
         }
         if (res.ok) {

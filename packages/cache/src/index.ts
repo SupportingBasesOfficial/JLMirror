@@ -12,6 +12,9 @@ export {
 
 // Cliente Redis singleton para cache geral
 let cacheClient: Redis | null = null;
+// Cliente Redis dedicado para pub/sub — não pode compartilhar com cache
+// pois entra em subscriber mode e bloqueia comandos normais (ping/get/set)
+let pubsubClient: Redis | null = null;
 let bullmqConnection: Redis | null = null;
 
 // Cria ou reutiliza cliente Redis para cache geral
@@ -38,6 +41,20 @@ export function createBullMQConnection(): Redis {
   return bullmqConnection;
 }
 
+// Cria ou reutiliza cliente Redis dedicado para pub/sub
+// Separado do cacheClient pois subscribe/psubscribe colocam o cliente
+// em subscriber mode, impedindo comandos normais (get/set/ping/publish)
+function createPubSubClient(): Redis {
+  if (!pubsubClient) {
+    const url = process.env.REDIS_URL ?? "redis://localhost:6379";
+    pubsubClient = new Redis(url, {
+      maxRetriesPerRequest: null,
+      retryStrategy: (times) => Math.min(times * 200, 2000),
+    });
+  }
+  return pubsubClient;
+}
+
 // Fecha todas as conexoes Redis — usado no graceful shutdown
 export async function closeCache(): Promise<void> {
   const promises: Promise<void>[] = [];
@@ -45,6 +62,13 @@ export async function closeCache(): Promise<void> {
     promises.push(
       cacheClient.quit().then(() => {
         cacheClient = null;
+      }),
+    );
+  }
+  if (pubsubClient) {
+    promises.push(
+      pubsubClient.quit().then(() => {
+        pubsubClient = null;
       }),
     );
   }
@@ -202,7 +226,7 @@ export async function subscribe(
   handler: (message: string) => void,
 ): Promise<void> {
   try {
-    const client = createCacheClient();
+    const client = createPubSubClient();
     await client.subscribe(channel);
     client.on("message", (_channel, message) => {
       if (_channel === channel) {
@@ -220,7 +244,7 @@ export async function psubscribe(
   handler: (channel: string, message: string) => void,
 ): Promise<void> {
   try {
-    const client = createCacheClient();
+    const client = createPubSubClient();
     await client.psubscribe(pattern);
     client.on("pmessage", (_pattern, channel, message) => {
       if (_pattern === pattern) {

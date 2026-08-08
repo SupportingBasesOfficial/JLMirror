@@ -7,12 +7,13 @@ import { validate } from "../middleware/validate.js";
 import { statusPageConfigSchema } from "@repo/shared-validation";
 import "../types.js";
 
-export const statusPageRoute = new Hono();
+// Router público — montado ANTES do jwtAuth (sem autenticação)
+export const statusPagePublicRoute = new Hono();
 
 // ========== Public Endpoints (no auth) ==========
 
 // GET /api/v1/status-page/:slug — dados publicos da pagina de status
-statusPageRoute.get("/:slug", async (c) => {
+statusPagePublicRoute.get("/:slug", async (c) => {
   const slug = c.req.param("slug");
 
   const pageResult = await query<{
@@ -130,6 +131,9 @@ statusPageRoute.get("/:slug", async (c) => {
     scheduled_maintenance: scheduledMaintenance,
   });
 });
+
+// Router protegido — montado DEPOIS do jwtAuth (requer autenticação)
+export const statusPageRoute = new Hono();
 
 // ========== Admin Config (auth required) ==========
 

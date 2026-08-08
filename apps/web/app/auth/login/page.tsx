@@ -478,6 +478,17 @@ export default function LoginPage() {
             </MagneticButton>
           </form>
 
+          {/* Link para recuperação de senha */}
+          <div className="mt-3 text-center">
+            <a
+              href="/auth/forgot-password"
+              className="text-[11px] hover:opacity-80 transition-opacity"
+              style={{ color: branding.primary_color }}
+            >
+              Esqueci minha senha
+            </a>
+          </div>
+
           {/* Divider */}
           <div className="mt-5 flex items-center gap-3">
             <div className="flex-1 h-px" style={{ background: "#1E2530" }} />

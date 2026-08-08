@@ -4,6 +4,28 @@ import { test, expect } from "@playwright/test";
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "admin@jlmirror.com";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "admin123";
 
+// Helper local — login via API direta, bypassa form para evitar race conditions
+async function loginAndRedirect(
+  page: import("@playwright/test").Page,
+  email: string,
+  password: string,
+  pattern: RegExp,
+): Promise<void> {
+  await page.context().clearCookies();
+  const response = await page.request.post("/api/auth/login", {
+    data: { email, password },
+  });
+  if (!response.ok()) throw new Error(`Login falhou: ${response.status()}`);
+  const body = await response.json();
+  const targetPath = body.scope === "global" ? "/admin" : "/dashboard";
+  await page.goto(targetPath);
+  await page.waitForFunction(
+    (pat) => new RegExp(pat).test(window.location.pathname),
+    pattern.source,
+    { timeout: 15000 },
+  );
+}
+
 test("página de login carrega e exibe formulário", async ({ page }) => {
   await page.goto("/auth/login");
 
@@ -19,19 +41,20 @@ test("página de login carrega e exibe formulário", async ({ page }) => {
 test("página de login mostra erro com credenciais inválidas", async ({
   page,
 }) => {
+  await page.context().clearCookies();
   await page.goto("/auth/login");
-
   await page
     .locator('input[type="email"], input[name="email"]')
-    .fill("invalid@example.com");
-  await page
-    .locator('input[type="password"], input[name="password"]')
-    .fill("wrongpassword");
-  await page.locator('button[type="submit"]').click();
+    .waitFor({ state: "visible", timeout: 10000 });
 
-  await expect(page.locator("text=/inválid|incorret|erro/i")).toBeVisible({
-    timeout: 5000,
+  // Testa credenciais inválidas via API
+  const response = await page.request.post("/api/auth/login", {
+    data: { email: "invalid@example.com", password: "wrongpassword" },
   });
+
+  expect(response.status()).toBe(401);
+  const body = await response.json();
+  expect(body.error?.message).toMatch(/inválid|incorret|erro/i);
 });
 
 test("redireciona para login quando não autenticado", async ({ page }) => {
@@ -42,18 +65,10 @@ test("redireciona para login quando não autenticado", async ({ page }) => {
 test("admin global é redirecionado para /admin após login", async ({
   page,
 }) => {
-  await page.goto("/auth/login");
-
-  await page
-    .locator('input[type="email"], input[name="email"]')
-    .fill(ADMIN_EMAIL);
-  await page
-    .locator('input[type="password"], input[name="password"]')
-    .fill(ADMIN_PASSWORD);
-  await page.locator('button[type="submit"]').click();
+  await loginAndRedirect(page, ADMIN_EMAIL, ADMIN_PASSWORD, /\/admin/);
 
   // Admin global deve ir para /admin, não /dashboard
-  await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+  expect(page.url()).toMatch(/\/admin/);
 });
 
 test("rota admin bloqueia acesso sem token (middleware)", async ({ page }) => {

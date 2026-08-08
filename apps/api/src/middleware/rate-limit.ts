@@ -14,8 +14,15 @@ interface RateLimitOptions {
   tenantOnly?: boolean;
 }
 
-function getClientIdentifier(c: { req: { header: (name: string) => string | undefined }; get: (key: string) => unknown }, tenantOnly: boolean): string {
-  const user = c.get("user") as { tenant_id?: string; sub?: string } | undefined;
+function getClientIdentifier(
+  c: {
+    req: { header: (name: string) => string | undefined };
+    get: (key: string) => unknown;
+  },
+  tenantOnly: boolean,
+): string {
+  const user = c.get("user") as
+    { tenant_id?: string; sub?: string } | undefined;
   const tenant = user?.tenant_id ?? "anonymous";
   if (tenantOnly) {
     return tenant;
@@ -36,7 +43,12 @@ setInterval(() => {
 }, 60_000);
 
 export function rateLimit(options: RateLimitOptions) {
-  const { windowMs, maxRequests, keyPrefix = "default", tenantOnly = false } = options;
+  const {
+    windowMs,
+    maxRequests,
+    keyPrefix = "default",
+    tenantOnly = false,
+  } = options;
   const windowSeconds = Math.ceil(windowMs / 1000);
 
   return createMiddleware(async (c, next) => {
@@ -73,7 +85,8 @@ export function rateLimit(options: RateLimitOptions) {
           {
             error: {
               code: "RATE_LIMIT_EXCEEDED",
-              message: "Limite de requisições excedido. Tente novamente em alguns segundos.",
+              message:
+                "Limite de requisições excedido. Tente novamente em alguns segundos.",
             },
           },
           429,
@@ -86,7 +99,10 @@ export function rateLimit(options: RateLimitOptions) {
         memoryBuckets.set(redisKey, { count: 1, resetAt: now + windowMs });
         c.header("X-RateLimit-Limit", String(maxRequests));
         c.header("X-RateLimit-Remaining", String(maxRequests - 1));
-        c.header("X-RateLimit-Reset", String(Math.ceil((now + windowMs) / 1000)));
+        c.header(
+          "X-RateLimit-Reset",
+          String(Math.ceil((now + windowMs) / 1000)),
+        );
       } else {
         entry.count++;
         const remaining = Math.max(0, maxRequests - entry.count);
@@ -101,7 +117,8 @@ export function rateLimit(options: RateLimitOptions) {
             {
               error: {
                 code: "RATE_LIMIT_EXCEEDED",
-                message: "Limite de requisições excedido. Tente novamente em alguns segundos.",
+                message:
+                  "Limite de requisições excedido. Tente novamente em alguns segundos.",
               },
             },
             429,
@@ -114,10 +131,27 @@ export function rateLimit(options: RateLimitOptions) {
   });
 }
 
-export const rateLimitAuth = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10, keyPrefix: "auth" });
-export const rateLimitApi = rateLimit({ windowMs: 60 * 1000, maxRequests: 300, keyPrefix: "api" });
-export const rateLimitWrite = rateLimit({ windowMs: 60 * 1000, maxRequests: 30, keyPrefix: "write" });
+export const rateLimitAuth = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 1000,
+  keyPrefix: "auth",
+});
+export const rateLimitApi = rateLimit({
+  windowMs: 60 * 1000,
+  maxRequests: 300,
+  keyPrefix: "api",
+});
+export const rateLimitWrite = rateLimit({
+  windowMs: 60 * 1000,
+  maxRequests: 30,
+  keyPrefix: "write",
+});
 
 // Rate limit por tenant (sem IP) — protege API Zabbix de sobrecarga
 // Limita total de requests por tenant independente de quantos usuarios/IPs
-export const rateLimitTenant = rateLimit({ windowMs: 60 * 1000, maxRequests: 100, keyPrefix: "tenant", tenantOnly: true });
+export const rateLimitTenant = rateLimit({
+  windowMs: 60 * 1000,
+  maxRequests: 100,
+  keyPrefix: "tenant",
+  tenantOnly: true,
+});

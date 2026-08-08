@@ -51,6 +51,8 @@ const createTenantSchema = z.object({
   zabbix_host_group_id: z.string().min(1),
   zabbix_api_url: z.string().url(),
   zabbix_api_token: z.string().min(1),
+  tenant_type: z.enum(["manager", "client"]).default("client"),
+  parent_tenant_id: z.string().uuid().optional(),
 });
 
 const updateTenantSchema = z.object({
@@ -61,6 +63,7 @@ const updateTenantSchema = z.object({
   zabbix_host_group_id: z.string().min(1).optional(),
   zabbix_api_url: z.string().url().optional(),
   zabbix_api_token: z.string().min(1).optional(),
+  tenant_type: z.enum(["owner", "manager", "client"]).optional(),
 });
 
 // ========== List Tenants ==========
@@ -71,10 +74,15 @@ adminRoute.get(
   async (c) => {
     const result = await query(
       `SELECT t.*, tr.cluster_id, tr.cluster_host, tr.schema_name, tr.status as route_status,
-       (SELECT COUNT(*) FROM public.tenant_users tu WHERE tu.tenant_id = t.id) as user_count
+       (SELECT COUNT(*) FROM public.tenant_users tu WHERE tu.tenant_id = t.id) as user_count,
+       (SELECT COUNT(*) FROM public.tenants sub WHERE sub.parent_tenant_id = t.id) as managed_count,
+       pt.name as parent_tenant_name
      FROM public.tenants t
      LEFT JOIN public.tenant_routes tr ON t.id = tr.tenant_id
-     ORDER BY t.created_at DESC`,
+     LEFT JOIN public.tenants pt ON t.parent_tenant_id = pt.id
+     ORDER BY
+       CASE t.tenant_type WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END,
+       t.created_at DESC`,
     );
 
     return c.json({ tenants: result.data?.rows ?? [] });
@@ -139,11 +147,20 @@ adminRoute.post(
     const data = parsed.data;
     const user = c.get("user");
 
+    // Define parent_tenant_id: se informado usa o valor, senao usa o tenant_id do admin logado
+    const parentTenantId = data.parent_tenant_id ?? user.tenant_id ?? null;
+
     // Cria tenant
     const tenantResult = await query(
-      `INSERT INTO public.tenants (name, cnpj, contract_end_date, status)
-     VALUES ($1, $2, $3, 'active') RETURNING id`,
-      [data.name, data.cnpj ?? null, data.contract_end_date ?? null],
+      `INSERT INTO public.tenants (name, cnpj, contract_end_date, status, tenant_type, parent_tenant_id)
+     VALUES ($1, $2, $3, 'active', $4, $5) RETURNING id`,
+      [
+        data.name,
+        data.cnpj ?? null,
+        data.contract_end_date ?? null,
+        data.tenant_type,
+        parentTenantId,
+      ],
     );
 
     const tenantId = tenantResult.data?.rows[0]?.id as string;
@@ -233,6 +250,10 @@ adminRoute.put(
     if (data.status !== undefined) {
       updateFields.push(`status = $${paramIdx++}`);
       params.push(data.status);
+    }
+    if (data.tenant_type !== undefined) {
+      updateFields.push(`tenant_type = $${paramIdx++}`);
+      params.push(data.tenant_type);
     }
 
     if (updateFields.length > 0) {
@@ -503,10 +524,17 @@ adminRoute.get("/stats", requirePermission("admin:tenants:read"), async (c) => {
     ),
   );
 
+  // Tenants by type
+  const byType = safeRows(
+    await query(
+      "SELECT tenant_type, COUNT(*) as count FROM public.tenants GROUP BY tenant_type",
+    ),
+  );
+
   // Recent tenants
   const recent = safeRows(
     await query(
-      `SELECT id, name, status, created_at FROM public.tenants ORDER BY created_at DESC LIMIT 10`,
+      `SELECT id, name, status, tenant_type, created_at FROM public.tenants ORDER BY created_at DESC LIMIT 10`,
     ),
   );
 
@@ -526,6 +554,7 @@ adminRoute.get("/stats", requirePermission("admin:tenants:read"), async (c) => {
     total_tenant_users: totalTenantUsers,
     total_routes: totalRoutes,
     by_status: byStatus,
+    by_type: byType,
     by_role: byRole,
     recent,
   });

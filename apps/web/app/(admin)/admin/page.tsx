@@ -39,6 +39,15 @@ const STATUS_COLORS: Record<string, string> = {
   migrating: COLORS.amber,
 };
 
+const TENANT_TYPE_CONFIG: Record<
+  string,
+  { label: string; color: string; icon: string }
+> = {
+  owner: { label: "Proprietário", color: COLORS.teal, icon: "👑" },
+  manager: { label: "Gestor", color: COLORS.blue, icon: "🏢" },
+  client: { label: "Cliente", color: COLORS.amber, icon: "📦" },
+};
+
 interface Tenant {
   id: string;
   name: string;
@@ -50,6 +59,10 @@ interface Tenant {
   schema_name?: string;
   route_status?: string;
   user_count?: number;
+  managed_count?: number;
+  tenant_type?: string;
+  parent_tenant_id?: string | null;
+  parent_tenant_name?: string | null;
   created_at: string;
 }
 
@@ -86,6 +99,7 @@ interface Stats {
   total_tenant_users: number;
   total_routes: number;
   by_status: Array<Record<string, unknown>>;
+  by_type: Array<Record<string, unknown>>;
   by_role: Array<Record<string, unknown>>;
   recent: Array<Record<string, unknown>>;
 }
@@ -158,6 +172,9 @@ export default function AdminPage() {
     "https://zabbix.jlinformatica.com.br/api_jsonrpc.php",
   );
   const [crZabbixToken, setCrZabbixToken] = useState("");
+  const [crTenantType, setCrTenantType] = useState<"manager" | "client">(
+    "client",
+  );
 
   // Edit form
   const [edName, setEdName] = useState("");
@@ -205,6 +222,7 @@ export default function AdminPage() {
           zabbix_host_group_id: crZabbixGroupId,
           zabbix_api_url: crZabbixUrl,
           zabbix_api_token: crZabbixToken,
+          tenant_type: crTenantType,
         }),
       });
       if (res.ok) {
@@ -215,6 +233,7 @@ export default function AdminPage() {
         setCrCnpj("");
         setCrZabbixGroupId("");
         setCrZabbixToken("");
+        setCrTenantType("client");
         mutateTenants();
         mutateStats();
       }
@@ -544,27 +563,19 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Tenants Table */}
-      <div
-        className="rounded-xl p-6"
-        style={{
-          background: COLORS.card,
-          border: `1px solid ${COLORS.border}`,
-        }}
-      >
-        <h3
-          className="text-[10px] font-bold uppercase mb-3"
-          style={{ color: COLORS.muted }}
-        >
-          TENANTS
-        </h3>
-        <div className="space-y-2">
-          {tenants.length === 0 && (
-            <div className="text-[12px]" style={{ color: COLORS.muted }}>
-              Nenhum tenant cadastrado
-            </div>
-          )}
-          {tenants.map((t) => (
+      {/* Tenants — Agrupado por tipo */}
+      {(() => {
+        const ownerTenants = tenants.filter((t) => t.tenant_type === "owner");
+        const managerTenants = tenants.filter(
+          (t) => t.tenant_type === "manager",
+        );
+        const clientTenants = tenants.filter((t) => t.tenant_type === "client");
+        const tenantTypeCfg = (tt: string | undefined) =>
+          TENANT_TYPE_CONFIG[tt ?? "client"] ?? TENANT_TYPE_CONFIG.client;
+
+        function renderTenantCard(t: Tenant) {
+          const cfg = tenantTypeCfg(t.tenant_type);
+          return (
             <div
               key={t.id}
               className="flex items-center justify-between p-3 rounded-md"
@@ -576,9 +587,10 @@ export default function AdminPage() {
               <div className="flex items-center gap-4">
                 <div>
                   <div
-                    className="text-[13px] font-bold"
+                    className="text-[13px] font-bold flex items-center gap-1.5"
                     style={{ color: COLORS.teal }}
                   >
+                    <span>{cfg.icon}</span>
                     {t.name}
                   </div>
                   <div className="text-[10px]" style={{ color: COLORS.muted }}>
@@ -586,12 +598,25 @@ export default function AdminPage() {
                     {t.cluster_host ?? "—"}
                   </div>
                   <div className="text-[10px]" style={{ color: COLORS.muted }}>
-                    Users: {t.user_count ?? 0} · Criado:{" "}
-                    {formatTime(t.created_at)}
+                    Users: {t.user_count ?? 0} ·{" "}
+                    {t.managed_count ? `Gestando: ${t.managed_count} · ` : ""}
+                    {t.parent_tenant_name
+                      ? `Gestado por: ${t.parent_tenant_name} · `
+                      : ""}
+                    Criado: {formatTime(t.created_at)}
                   </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <span
+                  className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                  style={{
+                    background: `${cfg.color}15`,
+                    color: cfg.color,
+                  }}
+                >
+                  {cfg.label}
+                </span>
                 <span
                   className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
                   style={{
@@ -690,9 +715,80 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          );
+        }
+
+        function renderSection(
+          title: string,
+          icon: string,
+          color: string,
+          items: Tenant[],
+        ) {
+          if (items.length === 0) return null;
+          return (
+            <div
+              className="rounded-xl p-6"
+              style={{
+                background: COLORS.card,
+                border: `1px solid ${COLORS.border}`,
+              }}
+            >
+              <h3
+                className="text-[10px] font-bold uppercase mb-3 flex items-center gap-1.5"
+                style={{ color }}
+              >
+                <span>{icon}</span>
+                {title} ({items.length})
+              </h3>
+              <div className="space-y-2">{items.map(renderTenantCard)}</div>
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-4">
+            {renderSection(
+              "Nosso Tenant — Proprietário do Sistema",
+              "👑",
+              COLORS.teal,
+              ownerTenants,
+            )}
+            {renderSection(
+              "Tenants Gestores — Empresas que Gestam Outros Tenants",
+              "🏢",
+              COLORS.blue,
+              managerTenants,
+            )}
+            {renderSection(
+              "Tenants Clientes — Gerenciados por Nós",
+              "📦",
+              COLORS.amber,
+              clientTenants.filter(
+                (t) =>
+                  !t.parent_tenant_name ||
+                  t.parent_tenant_name === "Tenant Demo",
+              ),
+            )}
+            {/* Sub-tenants de gestores — agrupados por gestor */}
+            {managerTenants.map((mgr) => {
+              const subTenants = clientTenants.filter(
+                (t) => t.parent_tenant_name === mgr.name,
+              );
+              if (subTenants.length === 0) return null;
+              return (
+                <div key={mgr.id}>
+                  {renderSection(
+                    `Clientes de ${mgr.name}`,
+                    "📋",
+                    COLORS.purple,
+                    subTenants,
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Modal: Edit Tenant */}
       {editTenant && (
@@ -1006,6 +1102,37 @@ export default function AdminPage() {
                   }}
                 />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <label
+                htmlFor="cr-tt"
+                className="text-[10px] font-bold uppercase"
+                style={{ color: COLORS.muted }}
+              >
+                Tipo do Tenant
+              </label>
+              <select
+                id="cr-tt"
+                value={crTenantType}
+                onChange={(e) =>
+                  setCrTenantType(e.target.value as "manager" | "client")
+                }
+                className="w-full rounded-md px-3 py-2 text-[12px]"
+                style={{
+                  background: COLORS.bg,
+                  border: `1px solid ${COLORS.border}`,
+                  color: COLORS.text,
+                }}
+              >
+                <option value="client">Cliente — Tenant gerenciado</option>
+                <option value="manager">
+                  Gestor — Empresa que gesta outros tenants
+                </option>
+              </select>
+              <p className="text-[10px]" style={{ color: COLORS.muted }}>
+                O tenant sera associado ao seu tenant (parent) automaticamente.
+              </p>
             </div>
 
             <div className="space-y-1">

@@ -269,6 +269,12 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: <Workflow {...iconProps} />,
         flagKey: "module_workflows",
       },
+      {
+        label: "Escalonamento",
+        href: "/escalation",
+        icon: <Flame {...iconProps} />,
+        flagKey: "module_escalation",
+      },
     ],
   },
   {

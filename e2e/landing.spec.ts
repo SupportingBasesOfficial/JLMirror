@@ -9,9 +9,11 @@ import { expect, test } from "@playwright/test";
 test("landing page carrega com título", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "JLMIRROR" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Soluções de Tecnologia/i }),
+  ).toBeVisible();
 
-  await expect(page.getByText("Portal de Monitoramento")).toBeVisible();
+  await expect(page.getByText("JL Informática").first()).toBeVisible();
 });
 
 test("landing page navega para 404 em rota inexistente", async ({ page }) => {
