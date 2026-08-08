@@ -6,7 +6,10 @@ export type ApiResult<T> =
   | { data: T; error: null }
   | { data: null; error: { code: string; message: string } };
 
-const BASE_URL = env.NEXT_PUBLIC_API_URL;
+// SSR usa API_INTERNAL_URL (Docker service name), client usa NEXT_PUBLIC_API_URL
+const BASE_URL =
+  (typeof window === "undefined" ? process.env.API_INTERNAL_URL : null) ??
+  env.NEXT_PUBLIC_API_URL;
 
 // Para Server Components: passa cookies do request incoming
 export async function serverApiGet<T>(
