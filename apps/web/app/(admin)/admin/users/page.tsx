@@ -46,6 +46,12 @@ const ROLE_LABELS: Record<string, string> = {
   "tenant:admin": "Tenant Admin",
   "tenant:operator": "Tenant Operator",
   "tenant:viewer": "Tenant Viewer",
+  "tenant:user": "Tenant User",
+};
+
+const SCOPE_LABELS: Record<string, string> = {
+  global: "JL Staff",
+  tenant: "Cliente",
 };
 
 const TENANT_TYPE_CONFIG: Record<
@@ -556,7 +562,7 @@ export default function UsersManagementPage() {
                   className="px-2 py-0.5 rounded text-[10px] uppercase font-bold"
                   style={{ color: SCOPE_COLORS[u.scope] ?? COLORS.muted }}
                 >
-                  {u.scope}
+                  {SCOPE_LABELS[u.scope] ?? u.scope}
                 </span>
               </td>
               <td className="p-3">
