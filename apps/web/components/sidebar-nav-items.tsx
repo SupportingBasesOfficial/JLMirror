@@ -52,6 +52,8 @@ import {
   UserPlus,
   Globe,
   Puzzle,
+  FileClock,
+  Database,
 } from "lucide-react";
 
 export interface NavItem {
@@ -275,6 +277,11 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: <Flame {...iconProps} />,
         flagKey: "module_escalation",
       },
+      {
+        label: "Contratos & Horas",
+        href: "/contracts",
+        icon: <FileClock {...iconProps} />,
+      },
     ],
   },
   {
@@ -290,6 +297,12 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Gestão de Usuários",
         href: "/admin/users",
         icon: <UserCog {...iconProps} />,
+        flagKey: "module_admin",
+      },
+      {
+        label: "Error Reports",
+        href: "/admin/error-reports",
+        icon: <CircleAlert {...iconProps} />,
         flagKey: "module_admin",
       },
       {
@@ -523,6 +536,11 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/automation/scripts",
         icon: <Code2 {...iconProps} />,
         flagKey: "module_scripts",
+      },
+      {
+        label: "SQL Console",
+        href: "/sql-console",
+        icon: <Database {...iconProps} />,
       },
     ],
   },

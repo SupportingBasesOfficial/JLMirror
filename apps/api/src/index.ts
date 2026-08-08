@@ -83,6 +83,9 @@ import { auditMiddleware } from "./middleware/audit.js";
 import { requireModule } from "./middleware/require-module.js";
 import { metricsRoute, recordRequest } from "./routes/metrics.js";
 import { apmRoute } from "./routes/apm.js";
+import { errorReportRoute } from "./routes/error-reports.js";
+import { contractsRoute } from "./routes/contracts.js";
+import { sqlConsoleRoute } from "./routes/sql-console.js";
 import { startTaskScheduler } from "./lib/task-scheduler.js";
 import { startAlertingEngine } from "./lib/alerting-engine.js";
 import { startDeviceSync } from "./lib/device-sync.js";
@@ -389,6 +392,11 @@ app.route("/api/v1/admin", adminRoute);
 app.use("/api/v1/sla", requireModule("module_sla"));
 app.use("/api/v1/sla/*", requireModule("module_sla"));
 app.route("/api/v1/sla", slaRoute);
+
+// Rotas protegidas — novos modulos (sempre ativos, sem requireModule)
+app.route("/api/v1/errors", errorReportRoute);
+app.route("/api/v1/contracts", contractsRoute);
+app.route("/api/v1/sql-console", sqlConsoleRoute);
 
 app.use("/api/v1/apm", requireModule("module_apm"));
 app.use("/api/v1/apm/*", requireModule("module_apm"));

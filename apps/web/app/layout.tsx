@@ -4,6 +4,7 @@ import "@repo/tailwind-config/globals.css";
 import { Toaster } from "@repo/ui";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { WebVitalsReporter } from "./web-vitals";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { ServiceWorkerRegister } from "@/components/sw-register";
@@ -69,7 +70,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <ErrorBoundary>{children}</ErrorBoundary>
           <Toaster />
           <WebVitalsReporter />
           <PwaInstallPrompt />
