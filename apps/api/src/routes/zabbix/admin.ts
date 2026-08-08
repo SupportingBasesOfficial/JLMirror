@@ -26,6 +26,7 @@ import {
   accessDeniedResponse,
   verifyHostOwnership,
   redactSensitiveFields,
+  enqueueWriteJob,
 } from "./shared.js";
 
 export function registerAdminRoutes(zabbixRoute: Hono) {
@@ -85,6 +86,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/maintenances", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -106,8 +108,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
           }
         }
       }
-      const result = await ctx.client.createMaintenance(parsed.data);
-      return c.json({ ok: true, maintenanceids: result.maintenanceids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "maintenance.create",
+        method: "maintenance.create",
+        params: parsed.data as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -116,6 +124,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/maintenances/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const maintenanceId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -124,8 +133,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     }
 
     try {
-      await ctx.client.deleteMaintenance([maintenanceId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "maintenance.delete",
+        method: "maintenance.delete",
+        params: [maintenanceId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -190,6 +205,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/users", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -202,8 +218,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await ctx.client.createUser(parsed.data);
-      return c.json({ ok: true, userids: result.userids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "user.create",
+        method: "user.create",
+        params: parsed.data as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -212,7 +234,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/users/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
-    const userId = c.req.param("id");
+    const userId = user.sub;
+    const targetUserId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -225,8 +248,17 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await ctx.client.updateUser(userId, parsed.data);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "user.update",
+        method: "user.update",
+        params: { userid: targetUserId, ...parsed.data } as Record<
+          string,
+          unknown
+        >,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -235,7 +267,8 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/users/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
-    const userId = c.req.param("id");
+    const userId = user.sub;
+    const targetUserId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -243,8 +276,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     }
 
     try {
-      await ctx.client.deleteUser([userId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "user.delete",
+        method: "user.delete",
+        params: [targetUserId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -343,6 +382,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/host-groups", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -355,8 +395,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await ctx.client.createHostGroup(parsed.data.name);
-      return c.json({ ok: true, groupids: result.groupids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "hostgroup.create",
+        method: "hostgroup.create",
+        params: { name: parsed.data.name },
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -365,6 +411,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/host-groups/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const groupId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -378,8 +425,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await ctx.client.updateHostGroup(groupId, parsed.data.name);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "hostgroup.update",
+        method: "hostgroup.update",
+        params: { groupid: groupId, name: parsed.data.name },
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -388,6 +441,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/host-groups/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const groupId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -408,8 +462,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
           403,
         );
       }
-      await ctx.client.deleteHostGroup([groupId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "hostgroup.delete",
+        method: "hostgroup.delete",
+        params: [groupId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -436,6 +496,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/user-groups", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -448,11 +509,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await ctx.client.createUserGroup(
-        parsed.data.name,
-        parsed.data.permission,
-      );
-      return c.json({ ok: true, usrgrpids: result.usrgrpids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "usergroup.create",
+        method: "usergroup.create",
+        params: { name: parsed.data.name, permission: parsed.data.permission },
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -461,6 +525,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/user-groups/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const groupId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -474,8 +539,17 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await ctx.client.updateUserGroup(groupId, parsed.data);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "usergroup.update",
+        method: "usergroup.update",
+        params: { usrgrpid: groupId, ...parsed.data } as Record<
+          string,
+          unknown
+        >,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -484,6 +558,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/user-groups/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const groupId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -492,8 +567,14 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     }
 
     try {
-      await ctx.client.deleteUserGroup([groupId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "usergroup.delete",
+        method: "usergroup.delete",
+        params: [groupId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -823,6 +904,104 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     try {
       const connectors = await ctx.client.getConnectors();
       return c.json({ data: connectors });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // POST /api/v1/zabbix/connector/setup
+  // Configura connector de streaming no Zabbix do tenant:
+  // 1. Gera token unico para o connector
+  // 2. Salva token em tenant_routes.zabbix_connector_token
+  // 3. Chama connector.create no Zabbix apontando para nosso endpoint receptor
+  zabbixRoute.post("/connector/setup", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const body = await c.req.json().catch(() => ({}));
+      const dataType = body.data_type ?? "history";
+      const connectorName = body.name ?? `JLMIRROR-${tenantId.slice(0, 8)}`;
+
+      // Gera token unico (32 bytes hex)
+      const { randomBytes } = await import("node:crypto");
+      const connectorToken = randomBytes(32).toString("hex");
+
+      // URL do endpoint receptor — usa a URL base da request
+      const requestUrl = new URL(c.req.url);
+      const baseUrl = `${requestUrl.protocol}//${requestUrl.host}`;
+      const streamUrl = `${baseUrl}/api/v1/zabbix/connector/stream`;
+
+      // Salva token no banco antes de criar o connector no Zabbix
+      const updateResult = await query(
+        `UPDATE public.tenant_routes
+         SET zabbix_connector_token = $1
+         WHERE tenant_id = $2 AND status = 'active'`,
+        [connectorToken, tenantId],
+      );
+
+      if (updateResult.error) {
+        return c.json(
+          {
+            error: {
+              code: "DB_ERROR",
+              message: "Erro ao salvar token do connector",
+            },
+          },
+          500,
+        );
+      }
+
+      // Cria o connector no Zabbix
+      const result = await ctx.client.createConnector({
+        name: connectorName,
+        url: streamUrl,
+        data_type: dataType,
+        token: connectorToken,
+      });
+
+      return c.json({
+        ok: true,
+        connectorids: result.connectorids,
+        stream_url: streamUrl,
+        data_type: dataType,
+      });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
+  // DELETE /api/v1/zabbix/connector/:id — remove connector do Zabbix e limpa token
+  zabbixRoute.delete("/connector/:id", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const connectorId = c.req.param("id");
+
+    const ctx = await createZabbixClient(tenantId);
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      // Deleta o connector no Zabbix
+      await ctx.client.rpc("connector.delete", [
+        connectorId,
+      ] as unknown as Record<string, unknown>);
+
+      // Limpa o token do banco
+      await query(
+        `UPDATE public.tenant_routes
+         SET zabbix_connector_token = NULL
+         WHERE tenant_id = $1 AND status = 'active'`,
+        [tenantId],
+      );
+
+      return c.json({ ok: true });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }

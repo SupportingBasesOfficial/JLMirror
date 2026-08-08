@@ -5,6 +5,7 @@
 import { query } from "@repo/db";
 import { cachedQuery, cacheDel, cacheGet, cacheSet } from "@repo/cache";
 import { BlindedZabbixClient, decryptTokenParts } from "@repo/zabbix";
+import { enqueueZabbixWrite } from "../../lib/zabbix-write-processor.js";
 
 export interface ZabbixTenantConfig {
   zabbix_api_url: string;
@@ -307,4 +308,17 @@ export function redactSensitiveFields<T>(data: T): T {
   }
 
   return data;
+}
+
+// Enfileira um job de escrita no Zabbix e retorna o jobId
+// As rotas usam isso para responder 202 Accepted imediatamente
+// O worker processa em background e notifica via WebSocket quando conclui
+export async function enqueueWriteJob(args: {
+  tenantId: string;
+  userId: string;
+  operation: string;
+  method: string;
+  params: Record<string, unknown>;
+}): Promise<string | undefined> {
+  return enqueueZabbixWrite(args);
 }

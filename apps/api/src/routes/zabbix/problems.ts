@@ -11,6 +11,7 @@ import {
   validationErrorResponse,
   accessDeniedResponse,
   verifyHostOwnership,
+  enqueueWriteJob,
 } from "./shared.js";
 
 export function registerProblemsRoutes(zabbixRoute: Hono) {
@@ -94,6 +95,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/acknowledge", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -107,12 +109,18 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
       const d = parsed.data;
-      const result = await ctx.client.acknowledgeEvents(
-        d.eventids,
-        d.message,
-        d.action,
-      );
-      return c.json({ ok: true, eventids: result.eventids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "event.acknowledge",
+        method: "event.acknowledge",
+        params: {
+          eventids: d.eventids,
+          message: d.message,
+          action: d.action,
+        },
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }

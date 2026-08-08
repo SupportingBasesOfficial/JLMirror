@@ -14,6 +14,7 @@ import {
   validationErrorResponse,
   accessDeniedResponse,
   verifyHostOwnership,
+  enqueueWriteJob,
 } from "./shared.js";
 
 export function registerHostRoutes(zabbixRoute: Hono) {
@@ -324,6 +325,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/hosts", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -343,8 +345,15 @@ export function registerHostRoutes(zabbixRoute: Hono) {
         ...parsed.data,
         groupids: [ctx.hostGroupId],
       };
-      const result = await ctx.client.createHost(hostData);
-      return c.json({ ok: true, hostids: result.hostids });
+      // Enfileira write — retorna 202 Accepted
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "host.create",
+        method: "host.create",
+        params: hostData,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -354,6 +363,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/hosts/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const hostId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -378,8 +388,14 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       // Nao permite alterar groupids — host deve permanecer no grupo do tenant
       const { groupids, ...updateData } = parsed.data;
       void groupids;
-      await ctx.client.updateHost(hostId, updateData);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "host.update",
+        method: "host.update",
+        params: { hostid: hostId, ...updateData },
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -389,6 +405,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/hosts/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const hostId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -403,8 +420,14 @@ export function registerHostRoutes(zabbixRoute: Hono) {
         return c.json(accessDeniedResponse(), 403);
       }
 
-      await ctx.client.deleteHost([hostId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "host.delete",
+        method: "host.delete",
+        params: [hostId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -414,6 +437,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/items", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -433,8 +457,14 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       if (!belongs) {
         return c.json(accessDeniedResponse(), 403);
       }
-      const result = await ctx.client.createItem(parsed.data);
-      return c.json({ ok: true, itemids: result.itemids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "item.create",
+        method: "item.create",
+        params: parsed.data as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -444,6 +474,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/items/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const itemId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -459,8 +490,14 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await ctx.client.updateItem(itemId, parsed.data);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "item.update",
+        method: "item.update",
+        params: { itemid: itemId, ...parsed.data } as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -470,6 +507,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/items/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const itemId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -478,14 +516,21 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     }
 
     try {
-      await ctx.client.deleteItem([itemId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "item.delete",
+        method: "item.delete",
+        params: [itemId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
   });
 
   // POST /api/v1/zabbix/items/:id/execute — forca "Check Now" em um item
+  // Executa sincrono pois e uma operacao rapida de baixo risco
   zabbixRoute.post("/items/:id/execute", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;

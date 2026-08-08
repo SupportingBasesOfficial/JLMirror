@@ -390,6 +390,24 @@ export const NAV_SECTIONS: NavSection[] = [
         flagKey: "module_zabbix",
       },
       {
+        label: "Trends",
+        href: "/dashboard/trends",
+        icon: <TrendingUp {...iconProps} />,
+        flagKey: "module_zabbix",
+      },
+      {
+        label: "Audit Log",
+        href: "/dashboard/audit-log",
+        icon: <ScrollText {...iconProps} />,
+        flagKey: "module_zabbix",
+      },
+      {
+        label: "Connectors",
+        href: "/dashboard/connectors",
+        icon: <Plug {...iconProps} />,
+        flagKey: "module_zabbix",
+      },
+      {
         label: "Meu Perfil",
         href: "/profile",
         icon: <UserRound {...iconProps} />,

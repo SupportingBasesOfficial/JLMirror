@@ -14,6 +14,7 @@ import {
   validationErrorResponse,
   accessDeniedResponse,
   verifyHostOwnership,
+  enqueueWriteJob,
 } from "./shared.js";
 
 // Le history do TSDB (zabbix_history_cache) — retorna null se nao houver dados
@@ -384,6 +385,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
   zabbixRoute.post("/triggers", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId);
     if (!ctx) {
@@ -398,8 +400,14 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      const result = await ctx.client.createTrigger(parsed.data);
-      return c.json({ ok: true, triggerids: result.triggerids });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "trigger.create",
+        method: "trigger.create",
+        params: parsed.data as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -409,6 +417,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
   zabbixRoute.put("/triggers/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const triggerId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -424,8 +433,17 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      await ctx.client.updateTrigger(triggerId, parsed.data);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "trigger.update",
+        method: "trigger.update",
+        params: { triggerid: triggerId, ...parsed.data } as Record<
+          string,
+          unknown
+        >,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
@@ -435,6 +453,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
   zabbixRoute.delete("/triggers/:id", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
+    const userId = user.sub;
     const triggerId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId);
@@ -443,8 +462,14 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     }
 
     try {
-      await ctx.client.deleteTrigger([triggerId]);
-      return c.json({ ok: true });
+      const jobId = await enqueueWriteJob({
+        tenantId,
+        userId,
+        operation: "trigger.delete",
+        method: "trigger.delete",
+        params: [triggerId] as unknown as Record<string, unknown>,
+      });
+      return c.json({ ok: true, jobId, status: "queued" }, 202);
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
     }
