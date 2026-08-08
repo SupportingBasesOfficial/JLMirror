@@ -70,14 +70,27 @@ usersRoute.get("/all", requirePermission("global:users:read"), async (c) => {
     full_name: string | null;
     is_active: boolean;
     tenant_id: string;
+    tenant_name: string;
+    tenant_type: string;
+    parent_tenant_name: string | null;
     role: string;
     scope: string;
+    must_change_password: boolean;
+    last_login_at: string | null;
   }>(
-    `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id, tu.role,
-       CASE WHEN tu.role LIKE 'global:%' THEN 'global' ELSE 'tenant' END AS scope
+    `SELECT u.id, u.email, u.full_name, u.is_active, tu.tenant_id,
+       t.name as tenant_name, t.tenant_type,
+       pt.name as parent_tenant_name,
+       tu.role,
+       CASE WHEN tu.role LIKE 'global:%' THEN 'global' ELSE 'tenant' END AS scope,
+       u.must_change_password, u.last_login_at
      FROM public.tenant_users tu
      JOIN public.users u ON u.id = tu.user_id
-     ORDER BY u.email`,
+     JOIN public.tenants t ON t.id = tu.tenant_id
+     LEFT JOIN public.tenants pt ON t.parent_tenant_id = pt.id
+     ORDER BY
+       CASE t.tenant_type WHEN 'owner' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END,
+       t.name, u.email`,
   );
 
   if (result.error) {
@@ -187,7 +200,7 @@ usersRoute.post("/", requirePermission("tenant:users:write"), async (c) => {
   );
 });
 
-// PUT /api/v1/users/:userId/role — atualiza role do usuário no tenant atual
+// PUT /api/v1/users/:userId/role — atualiza role do usuário (admin global pode especificar tenant_id)
 usersRoute.put(
   "/:userId/role",
   requirePermission("tenant:users:write"),
@@ -196,6 +209,7 @@ usersRoute.put(
     const body = await c.req.json<{
       role: string;
       scope?: "global" | "tenant";
+      tenant_id?: string;
     }>();
     const { role, scope } = body;
 
@@ -207,11 +221,11 @@ usersRoute.put(
     }
 
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const targetTenantId = body.tenant_id ?? user.tenant_id;
 
     const result = await query(
       "UPDATE public.tenant_users SET role = $1, scope = COALESCE($2, scope), updated_at = now() WHERE user_id = $3 AND tenant_id = $4",
-      [role, scope ?? null, userId, tenantId],
+      [role, scope ?? null, userId, targetTenantId],
     );
 
     if (result.error) {
@@ -236,28 +250,28 @@ usersRoute.put(
     // Auditoria
     await query(
       "SELECT public.write_audit_log($1, $2, 'user.role.update', 'user', $3, $4, NULL, NULL)",
-      [user.sub, tenantId, userId, JSON.stringify({ role, scope })],
+      [user.sub, targetTenantId, userId, JSON.stringify({ role, scope })],
     );
 
     return c.json({ updated: true });
   },
 );
 
-// PUT /api/v1/users/:userId/status — ativa/desativa usuário
+// PUT /api/v1/users/:userId/status — ativa/desativa usuário (admin global pode especificar tenant_id)
 usersRoute.put(
   "/:userId/status",
   requirePermission("tenant:users:write"),
   async (c) => {
     const userId = c.req.param("userId");
-    const body = await c.req.json<{ is_active: boolean }>();
+    const body = await c.req.json<{ is_active: boolean; tenant_id?: string }>();
     const { is_active } = body;
 
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const targetTenantId = body.tenant_id ?? user.tenant_id;
 
     const result = await query(
       "UPDATE public.users SET is_active = $1 WHERE id = $2 AND id IN (SELECT user_id FROM public.tenant_users WHERE tenant_id = $3)",
-      [is_active, userId, tenantId],
+      [is_active, userId, targetTenantId],
     );
 
     if (result.error) {
@@ -284,21 +298,22 @@ usersRoute.put(
     // Auditoria
     await query(
       "SELECT public.write_audit_log($1, $2, 'user.status.update', 'user', $3, $4, NULL, NULL)",
-      [user.sub, tenantId, userId, JSON.stringify({ is_active })],
+      [user.sub, targetTenantId, userId, JSON.stringify({ is_active })],
     );
 
     return c.json({ updated: true });
   },
 );
 
-// DELETE /api/v1/users/:userId — remove usuário do tenant atual
+// DELETE /api/v1/users/:userId — remove usuário do tenant (admin global pode especificar tenant_id)
 usersRoute.delete(
   "/:userId",
   requirePermission("tenant:users:delete"),
   async (c) => {
     const userId = c.req.param("userId");
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const url = new URL(c.req.url);
+    const targetTenantId = url.searchParams.get("tenant_id") ?? user.tenant_id;
 
     // Não permite remover a si mesmo
     if (userId === user.sub) {
@@ -315,7 +330,7 @@ usersRoute.delete(
 
     const result = await query(
       "DELETE FROM public.tenant_users WHERE user_id = $1 AND tenant_id = $2",
-      [userId, tenantId],
+      [userId, targetTenantId],
     );
 
     if (result.error) {
@@ -340,10 +355,134 @@ usersRoute.delete(
     // Auditoria
     await query(
       "SELECT public.write_audit_log($1, $2, 'user.delete', 'user', $3, NULL, NULL, NULL)",
-      [user.sub, tenantId, userId],
+      [user.sub, targetTenantId, userId],
     );
 
     return c.json({ deleted: true });
+  },
+);
+
+// PUT /api/v1/users/:userId/password — admin reseta senha de qualquer usuario
+usersRoute.put(
+  "/:userId/password",
+  requirePermission("global:users:write"),
+  async (c) => {
+    const userId = c.req.param("userId");
+    const body = await c.req.json<{
+      password: string;
+      must_change_password?: boolean;
+    }>();
+
+    if (!body.password || body.password.length < 8) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Senha deve ter no mínimo 8 caracteres",
+          },
+        },
+        400,
+      );
+    }
+
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const passwordHash = await argon2.hash(body.password);
+    const result = await query(
+      "UPDATE public.users SET password_hash = $1, must_change_password = $2 WHERE id = $3",
+      [passwordHash, body.must_change_password ?? true, userId],
+    );
+
+    if (result.error) {
+      return c.json(
+        {
+          error: { code: "UPDATE_ERROR", message: "Erro ao atualizar senha" },
+        },
+        500,
+      );
+    }
+
+    if (result.data?.rowCount === 0) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Usuário não encontrado" } },
+        404,
+      );
+    }
+
+    // Auditoria
+    await query(
+      "SELECT public.write_audit_log($1, $2, 'user.password.reset', 'user', $3, NULL, NULL, NULL)",
+      [user.sub, tenantId, userId],
+    );
+
+    return c.json({ updated: true });
+  },
+);
+
+// PUT /api/v1/users/:userId/details — admin edita detalhes do usuario (full_name)
+usersRoute.put(
+  "/:userId/details",
+  requirePermission("global:users:write"),
+  async (c) => {
+    const userId = c.req.param("userId");
+    const body = await c.req.json<{
+      full_name?: string;
+      email?: string;
+    }>();
+
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+
+    const updates: string[] = [];
+    const params: (string | null)[] = [];
+    let paramIdx = 1;
+
+    if (body.full_name !== undefined) {
+      updates.push(`full_name = $${paramIdx++}`);
+      params.push(body.full_name || null);
+    }
+    if (body.email !== undefined) {
+      updates.push(`email = $${paramIdx++}`);
+      params.push(body.email);
+    }
+
+    if (updates.length === 0) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" } },
+        400,
+      );
+    }
+
+    params.push(userId);
+    const result = await query(
+      `UPDATE public.users SET ${updates.join(", ")} WHERE id = $${paramIdx++}`,
+      params,
+    );
+
+    if (result.error) {
+      return c.json(
+        {
+          error: { code: "UPDATE_ERROR", message: "Erro ao atualizar usuário" },
+        },
+        500,
+      );
+    }
+
+    if (result.data?.rowCount === 0) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Usuário não encontrado" } },
+        404,
+      );
+    }
+
+    // Auditoria
+    await query(
+      "SELECT public.write_audit_log($1, $2, 'user.details.update', 'user', $3, $4, NULL, NULL)",
+      [user.sub, tenantId, userId, JSON.stringify(body)],
+    );
+
+    return c.json({ updated: true });
   },
 );
 
