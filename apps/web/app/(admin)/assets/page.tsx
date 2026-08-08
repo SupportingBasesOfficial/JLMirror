@@ -8,13 +8,17 @@ import {
   ArrowLeft,
   Plus,
   Folder,
-  Server,
   Network,
   Activity,
 } from "lucide-react";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
 import type { ZabbixHost } from "@repo/zabbix";
+import {
+  classifyZabbixHost,
+  ASSET_TYPE_ICONS,
+  ASSET_TYPE_LABELS,
+} from "@/lib/classify-zabbix-host";
 
 const COLORS = {
   bg: "var(--surface-0)",
@@ -909,6 +913,12 @@ export default function AssetsPage() {
                       {groupDevices.map((d) => {
                         const iface = d.interfaces?.[0];
                         const isOnline = d.status === "0";
+                        const classification = classifyZabbixHost(d);
+                        const typeIcon =
+                          ASSET_TYPE_ICONS[classification.assetType];
+                        const typeLabel =
+                          ASSET_TYPE_LABELS[classification.assetType];
+                        const inv = d.inventory;
                         return (
                           <a
                             key={d.hostid}
@@ -922,15 +932,13 @@ export default function AssetsPage() {
                             }}
                           >
                             <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Server
-                                  size={14}
-                                  style={{
-                                    color: isOnline
-                                      ? COLORS.green
-                                      : COLORS.muted,
-                                  }}
-                                />
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="text-base shrink-0"
+                                  title={typeLabel}
+                                >
+                                  {typeIcon}
+                                </span>
                                 <span
                                   className="text-[13px] font-semibold truncate"
                                   style={{ color: COLORS.text }}
@@ -950,6 +958,27 @@ export default function AssetsPage() {
                                 {isOnline ? "ON" : "OFF"}
                               </span>
                             </div>
+                            {/* Tipo classificado */}
+                            <div className="mb-2 flex items-center gap-1.5">
+                              <span
+                                className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase"
+                                style={{
+                                  background: `${COLORS.teal}15`,
+                                  color: COLORS.teal,
+                                }}
+                              >
+                                {typeLabel}
+                              </span>
+                              {classification.confidence !== "high" && (
+                                <span
+                                  className="text-[8px]"
+                                  style={{ color: COLORS.muted }}
+                                  title={classification.reason}
+                                >
+                                  ~{classification.confidence}
+                                </span>
+                              )}
+                            </div>
                             <div
                               className="text-[10px] space-y-1"
                               style={{ color: COLORS.muted }}
@@ -961,7 +990,13 @@ export default function AssetsPage() {
                                   {iface?.port ? `:${iface.port}` : ""}
                                 </span>
                               </div>
-                              <div>host: {d.host}</div>
+                              {inv?.vendor && (
+                                <div>
+                                  {inv.vendor}
+                                  {inv.model ? ` ${inv.model}` : ""}
+                                </div>
+                              )}
+                              {inv?.os && <div>OS: {inv.os}</div>}
                             </div>
                           </a>
                         );

@@ -16,7 +16,9 @@ export interface ZabbixHost {
   groups?: ZabbixHostGroup[];
   proxyid?: string;
   templates?: ZabbixTemplate[];
+  parentTemplates?: ZabbixTemplate[];
   macros?: ZabbixMacro[];
+  inventory?: ZabbixHostInventory;
 }
 
 export interface ZabbixInterface {
@@ -34,6 +36,17 @@ export interface ZabbixHostGroup {
   groupid: string;
   name: string;
   hosts?: ZabbixHost[];
+}
+
+export interface ZabbixHostInventory {
+  type?: string;
+  os?: string;
+  serialno_a?: string;
+  vendor?: string;
+  model?: string;
+  location?: string;
+  tag?: string;
+  [key: string]: string | undefined;
 }
 
 export interface ZabbixTemplate {
@@ -570,6 +583,16 @@ export class BlindedZabbixClient {
       output: ["hostid", "host", "name", "status"],
       selectInterfaces: ["ip", "type", "port", "dns"],
       selectHostGroups: ["groupid", "name"],
+      selectParentTemplates: ["templateid", "host", "name"],
+      selectInventory: [
+        "type",
+        "os",
+        "serialno_a",
+        "vendor",
+        "model",
+        "location",
+        "tag",
+      ],
     };
     if (hostGroupId) {
       params.groupids = hostGroupId;
