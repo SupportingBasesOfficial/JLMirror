@@ -2,10 +2,19 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, ArrowLeft, Plus } from "lucide-react";
+import { useState, useMemo } from "react";
+import {
+  RefreshCw,
+  ArrowLeft,
+  Plus,
+  Folder,
+  Server,
+  Network,
+  Activity,
+} from "lucide-react";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
+import type { ZabbixHost } from "@repo/zabbix";
 
 const COLORS = {
   bg: "var(--surface-0)",
@@ -190,6 +199,41 @@ export default function AssetsPage() {
   const { data: stats, mutate: mutateStats } =
     useApi<AssetStats>("/api/assets/stats");
   const assets = aData?.assets ?? [];
+
+  // Dispositivos do Zabbix — busca todos os hosts monitorados
+  const {
+    data: zData,
+    isLoading: zLoading,
+    mutate: mutateZabbix,
+  } = useApi<{ devices: ZabbixHost[] }>("/api/zabbix/devices");
+  const zDevices = useMemo(() => zData?.devices ?? [], [zData]);
+
+  // Agrupa dispositivos do Zabbix por host group
+  const zabbixByGroup = useMemo(() => {
+    const groups: Record<string, { groupName: string; devices: ZabbixHost[] }> =
+      {};
+    for (const d of zDevices) {
+      const hg = d.hostgroups ?? d.groups ?? [];
+      if (hg.length === 0) {
+        const key = "__sem_grupo";
+        if (!groups[key])
+          groups[key] = { groupName: "Sem categoria", devices: [] };
+        groups[key].devices.push(d);
+      } else {
+        for (const g of hg) {
+          if (!groups[g.groupid])
+            groups[g.groupid] = { groupName: g.name, devices: [] };
+          groups[g.groupid].devices.push(d);
+        }
+      }
+    }
+    return Object.entries(groups).sort((a, b) =>
+      a[1].groupName.localeCompare(b[1].groupName),
+    );
+  }, [zDevices]);
+
+  const zOnline = zDevices.filter((d) => d.status === "0").length;
+  const zOffline = zDevices.length - zOnline;
 
   // Form
   const [fTag, setFTag] = useState("");
@@ -764,6 +808,170 @@ export default function AssetsPage() {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Dispositivos do Zabbix agrupados por host group */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>
+              Dispositivos Monitorados (Zabbix)
+            </h2>
+            <p className="text-[11px]" style={{ color: COLORS.muted }}>
+              Todos os hosts sincronizados do Zabbix, agrupados por host group
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className="text-[11px] flex items-center gap-1"
+              style={{ color: COLORS.green }}
+            >
+              <Activity size={12} /> {zOnline} online
+            </span>
+            <span
+              className="text-[11px] flex items-center gap-1"
+              style={{ color: COLORS.red }}
+            >
+              <Activity size={12} /> {zOffline} offline
+            </span>
+            <span className="text-[11px]" style={{ color: COLORS.muted }}>
+              {zDevices.length} total
+            </span>
+            <button
+              onClick={() => mutateZabbix()}
+              className="text-[12px] px-3 py-1.5 rounded border"
+              style={{
+                background: COLORS.card,
+                border: `1px solid ${COLORS.border}`,
+                color: COLORS.muted,
+                cursor: "pointer",
+              }}
+            >
+              <RefreshCw size={12} className="inline" /> Zabbix
+            </button>
+          </div>
+        </div>
+
+        {zLoading ? (
+          <LoadingState label="Carregando dispositivos do Zabbix..." />
+        ) : zDevices.length === 0 ? (
+          <div
+            className="rounded-xl p-6 text-center text-[12px]"
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.muted,
+            }}
+          >
+            Nenhum dispositivo monitorado no Zabbix
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {zabbixByGroup.map(
+              ([groupId, { groupName, devices: groupDevices }]) => {
+                const gOnline = groupDevices.filter(
+                  (d) => d.status === "0",
+                ).length;
+                const gOffline = groupDevices.length - gOnline;
+                return (
+                  <div key={groupId}>
+                    {/* Header do grupo */}
+                    <div
+                      className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg"
+                      style={{
+                        background: COLORS.card,
+                        border: `1px solid ${COLORS.border}`,
+                      }}
+                    >
+                      <Folder
+                        size={16}
+                        className="shrink-0"
+                        style={{ color: COLORS.teal }}
+                      />
+                      <span
+                        className="text-sm font-semibold"
+                        style={{ color: COLORS.teal }}
+                      >
+                        {groupName}
+                      </span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: COLORS.muted }}
+                      >
+                        ({groupDevices.length} · {gOnline} online · {gOffline}{" "}
+                        offline)
+                      </span>
+                    </div>
+
+                    {/* Grid de devices do grupo */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {groupDevices.map((d) => {
+                        const iface = d.interfaces?.[0];
+                        const isOnline = d.status === "0";
+                        return (
+                          <a
+                            key={d.hostid}
+                            href={`/dashboard/devices/${d.hostid}`}
+                            className="rounded-lg p-3 transition-all hover:scale-[1.02]"
+                            style={{
+                              background: COLORS.card,
+                              border: `1px solid ${COLORS.border}`,
+                              cursor: "pointer",
+                              textDecoration: "none",
+                            }}
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Server
+                                  size={14}
+                                  style={{
+                                    color: isOnline
+                                      ? COLORS.green
+                                      : COLORS.muted,
+                                  }}
+                                />
+                                <span
+                                  className="text-[13px] font-semibold truncate"
+                                  style={{ color: COLORS.text }}
+                                >
+                                  {d.name}
+                                </span>
+                              </div>
+                              <span
+                                className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0"
+                                style={{
+                                  background: isOnline
+                                    ? `${COLORS.green}15`
+                                    : `${COLORS.red}15`,
+                                  color: isOnline ? COLORS.green : COLORS.red,
+                                }}
+                              >
+                                {isOnline ? "ON" : "OFF"}
+                              </span>
+                            </div>
+                            <div
+                              className="text-[10px] space-y-1"
+                              style={{ color: COLORS.muted }}
+                            >
+                              <div className="flex items-center gap-1">
+                                <Network size={10} />
+                                <span>
+                                  {iface?.ip ?? iface?.dns ?? "—"}
+                                  {iface?.port ? `:${iface.port}` : ""}
+                                </span>
+                              </div>
+                              <div>host: {d.host}</div>
+                            </div>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              },
+            )}
+          </div>
         )}
       </div>
 
