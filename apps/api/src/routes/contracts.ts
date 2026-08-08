@@ -73,6 +73,28 @@ const createWorkLogSchema = z.object({
 
 const updateWorkLogSchema = createWorkLogSchema.partial();
 
+const startWorkLogSchema = z.object({
+  ticket_id: z.string().uuid(),
+  contract_id: z.string().uuid().optional(),
+  description: z.string().min(1).max(5000),
+  work_type: z.enum([
+    "diagnosis",
+    "fix",
+    "monitoring",
+    "meeting",
+    "research",
+    "travel",
+    "other",
+  ]),
+  billable: z.boolean().default(true),
+});
+
+const finishWorkLogSchema = z.object({
+  adjusted_minutes: z.number().int().min(1).optional(),
+  description: z.string().max(5000).optional(),
+  billable: z.boolean().optional(),
+});
+
 // ========== Contracts CRUD ==========
 
 // GET /api/v1/contracts — lista contratos do tenant
@@ -698,5 +720,350 @@ contractsRoute.get(
     );
 
     return c.json({ work_logs: result.data?.rows ?? [] });
+  },
+);
+
+// ===================================================================
+// TIMER ENDPOINTS — iniciar/pausar/retomar/finalizar com revisao
+// ===================================================================
+
+// POST /api/v1/contracts/work-logs/start — inicia timer
+contractsRoute.post(
+  "/work-logs/start",
+  requirePermission("tickets:write"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+
+    const parsed = startWorkLogSchema.safeParse(bodyResult.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Dados invalidos",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const d = parsed.data;
+
+    // Se contract_id nao fornecido, busca contrato ativo do tenant
+    let contractId: string | null = d.contract_id ?? null;
+    if (!contractId) {
+      const activeContract = await query<{ id: string }>(
+        `SELECT id FROM public.tenant_contracts WHERE tenant_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+        [tenantId],
+      );
+      contractId = activeContract.data?.rows[0]?.id ?? null;
+    }
+
+    const result = await query<{ id: string; started_at: string }>(
+      `INSERT INTO public.ticket_work_logs
+        (tenant_id, ticket_id, contract_id, user_id, user_name,
+         started_at, minutes_worked, pause_minutes,
+         description, work_type, billable,
+         status, total_seconds)
+       VALUES ($1, $2, $3, $4, $5, now(), 0, 0, $6, $7, $8, 'running', 0)
+       RETURNING id, started_at`,
+      [
+        tenantId,
+        d.ticket_id,
+        contractId,
+        user?.sub ?? null,
+        user?.sub ?? "Sistema",
+        d.description,
+        d.work_type,
+        d.billable,
+      ],
+    );
+
+    if (!result.data?.rows[0]) {
+      return c.json(
+        {
+          error: { code: "CREATE_ERROR", message: "Erro ao iniciar work log" },
+        },
+        500,
+      );
+    }
+
+    return c.json(
+      {
+        id: result.data.rows[0].id,
+        started_at: result.data.rows[0].started_at,
+        status: "running",
+      },
+      201,
+    );
+  },
+);
+
+// POST /api/v1/contracts/work-logs/:logId/pause — pausa timer (retorna tempo para revisao)
+contractsRoute.post(
+  "/work-logs/:logId/pause",
+  requirePermission("tickets:write"),
+  async (c) => {
+    const logId = c.req.param("logId");
+    const user = c.get("user");
+
+    try {
+      const result = await query<{
+        id: string;
+        elapsed_seconds: number;
+        total_seconds: number;
+        started_at: string;
+        last_resumed_at: string | null;
+      }>("SELECT * FROM public.pause_work_log($1, $2)", [
+        logId,
+        user?.sub ?? null,
+      ]);
+
+      if (!result.data?.rows[0]) {
+        return c.json(
+          {
+            error: { code: "PAUSE_ERROR", message: "Erro ao pausar work log" },
+          },
+          500,
+        );
+      }
+
+      const r = result.data.rows[0];
+      return c.json({
+        id: r.id,
+        elapsed_seconds: r.elapsed_seconds,
+        total_seconds: r.total_seconds,
+        total_minutes: Math.floor(r.total_seconds / 60),
+        started_at: r.started_at,
+        last_resumed_at: r.last_resumed_at,
+        status: "paused",
+      });
+    } catch (err) {
+      return c.json(
+        {
+          error: {
+            code: "PAUSE_ERROR",
+            message: err instanceof Error ? err.message : "Erro ao pausar",
+          },
+        },
+        400,
+      );
+    }
+  },
+);
+
+// POST /api/v1/contracts/work-logs/:logId/resume — retoma timer pausado
+contractsRoute.post(
+  "/work-logs/:logId/resume",
+  requirePermission("tickets:write"),
+  async (c) => {
+    const logId = c.req.param("logId");
+    const user = c.get("user");
+
+    try {
+      const result = await query<{
+        id: string;
+        total_seconds: number;
+        status: string;
+      }>("SELECT * FROM public.resume_work_log($1, $2)", [
+        logId,
+        user?.sub ?? null,
+      ]);
+
+      if (!result.data?.rows[0]) {
+        return c.json(
+          {
+            error: {
+              code: "RESUME_ERROR",
+              message: "Erro ao retomar work log",
+            },
+          },
+          500,
+        );
+      }
+
+      return c.json({
+        id: result.data.rows[0].id,
+        total_seconds: result.data.rows[0].total_seconds,
+        status: "running",
+      });
+    } catch (err) {
+      return c.json(
+        {
+          error: {
+            code: "RESUME_ERROR",
+            message: err instanceof Error ? err.message : "Erro ao retomar",
+          },
+        },
+        400,
+      );
+    }
+  },
+);
+
+// POST /api/v1/contracts/work-logs/:logId/finish — finaliza timer com revisao manual
+contractsRoute.post(
+  "/work-logs/:logId/finish",
+  requirePermission("tickets:write"),
+  async (c) => {
+    const logId = c.req.param("logId");
+    const user = c.get("user");
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+
+    const parsed = finishWorkLogSchema.safeParse(bodyResult.data ?? {});
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+        400,
+      );
+    }
+
+    const d = parsed.data;
+
+    try {
+      const result = await query<{
+        id: string;
+        elapsed_seconds: number;
+        total_seconds: number;
+        total_minutes: number;
+        started_at: string;
+        ended_at: string;
+        status: string;
+      }>("SELECT * FROM public.finish_work_log($1, $2, $3)", [
+        logId,
+        user?.sub ?? null,
+        d.adjusted_minutes ?? null,
+      ]);
+
+      if (!result.data?.rows[0]) {
+        return c.json(
+          {
+            error: {
+              code: "FINISH_ERROR",
+              message: "Erro ao finalizar work log",
+            },
+          },
+          500,
+        );
+      }
+
+      const r = result.data.rows[0];
+
+      // Se description ou billable foram atualizados, aplica
+      if (d.description || d.billable !== undefined) {
+        const updates: string[] = [];
+        const params: unknown[] = [];
+        let idx = 1;
+        if (d.description) {
+          updates.push(`description = $${idx++}`);
+          params.push(d.description);
+        }
+        if (d.billable !== undefined) {
+          updates.push(`billable = $${idx++}`);
+          params.push(d.billable);
+        }
+        params.push(logId);
+        await query(
+          `UPDATE public.ticket_work_logs SET ${updates.join(", ")} WHERE id = $${idx}`,
+          params,
+        );
+      }
+
+      // Recalcula amount baseado no contrato
+      const logResult = await query<{
+        contract_id: string | null;
+        work_type: string;
+        minutes_worked: number;
+      }>(
+        "SELECT contract_id, work_type, minutes_worked FROM public.ticket_work_logs WHERE id = $1",
+        [logId],
+      );
+      const logRow = logResult.data?.rows[0];
+      if (logRow?.contract_id) {
+        const contractResult = await query(
+          "SELECT rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research, rate_default FROM public.tenant_contracts WHERE id = $1",
+          [logRow.contract_id],
+        );
+        const contract = contractResult.data?.rows[0];
+        if (contract) {
+          const rateMap: Record<string, string> = {
+            diagnosis: "rate_diagnosis",
+            fix: "rate_fix",
+            monitoring: "rate_monitoring",
+            meeting: "rate_meeting",
+            research: "rate_research",
+          };
+          const rateField = rateMap[logRow.work_type];
+          const rate = rateField
+            ? (contract[rateField] as number)
+            : (contract.rate_default as number);
+          if (rate) {
+            const amount = (logRow.minutes_worked / 60) * rate;
+            await query(
+              "UPDATE public.ticket_work_logs SET rate_applied = $1, amount = $2 WHERE id = $3",
+              [rate, amount, logId],
+            );
+          }
+        }
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'work_log.finish', 'ticket_work_log', $2, $3, NULL, NULL)",
+          [
+            user.sub,
+            logId,
+            JSON.stringify({
+              total_minutes: r.total_minutes,
+              adjusted: !!d.adjusted_minutes,
+            }),
+          ],
+        );
+      }
+
+      return c.json({
+        id: r.id,
+        elapsed_seconds: r.elapsed_seconds,
+        total_seconds: r.total_seconds,
+        total_minutes: r.total_minutes,
+        started_at: r.started_at,
+        ended_at: r.ended_at,
+        status: "finished",
+      });
+    } catch (err) {
+      return c.json(
+        {
+          error: {
+            code: "FINISH_ERROR",
+            message: err instanceof Error ? err.message : "Erro ao finalizar",
+          },
+        },
+        400,
+      );
+    }
+  },
+);
+
+// GET /api/v1/contracts/work-logs/active — busca timer em andamento do usuario
+contractsRoute.get(
+  "/work-logs/active",
+  requirePermission("tickets:read"),
+  async (c) => {
+    const user = c.get("user");
+    const result = await query(
+      `SELECT wl.*, t.ticket_number, t.subject as ticket_subject
+       FROM public.ticket_work_logs wl
+       LEFT JOIN public.tickets t ON wl.ticket_id = t.id
+       WHERE wl.user_id = $1 AND wl.status IN ('running', 'paused')
+       ORDER BY wl.started_at DESC`,
+      [user?.sub],
+    );
+
+    return c.json({ active_timers: result.data?.rows ?? [] });
   },
 );

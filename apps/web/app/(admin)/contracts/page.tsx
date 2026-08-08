@@ -2,7 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus,
   RefreshCw,
@@ -13,6 +13,13 @@ import {
   Calendar,
   FileClock,
   X,
+  Play,
+  Pause,
+  Square,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Timer,
 } from "lucide-react";
 import { useApi } from "@/lib/use-api";
 import { LoadingState } from "@/components/ui/state-display";
@@ -40,10 +47,21 @@ interface Contract {
   period_type: string;
   billing_day: number;
   carry_over_rule: string;
+  carry_over_limit_hours: number | null;
+  carry_over_expire_days: number | null;
   overtime_enabled: boolean;
+  overtime_rate: number | null;
+  rate_diagnosis: number | null;
+  rate_fix: number | null;
+  rate_monitoring: number | null;
+  rate_meeting: number | null;
+  rate_research: number | null;
+  rate_default: number | null;
   is_active: boolean;
   start_date: string;
   end_date: string | null;
+  auto_close_tickets_on_expire: boolean;
+  notes: string | null;
   used_hours_current_month: string | null;
   total_work_logs: string | null;
 }
@@ -62,6 +80,26 @@ interface HourBankSummary {
   used_by_type: Record<string, number>;
 }
 
+interface WorkLog {
+  id: string;
+  ticket_id: string;
+  contract_id: string | null;
+  user_name: string;
+  started_at: string;
+  ended_at: string | null;
+  minutes_worked: number;
+  pause_minutes: number;
+  description: string;
+  work_type: string;
+  billable: boolean;
+  status: string;
+  total_seconds: number;
+  rate_applied: number | null;
+  amount: number;
+  ticket_number?: string;
+  ticket_subject?: string;
+}
+
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   monthly_support: "Suporte Mensal",
   project_fixed: "Projeto (Horas Fixas)",
@@ -76,6 +114,30 @@ const CARRY_OVER_LABELS: Record<string, string> = {
   limited: "Acúmulo limitado",
   expire: "Acúmulo com expiração",
 };
+
+const WORK_TYPE_LABELS: Record<string, string> = {
+  diagnosis: "Diagnóstico",
+  fix: "Correção",
+  monitoring: "Monitoramento",
+  meeting: "Reunião",
+  research: "Pesquisa",
+  travel: "Deslocamento",
+  other: "Outro",
+};
+
+const PERIOD_LABELS: Record<string, string> = {
+  monthly: "Mensal",
+  quarterly: "Trimestral",
+  yearly: "Anual",
+  total: "Total",
+};
+
+function formatSeconds(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function ContractsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -97,7 +159,16 @@ export default function ContractsPage() {
       : null,
   );
 
+  const { data: workLogsData, mutate: mutateWorkLogs } = useApi<{
+    work_logs: WorkLog[];
+  }>(
+    selectedContractId
+      ? `/api/v1/contracts/${selectedContractId}/work-logs?limit=50`
+      : null,
+  );
+
   const contracts = contractsData?.contracts ?? [];
+  const workLogs = workLogsData?.work_logs ?? [];
 
   const handleCreate = useCallback(
     async (formData: Record<string, string>) => {
@@ -229,7 +300,8 @@ export default function ContractsPage() {
             className="text-center py-12 rounded-xl border"
             style={{ borderColor: COLORS.border, color: COLORS.muted }}
           >
-            Nenhum contrato cadastrado. Clique em "Novo Contrato" para começar.
+            Nenhum contrato cadastrado. Clique em &quot;Novo Contrato&quot; para
+            começar.
           </div>
         ) : (
           contracts.map((contract) => (
@@ -247,6 +319,8 @@ export default function ContractsPage() {
                   ? summaryData?.summary
                   : undefined
               }
+              workLogs={selectedContractId === contract.id ? workLogs : []}
+              onWorkLogsChange={mutateWorkLogs}
             />
           ))
         )}
@@ -298,11 +372,15 @@ function ContractCard({
   isSelected,
   onSelect,
   summary,
+  workLogs,
+  onWorkLogsChange,
 }: {
   contract: Contract;
   isSelected: boolean;
   onSelect: () => void;
   summary?: HourBankSummary;
+  workLogs: WorkLog[];
+  onWorkLogsChange: () => void;
 }) {
   const usedHours = Number(contract.used_hours_current_month ?? 0);
   const remainingHours = Math.max(contract.contracted_hours - usedHours, 0);
@@ -314,17 +392,25 @@ function ContractCard({
 
   return (
     <div
-      className="rounded-xl border transition-all cursor-pointer"
+      className="rounded-xl border transition-all"
       style={{
         background: COLORS.card,
         borderColor: isSelected ? COLORS.teal : COLORS.border,
         borderWidth: isSelected ? 2 : 1,
       }}
-      onClick={onSelect}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4">
+      {/* Header — clicavel para expandir */}
+      <button
+        type="button"
+        onClick={onSelect}
+        className="w-full text-left p-4 flex items-center justify-between"
+      >
         <div className="flex items-center gap-3">
+          {isSelected ? (
+            <ChevronDown size={20} style={{ color: COLORS.muted }} />
+          ) : (
+            <ChevronRight size={20} style={{ color: COLORS.muted }} />
+          )}
           <div
             className="w-10 h-10 rounded-lg flex items-center justify-center"
             style={{ background: `${COLORS.teal}20` }}
@@ -352,6 +438,14 @@ function ContractCard({
                   · #{contract.contract_number}
                 </span>
               )}
+              {!contract.is_active && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full"
+                  style={{ background: `${COLORS.red}20`, color: COLORS.red }}
+                >
+                  Inativo
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -361,12 +455,12 @@ function ContractCard({
           </p>
           <p className="text-xs" style={{ color: COLORS.muted }}>
             {contract.contracted_hours}h/
-            {contract.period_type === "monthly" ? "mês" : contract.period_type}
+            {PERIOD_LABELS[contract.period_type] ?? contract.period_type}
           </p>
         </div>
-      </div>
+      </button>
 
-      {/* Usage Bar */}
+      {/* Usage Bar — sempre visivel */}
       <div className="px-4 pb-4">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs" style={{ color: COLORS.muted }}>
@@ -402,67 +496,259 @@ function ContractCard({
         </div>
       </div>
 
-      {/* Summary Details (quando selecionado) */}
-      {isSelected && summary && (
+      {/* Detalhes completos — quando expandido */}
+      {isSelected && (
         <div
-          className="border-t p-4 grid grid-cols-2 md:grid-cols-4 gap-4"
+          className="border-t p-4 space-y-4"
           style={{ borderColor: COLORS.border }}
         >
-          <SummaryItem
-            label="Horas Contratadas"
-            value={`${summary.contracted_hours}h`}
-            icon={<Calendar size={16} />}
-            color={COLORS.blue}
-          />
-          <SummaryItem
-            label="Horas Usadas"
-            value={`${Number(summary.used_hours).toFixed(1)}h`}
-            icon={<Clock size={16} />}
-            color={COLORS.amber}
-          />
-          <SummaryItem
-            label="Saldo Atual"
-            value={`${Number(summary.remaining_hours).toFixed(1)}h`}
-            icon={<TrendingUp size={16} />}
-            color={
-              Number(summary.remaining_hours) > 0 ? COLORS.green : COLORS.red
-            }
-          />
-          <SummaryItem
-            label="Excedente"
-            value={`${Number(summary.overtime_hours).toFixed(1)}h`}
-            icon={<TrendingDown size={16} />}
-            color={
-              Number(summary.overtime_hours) > 0 ? COLORS.red : COLORS.muted
-            }
-          />
-          {Object.keys(summary.used_by_type).length > 0 && (
-            <div className="col-span-2 md:col-span-4">
+          {/* Dados completos do contrato */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <DetailItem
+              label="Tipo"
+              value={
+                CONTRACT_TYPE_LABELS[contract.contract_type] ??
+                contract.contract_type
+              }
+            />
+            <DetailItem
+              label="Período"
+              value={
+                PERIOD_LABELS[contract.period_type] ?? contract.period_type
+              }
+            />
+            <DetailItem
+              label="Horas Contratadas"
+              value={`${contract.contracted_hours}h`}
+            />
+            <DetailItem
+              label="Dia de Fechamento"
+              value={`Dia ${contract.billing_day}`}
+            />
+            <DetailItem
+              label="Início"
+              value={new Date(contract.start_date).toLocaleDateString("pt-BR")}
+            />
+            <DetailItem
+              label="Fim"
+              value={
+                contract.end_date
+                  ? new Date(contract.end_date).toLocaleDateString("pt-BR")
+                  : "Indeterminado"
+              }
+            />
+            <DetailItem
+              label="Carry Over"
+              value={
+                CARRY_OVER_LABELS[contract.carry_over_rule] ??
+                contract.carry_over_rule
+              }
+            />
+            {contract.carry_over_limit_hours !== null && (
+              <DetailItem
+                label="Limite Carry Over"
+                value={`${contract.carry_over_limit_hours}h`}
+              />
+            )}
+            {contract.carry_over_expire_days !== null && (
+              <DetailItem
+                label="Expira em"
+                value={`${contract.carry_over_expire_days} dias`}
+              />
+            )}
+            <DetailItem
+              label="Overtime"
+              value={contract.overtime_enabled ? "Habilitado" : "Desabilitado"}
+            />
+            {contract.overtime_rate && (
+              <DetailItem
+                label="Taxa Overtime"
+                value={`R$ ${contract.overtime_rate.toFixed(2)}/h`}
+              />
+            )}
+            <DetailItem
+              label="Auto-fechar tickets"
+              value={contract.auto_close_tickets_on_expire ? "Sim" : "Não"}
+            />
+          </div>
+
+          {/* Rates */}
+          {(contract.rate_default ||
+            contract.rate_diagnosis ||
+            contract.rate_fix) && (
+            <div>
               <p
                 className="text-xs font-medium mb-2"
                 style={{ color: COLORS.muted }}
               >
-                Uso por tipo:
+                Taxas por tipo de trabalho:
               </p>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(summary.used_by_type).map(([type, minutes]) => (
-                  <span
-                    key={type}
-                    className="text-xs px-2 py-1 rounded-md"
-                    style={{
-                      background: `${COLORS.border}30`,
-                      color: COLORS.text,
-                    }}
-                  >
-                    {type}: {(Number(minutes) / 60).toFixed(1)}h
-                  </span>
-                ))}
+                {contract.rate_default && (
+                  <RateBadge label="Padrão" value={contract.rate_default} />
+                )}
+                {contract.rate_diagnosis && (
+                  <RateBadge
+                    label="Diagnóstico"
+                    value={contract.rate_diagnosis}
+                  />
+                )}
+                {contract.rate_fix && (
+                  <RateBadge label="Correção" value={contract.rate_fix} />
+                )}
+                {contract.rate_monitoring && (
+                  <RateBadge
+                    label="Monitoramento"
+                    value={contract.rate_monitoring}
+                  />
+                )}
+                {contract.rate_meeting && (
+                  <RateBadge label="Reunião" value={contract.rate_meeting} />
+                )}
+                {contract.rate_research && (
+                  <RateBadge label="Pesquisa" value={contract.rate_research} />
+                )}
               </div>
             </div>
           )}
+
+          {/* Notes */}
+          {contract.notes && (
+            <div>
+              <p
+                className="text-xs font-medium mb-1"
+                style={{ color: COLORS.muted }}
+              >
+                Observações:
+              </p>
+              <p
+                className="text-sm p-3 rounded-lg"
+                style={{
+                  background: COLORS.bg,
+                  border: `1px solid ${COLORS.border}`,
+                  color: COLORS.text,
+                }}
+              >
+                {contract.notes}
+              </p>
+            </div>
+          )}
+
+          {/* Hour Bank Summary */}
+          {summary && (
+            <div
+              className="grid grid-cols-2 md:grid-cols-4 gap-4 p-3 rounded-lg"
+              style={{ background: COLORS.bg }}
+            >
+              <SummaryItem
+                label="Horas Contratadas"
+                value={`${summary.contracted_hours}h`}
+                icon={<Calendar size={16} />}
+                color={COLORS.blue}
+              />
+              <SummaryItem
+                label="Horas Usadas"
+                value={`${Number(summary.used_hours).toFixed(1)}h`}
+                icon={<Clock size={16} />}
+                color={COLORS.amber}
+              />
+              <SummaryItem
+                label="Saldo Atual"
+                value={`${Number(summary.remaining_hours).toFixed(1)}h`}
+                icon={<TrendingUp size={16} />}
+                color={
+                  Number(summary.remaining_hours) > 0
+                    ? COLORS.green
+                    : COLORS.red
+                }
+              />
+              <SummaryItem
+                label="Excedente"
+                value={`${Number(summary.overtime_hours).toFixed(1)}h`}
+                icon={<TrendingDown size={16} />}
+                color={
+                  Number(summary.overtime_hours) > 0 ? COLORS.red : COLORS.muted
+                }
+              />
+              {Number(summary.carried_over_hours) > 0 && (
+                <SummaryItem
+                  label="Carry Over"
+                  value={`${Number(summary.carried_over_hours).toFixed(1)}h`}
+                  icon={<TrendingUp size={16} />}
+                  color={COLORS.blue}
+                />
+              )}
+              <SummaryItem
+                label="Próximo Fechamento"
+                value={new Date(summary.next_billing_date).toLocaleDateString(
+                  "pt-BR",
+                )}
+                icon={<Calendar size={16} />}
+                color={COLORS.teal}
+              />
+              {Object.keys(summary.used_by_type).length > 0 && (
+                <div className="col-span-2 md:col-span-4">
+                  <p
+                    className="text-xs font-medium mb-2"
+                    style={{ color: COLORS.muted }}
+                  >
+                    Uso por tipo:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(summary.used_by_type).map(
+                      ([type, minutes]) => (
+                        <span
+                          key={type}
+                          className="text-xs px-2 py-1 rounded-md"
+                          style={{
+                            background: `${COLORS.border}30`,
+                            color: COLORS.text,
+                          }}
+                        >
+                          {WORK_TYPE_LABELS[type] ?? type}:{" "}
+                          {(Number(minutes) / 60).toFixed(1)}h
+                        </span>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Work Logs Section */}
+          <WorkLogsSection
+            contractId={contract.id}
+            workLogs={workLogs}
+            onRefresh={onWorkLogsChange}
+          />
         </div>
       )}
     </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs" style={{ color: COLORS.muted }}>
+        {label}
+      </p>
+      <p className="text-sm font-medium" style={{ color: COLORS.text }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RateBadge({ label, value }: { label: string; value: number }) {
+  return (
+    <span
+      className="text-xs px-2 py-1 rounded-md"
+      style={{ background: `${COLORS.green}20`, color: COLORS.green }}
+    >
+      {label}: R$ {value.toFixed(2)}/h
+    </span>
   );
 }
 
@@ -491,6 +777,804 @@ function SummaryItem({
     </div>
   );
 }
+
+// ===================================================================
+// WORK LOGS SECTION — lista + timer com iniciar/pausar/finalizar
+// ===================================================================
+
+function WorkLogsSection({
+  contractId,
+  workLogs,
+  onRefresh,
+}: {
+  contractId: string;
+  workLogs: WorkLog[];
+  onRefresh: () => void;
+}) {
+  const [showStartForm, setShowStartForm] = useState(false);
+  const [reviewModal, setReviewModal] = useState<{
+    logId: string;
+    action: "pause" | "finish";
+    elapsedSeconds: number;
+    totalSeconds: number;
+    totalMinutes: number;
+  } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleStart = useCallback(
+    async (data: {
+      ticket_id: string;
+      description: string;
+      work_type: string;
+      billable: boolean;
+    }) => {
+      setActionLoading(true);
+      try {
+        await apiFetchWithProgress(
+          "/api/v1/contracts/work-logs/start",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ticket_id: data.ticket_id,
+              contract_id: contractId,
+              description: data.description,
+              work_type: data.work_type,
+              billable: data.billable,
+            }),
+          },
+          () => {},
+        );
+        await onRefresh();
+        setShowStartForm(false);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Erro ao iniciar timer");
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [contractId, onRefresh],
+  );
+
+  const handlePause = useCallback(async (logId: string) => {
+    setActionLoading(true);
+    try {
+      const res = await apiFetchWithProgress<{
+        id: string;
+        elapsed_seconds: number;
+        total_seconds: number;
+        total_minutes: number;
+      }>(
+        `/api/v1/contracts/work-logs/${logId}/pause`,
+        { method: "POST" },
+        () => {},
+      );
+      setReviewModal({
+        logId: res.id,
+        action: "pause",
+        elapsedSeconds: res.elapsed_seconds,
+        totalSeconds: res.total_seconds,
+        totalMinutes: res.total_minutes,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao pausar");
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
+  const handleResume = useCallback(
+    async (logId: string) => {
+      setActionLoading(true);
+      try {
+        await apiFetchWithProgress(
+          `/api/v1/contracts/work-logs/${logId}/resume`,
+          { method: "POST" },
+          () => {},
+        );
+        await onRefresh();
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Erro ao retomar");
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [onRefresh],
+  );
+
+  const handleFinish = useCallback(async (logId: string) => {
+    setActionLoading(true);
+    try {
+      const res = await apiFetchWithProgress<{
+        id: string;
+        elapsed_seconds: number;
+        total_seconds: number;
+        total_minutes: number;
+      }>(
+        `/api/v1/contracts/work-logs/${logId}/finish`,
+        { method: "POST", body: JSON.stringify({}) },
+        () => {},
+      );
+      setReviewModal({
+        logId: res.id,
+        action: "finish",
+        elapsedSeconds: res.elapsed_seconds,
+        totalSeconds: res.total_seconds,
+        totalMinutes: res.total_minutes,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erro ao finalizar");
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
+  const handleConfirmReview = useCallback(
+    async (
+      adjustedMinutes: number | null,
+      description?: string,
+      billable?: boolean,
+    ) => {
+      if (!reviewModal) return;
+      setActionLoading(true);
+      try {
+        if (reviewModal.action === "finish") {
+          await apiFetchWithProgress(
+            `/api/v1/contracts/work-logs/${reviewModal.logId}/finish`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                adjusted_minutes: adjustedMinutes,
+                description: description ?? undefined,
+                billable: billable ?? undefined,
+              }),
+            },
+            () => {},
+          );
+        }
+        // Para pause: se ajustou minutos, atualiza via PUT
+        if (reviewModal.action === "pause" && adjustedMinutes !== null) {
+          await apiFetchWithProgress(
+            `/api/v1/contracts/work-logs/${reviewModal.logId}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                minutes_worked: adjustedMinutes,
+                ...(description ? { description } : {}),
+                ...(billable !== undefined ? { billable } : {}),
+              }),
+            },
+            () => {},
+          );
+        }
+        await onRefresh();
+        setReviewModal(null);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : "Erro ao confirmar");
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [reviewModal, onRefresh],
+  );
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h4
+          className="text-sm font-bold flex items-center gap-2"
+          style={{ color: COLORS.text }}
+        >
+          <Timer size={16} style={{ color: COLORS.teal }} />
+          Work Logs ({workLogs.length})
+        </h4>
+        <button
+          type="button"
+          onClick={() => setShowStartForm(true)}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+          style={{ background: COLORS.teal }}
+        >
+          <Play size={14} />
+          Iniciar Trabalho
+        </button>
+      </div>
+
+      {workLogs.length === 0 ? (
+        <p className="text-xs py-4 text-center" style={{ color: COLORS.muted }}>
+          Nenhum work log registrado para este contrato.
+        </p>
+      ) : (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {workLogs.map((log) => (
+            <WorkLogRow
+              key={log.id}
+              log={log}
+              onPause={() => handlePause(log.id)}
+              onResume={() => handleResume(log.id)}
+              onFinish={() => handleFinish(log.id)}
+              disabled={actionLoading}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Start Form Modal */}
+      {showStartForm && (
+        <StartWorkLogModal
+          onClose={() => setShowStartForm(false)}
+          onStart={handleStart}
+          loading={actionLoading}
+        />
+      )}
+
+      {/* Review Modal — pausa ou finaliza */}
+      {reviewModal && (
+        <ReviewTimeModal
+          action={reviewModal.action}
+          elapsedSeconds={reviewModal.elapsedSeconds}
+          totalSeconds={reviewModal.totalSeconds}
+          totalMinutes={reviewModal.totalMinutes}
+          loading={actionLoading}
+          onConfirm={handleConfirmReview}
+          onCancel={() => {
+            setReviewModal(null);
+            onRefresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function WorkLogRow({
+  log,
+  onPause,
+  onResume,
+  onFinish,
+  disabled,
+}: {
+  log: WorkLog;
+  onPause: () => void;
+  onResume: () => void;
+  onFinish: () => void;
+  disabled: boolean;
+}) {
+  const [liveSeconds, setLiveSeconds] = useState(log.total_seconds ?? 0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (log.status === "running") {
+      const baseSeconds = log.total_seconds ?? 0;
+      const startTime = Date.now();
+      intervalRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setLiveSeconds(baseSeconds + elapsed);
+      }, 1000);
+      return () => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+      };
+    } else {
+      setLiveSeconds(log.total_seconds ?? 0);
+    }
+  }, [log.status, log.total_seconds]);
+
+  const statusConfig: Record<
+    string,
+    { color: string; label: string; icon: React.ReactNode }
+  > = {
+    running: {
+      color: COLORS.green,
+      label: "Em execução",
+      icon: <Play size={12} />,
+    },
+    paused: {
+      color: COLORS.amber,
+      label: "Pausado",
+      icon: <Pause size={12} />,
+    },
+    finished: {
+      color: COLORS.muted,
+      label: "Finalizado",
+      icon: <CheckCircle2 size={12} />,
+    },
+  };
+  const st = statusConfig[log.status] ?? statusConfig.finished;
+
+  return (
+    <div
+      className="flex items-center gap-3 p-3 rounded-lg border"
+      style={{ background: COLORS.bg, borderColor: COLORS.border }}
+    >
+      {/* Status indicator */}
+      <div className="flex items-center gap-1.5" style={{ color: st.color }}>
+        {st.icon}
+        <span className="text-xs font-medium">{st.label}</span>
+      </div>
+
+      {/* Timer display */}
+      {log.status !== "finished" ? (
+        <span
+          className="text-sm font-mono font-bold tabular-nums"
+          style={{ color: st.color, minWidth: "80px" }}
+        >
+          {formatSeconds(liveSeconds)}
+        </span>
+      ) : (
+        <span
+          className="text-sm font-mono"
+          style={{ color: COLORS.muted, minWidth: "80px" }}
+        >
+          {log.minutes_worked}min
+        </span>
+      )}
+
+      {/* Description */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm truncate" style={{ color: COLORS.text }}>
+          {log.description}
+        </p>
+        <div
+          className="flex items-center gap-2 text-xs"
+          style={{ color: COLORS.muted }}
+        >
+          <span>{WORK_TYPE_LABELS[log.work_type] ?? log.work_type}</span>
+          {log.ticket_number && <span>· {log.ticket_number}</span>}
+          <span>· {new Date(log.started_at).toLocaleDateString("pt-BR")}</span>
+          {log.billable && (
+            <span style={{ color: COLORS.green }}>· Faturável</span>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-1">
+        {log.status === "running" && (
+          <button
+            type="button"
+            onClick={onPause}
+            disabled={disabled}
+            className="p-2 rounded-lg border transition-colors disabled:opacity-50"
+            style={{ borderColor: COLORS.amber, color: COLORS.amber }}
+            title="Pausar"
+          >
+            <Pause size={16} />
+          </button>
+        )}
+        {log.status === "paused" && (
+          <button
+            type="button"
+            onClick={onResume}
+            disabled={disabled}
+            className="p-2 rounded-lg border transition-colors disabled:opacity-50"
+            style={{ borderColor: COLORS.green, color: COLORS.green }}
+            title="Retomar"
+          >
+            <Play size={16} />
+          </button>
+        )}
+        {(log.status === "running" || log.status === "paused") && (
+          <button
+            type="button"
+            onClick={onFinish}
+            disabled={disabled}
+            className="p-2 rounded-lg border transition-colors disabled:opacity-50"
+            style={{ borderColor: COLORS.red, color: COLORS.red }}
+            title="Finalizar"
+          >
+            <Square size={16} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ===================================================================
+// START WORK LOG MODAL — form para iniciar timer
+// ===================================================================
+
+function StartWorkLogModal({
+  onClose,
+  onStart,
+  loading,
+}: {
+  onClose: () => void;
+  onStart: (data: {
+    ticket_id: string;
+    description: string;
+    work_type: string;
+    billable: boolean;
+  }) => void;
+  loading: boolean;
+}) {
+  const [formData, setFormData] = useState({
+    ticket_id: "",
+    description: "",
+    work_type: "diagnosis",
+    billable: "true",
+  });
+
+  const update = (key: string, value: string) =>
+    setFormData((prev) => ({ ...prev, [key]: value }));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.6)" }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6"
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2
+            className="text-lg font-bold flex items-center gap-2"
+            style={{ color: COLORS.text }}
+          >
+            <Play size={20} style={{ color: COLORS.green }} />
+            Iniciar Trabalho
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ color: COLORS.muted }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <Field label="Ticket ID" required>
+            <input
+              type="text"
+              value={formData.ticket_id}
+              onChange={(e) => update("ticket_id", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border"
+              style={{
+                background: COLORS.bg,
+                borderColor: COLORS.border,
+                color: COLORS.text,
+              }}
+              placeholder="UUID do ticket"
+            />
+          </Field>
+
+          <Field label="Descrição do trabalho" required>
+            <textarea
+              value={formData.description}
+              onChange={(e) => update("description", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border resize-none"
+              style={{
+                background: COLORS.bg,
+                borderColor: COLORS.border,
+                color: COLORS.text,
+              }}
+              rows={3}
+              placeholder="Ex: Análise de logs do servidor..."
+            />
+          </Field>
+
+          <Field label="Tipo de trabalho">
+            <select
+              value={formData.work_type}
+              onChange={(e) => update("work_type", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border"
+              style={{
+                background: COLORS.bg,
+                borderColor: COLORS.border,
+                color: COLORS.text,
+              }}
+            >
+              {Object.entries(WORK_TYPE_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Faturável">
+            <select
+              value={formData.billable}
+              onChange={(e) => update("billable", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border"
+              style={{
+                background: COLORS.bg,
+                borderColor: COLORS.border,
+                color: COLORS.text,
+              }}
+            >
+              <option value="true">Sim — conta no contrato</option>
+              <option value="false">Não — cortesia</option>
+            </select>
+          </Field>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 rounded-lg border font-medium"
+              style={{ borderColor: COLORS.border, color: COLORS.muted }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                onStart({
+                  ticket_id: formData.ticket_id,
+                  description: formData.description,
+                  work_type: formData.work_type,
+                  billable: formData.billable === "true",
+                })
+              }
+              disabled={loading || !formData.ticket_id || !formData.description}
+              className="flex-1 px-4 py-2 rounded-lg text-white font-medium disabled:opacity-50"
+              style={{ background: COLORS.green }}
+            >
+              {loading ? "Iniciando..." : "Iniciar Timer"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================================================================
+// REVIEW TIME MODAL — revisar e ajustar tempo antes de confirmar
+// ===================================================================
+
+function ReviewTimeModal({
+  action,
+  elapsedSeconds,
+  totalSeconds,
+  totalMinutes,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  action: "pause" | "finish";
+  elapsedSeconds: number;
+  totalSeconds: number;
+  totalMinutes: number;
+  loading: boolean;
+  onConfirm: (
+    adjustedMinutes: number | null,
+    description?: string,
+    billable?: boolean,
+  ) => void;
+  onCancel: () => void;
+}) {
+  const [adjustMode, setAdjustMode] = useState(false);
+  const [adjustedMinutes, setAdjustedMinutes] = useState(totalMinutes);
+  const [adjustedSeconds, setAdjustedSeconds] = useState(0);
+  const [description, setDescription] = useState("");
+  const [billable, setBillable] = useState(true);
+
+  const isFinish = action === "finish";
+  const title = isFinish ? "Finalizar Trabalho" : "Pausar Trabalho";
+  const confirmLabel = isFinish ? "Confirmar e Finalizar" : "Confirmar Pausa";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.6)" }}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl p-6"
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2
+            className="text-lg font-bold flex items-center gap-2"
+            style={{ color: COLORS.text }}
+          >
+            {isFinish ? (
+              <Square size={20} style={{ color: COLORS.red }} />
+            ) : (
+              <Pause size={20} style={{ color: COLORS.amber }} />
+            )}
+            {title}
+          </h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{ color: COLORS.muted }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Tempo calculado */}
+        <div className="space-y-3 mb-4">
+          <div
+            className="p-4 rounded-lg text-center"
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <p className="text-xs mb-1" style={{ color: COLORS.muted }}>
+              Tempo decorrido nesta sessão:
+            </p>
+            <p
+              className="text-2xl font-mono font-bold"
+              style={{ color: COLORS.teal }}
+            >
+              {formatSeconds(elapsedSeconds)}
+            </p>
+          </div>
+
+          <div
+            className="p-4 rounded-lg text-center"
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+            }}
+          >
+            <p className="text-xs mb-1" style={{ color: COLORS.muted }}>
+              Tempo total acumulado:
+            </p>
+            <p
+              className="text-3xl font-mono font-bold"
+              style={{ color: COLORS.text }}
+            >
+              {formatSeconds(totalSeconds)}
+            </p>
+            <p className="text-sm mt-1" style={{ color: COLORS.muted }}>
+              ({totalMinutes} minutos)
+            </p>
+          </div>
+        </div>
+
+        {/* Toggle adjust mode */}
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => setAdjustMode(!adjustMode)}
+            className="w-full text-left text-xs font-medium flex items-center gap-1"
+            style={{ color: COLORS.blue }}
+          >
+            <ChevronRight
+              size={14}
+              style={{
+                transform: adjustMode ? "rotate(90deg)" : "none",
+                transition: "transform 0.2s",
+              }}
+            />
+            Ajustar tempo manualmente
+          </button>
+
+          {adjustMode && (
+            <div
+              className="mt-3 p-3 rounded-lg space-y-3"
+              style={{
+                background: COLORS.bg,
+                border: `1px solid ${COLORS.border}`,
+              }}
+            >
+              <p className="text-xs" style={{ color: COLORS.muted }}>
+                Confira o tempo. Se necessário, ajuste os minutos antes de
+                confirmar.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Minutos">
+                  <input
+                    type="number"
+                    min="0"
+                    value={adjustedMinutes}
+                    onChange={(e) =>
+                      setAdjustedMinutes(Number(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 rounded-lg border"
+                    style={{
+                      background: COLORS.card,
+                      borderColor: COLORS.border,
+                      color: COLORS.text,
+                    }}
+                  />
+                </Field>
+                <Field label="Segundos (opcional)">
+                  <input
+                    type="number"
+                    min="0"
+                    max="59"
+                    value={adjustedSeconds}
+                    onChange={(e) =>
+                      setAdjustedSeconds(Number(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 rounded-lg border"
+                    style={{
+                      background: COLORS.card,
+                      borderColor: COLORS.border,
+                      color: COLORS.text,
+                    }}
+                  />
+                </Field>
+              </div>
+              {isFinish && (
+                <>
+                  <Field label="Descrição (opcional)">
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border resize-none"
+                      style={{
+                        background: COLORS.card,
+                        borderColor: COLORS.border,
+                        color: COLORS.text,
+                      }}
+                      rows={2}
+                      placeholder="Atualizar descrição..."
+                    />
+                  </Field>
+                  <Field label="Faturável">
+                    <select
+                      value={billable ? "true" : "false"}
+                      onChange={(e) => setBillable(e.target.value === "true")}
+                      className="w-full px-3 py-2 rounded-lg border"
+                      style={{
+                        background: COLORS.card,
+                        borderColor: COLORS.border,
+                        color: COLORS.text,
+                      }}
+                    >
+                      <option value="true">Sim</option>
+                      <option value="false">Não</option>
+                    </select>
+                  </Field>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Confirm buttons */}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg border font-medium disabled:opacity-50"
+            style={{ borderColor: COLORS.border, color: COLORS.muted }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (adjustMode) {
+                const totalMin =
+                  adjustedMinutes + (adjustedSeconds > 30 ? 1 : 0);
+                onConfirm(totalMin, description || undefined, billable);
+              } else {
+                onConfirm(null);
+              }
+            }}
+            disabled={loading}
+            className="flex-1 px-4 py-2 rounded-lg text-white font-medium disabled:opacity-50"
+            style={{ background: isFinish ? COLORS.red : COLORS.amber }}
+          >
+            {loading ? "Confirmando..." : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================================================================
+// CREATE CONTRACT MODAL — form para criar contrato
+// ===================================================================
 
 function CreateContractModal({
   onClose,
