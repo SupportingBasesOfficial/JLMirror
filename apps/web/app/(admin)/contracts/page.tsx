@@ -181,14 +181,45 @@ export default function ContractsPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               name: formData.name,
+              contract_number: formData.contract_number || undefined,
               contract_type: formData.contract_type,
               contracted_hours: Number(formData.contracted_hours) || 0,
               period_type: formData.period_type || "monthly",
               billing_day: Number(formData.billing_day) || 1,
               carry_over_rule: formData.carry_over_rule || "none",
+              carry_over_limit_hours: formData.carry_over_limit_hours
+                ? Number(formData.carry_over_limit_hours)
+                : undefined,
+              carry_over_expire_days: formData.carry_over_expire_days
+                ? Number(formData.carry_over_expire_days)
+                : undefined,
               overtime_enabled: formData.overtime_enabled === "true",
+              overtime_rate: formData.overtime_rate
+                ? Number(formData.overtime_rate)
+                : undefined,
+              rate_diagnosis: formData.rate_diagnosis
+                ? Number(formData.rate_diagnosis)
+                : undefined,
+              rate_fix: formData.rate_fix
+                ? Number(formData.rate_fix)
+                : undefined,
+              rate_monitoring: formData.rate_monitoring
+                ? Number(formData.rate_monitoring)
+                : undefined,
+              rate_meeting: formData.rate_meeting
+                ? Number(formData.rate_meeting)
+                : undefined,
+              rate_research: formData.rate_research
+                ? Number(formData.rate_research)
+                : undefined,
+              rate_default: formData.rate_default
+                ? Number(formData.rate_default)
+                : undefined,
               start_date: formData.start_date,
               end_date: formData.end_date || undefined,
+              auto_close_tickets_on_expire:
+                formData.auto_close_tickets_on_expire === "true",
+              notes: formData.notes || undefined,
             }),
           },
           () => {},
@@ -1587,13 +1618,26 @@ function CreateContractModal({
 }) {
   const [formData, setFormData] = useState<Record<string, string>>({
     name: "",
+    contract_number: "",
     contract_type: "monthly_support",
     contracted_hours: "0",
     period_type: "monthly",
     billing_day: "1",
     carry_over_rule: "none",
+    carry_over_limit_hours: "",
+    carry_over_expire_days: "",
     overtime_enabled: "false",
+    overtime_rate: "",
+    rate_diagnosis: "",
+    rate_fix: "",
+    rate_monitoring: "",
+    rate_meeting: "",
+    rate_research: "",
+    rate_default: "",
     start_date: new Date().toISOString().split("T")[0],
+    end_date: "",
+    auto_close_tickets_on_expire: "false",
+    notes: "",
   });
 
   const update = (key: string, value: string) =>
@@ -1624,105 +1668,409 @@ function CreateContractModal({
           </button>
         </div>
 
-        <div className="space-y-4">
-          <Field label="Nome do contrato" required>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => update("name", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border"
-              style={{
-                background: COLORS.bg,
-                borderColor: COLORS.border,
-                color: COLORS.text,
-              }}
-              placeholder="Ex: Suporte Mensal Infra"
-            />
-          </Field>
-
-          <Field label="Tipo de contrato">
-            <select
-              value={formData.contract_type}
-              onChange={(e) => update("contract_type", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border"
-              style={{
-                background: COLORS.bg,
-                borderColor: COLORS.border,
-                color: COLORS.text,
-              }}
+        <div className="space-y-5">
+          {/* --- Dados Gerais --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
             >
-              {Object.entries(CONTRACT_TYPE_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Horas contratadas">
+              Dados Gerais
+            </h3>
+            <Field label="Nome do contrato" required>
               <input
-                type="number"
-                min="0"
-                value={formData.contracted_hours}
-                onChange={(e) => update("contracted_hours", e.target.value)}
+                type="text"
+                value={formData.name}
+                onChange={(e) => update("name", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border"
                 style={{
                   background: COLORS.bg,
                   borderColor: COLORS.border,
                   color: COLORS.text,
                 }}
+                placeholder="Ex: Suporte Mensal Infra"
               />
             </Field>
-            <Field label="Dia de fechamento">
-              <input
-                type="number"
-                min="1"
-                max="28"
-                value={formData.billing_day}
-                onChange={(e) => update("billing_day", e.target.value)}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Número do contrato">
+                <input
+                  type="text"
+                  value={formData.contract_number}
+                  onChange={(e) => update("contract_number", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 2026-001"
+                />
+              </Field>
+              <Field label="Tipo de contrato">
+                <select
+                  value={formData.contract_type}
+                  onChange={(e) => update("contract_type", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                >
+                  {Object.entries(CONTRACT_TYPE_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </div>
+
+          {/* --- Período e Horas --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
+            >
+              Período e Horas
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Horas contratadas">
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.contracted_hours}
+                  onChange={(e) => update("contracted_hours", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                />
+              </Field>
+              <Field label="Tipo de período">
+                <select
+                  value={formData.period_type}
+                  onChange={(e) => update("period_type", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                >
+                  {Object.entries(PERIOD_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Dia de fechamento">
+                <input
+                  type="number"
+                  min="1"
+                  max="28"
+                  value={formData.billing_day}
+                  onChange={(e) => update("billing_day", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Data de início" required>
+                <input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => update("start_date", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                />
+              </Field>
+              <Field label="Data de término">
+                <input
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => update("end_date", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* --- Carry Over --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
+            >
+              Acúmulo de Horas (Carry Over)
+            </h3>
+            <Field label="Regra de acúmulo">
+              <select
+                value={formData.carry_over_rule}
+                onChange={(e) => update("carry_over_rule", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border"
                 style={{
                   background: COLORS.bg,
                   borderColor: COLORS.border,
                   color: COLORS.text,
                 }}
+              >
+                {Object.entries(CARRY_OVER_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {formData.carry_over_rule === "limited" && (
+              <Field label="Limite de acúmulo (horas)">
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.carry_over_limit_hours}
+                  onChange={(e) =>
+                    update("carry_over_limit_hours", e.target.value)
+                  }
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 10"
+                />
+              </Field>
+            )}
+            {formData.carry_over_rule === "expire" && (
+              <Field label="Expira em (dias)">
+                <input
+                  type="number"
+                  min="1"
+                  value={formData.carry_over_expire_days}
+                  onChange={(e) =>
+                    update("carry_over_expire_days", e.target.value)
+                  }
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 90"
+                />
+              </Field>
+            )}
+          </div>
+
+          {/* --- Overtime --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
+            >
+              Horas Excedentes (Overtime)
+            </h3>
+            <Field label="Permitir horas excedentes">
+              <select
+                value={formData.overtime_enabled}
+                onChange={(e) => update("overtime_enabled", e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border"
+                style={{
+                  background: COLORS.bg,
+                  borderColor: COLORS.border,
+                  color: COLORS.text,
+                }}
+              >
+                <option value="false">Não</option>
+                <option value="true">Sim</option>
+              </select>
+            </Field>
+            {formData.overtime_enabled === "true" && (
+              <Field label="Taxa de overtime (R$/h)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.overtime_rate}
+                  onChange={(e) => update("overtime_rate", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 150.00"
+                />
+              </Field>
+            )}
+          </div>
+
+          {/* --- Taxas por Tipo --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
+            >
+              Taxas por Tipo de Trabalho (R$/h)
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Taxa padrão">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_default}
+                  onChange={(e) => update("rate_default", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 120.00"
+                />
+              </Field>
+              <Field label="Diagnóstico">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_diagnosis}
+                  onChange={(e) => update("rate_diagnosis", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 100.00"
+                />
+              </Field>
+              <Field label="Correção">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_fix}
+                  onChange={(e) => update("rate_fix", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 150.00"
+                />
+              </Field>
+              <Field label="Monitoramento">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_monitoring}
+                  onChange={(e) => update("rate_monitoring", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 80.00"
+                />
+              </Field>
+              <Field label="Reunião">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_meeting}
+                  onChange={(e) => update("rate_meeting", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 90.00"
+                />
+              </Field>
+              <Field label="Pesquisa">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.rate_research}
+                  onChange={(e) => update("rate_research", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border"
+                  style={{
+                    background: COLORS.bg,
+                    borderColor: COLORS.border,
+                    color: COLORS.text,
+                  }}
+                  placeholder="Ex: 80.00"
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* --- Configurações Adicionais --- */}
+          <div className="space-y-3">
+            <h3
+              className="text-xs font-bold uppercase tracking-wide"
+              style={{ color: COLORS.muted }}
+            >
+              Configurações Adicionais
+            </h3>
+            <Field label="Auto-fechar tickets ao expirar">
+              <select
+                value={formData.auto_close_tickets_on_expire}
+                onChange={(e) =>
+                  update("auto_close_tickets_on_expire", e.target.value)
+                }
+                className="w-full px-3 py-2 rounded-lg border"
+                style={{
+                  background: COLORS.bg,
+                  borderColor: COLORS.border,
+                  color: COLORS.text,
+                }}
+              >
+                <option value="false">Não</option>
+                <option value="true">Sim</option>
+              </select>
+            </Field>
+            <Field label="Observações">
+              <textarea
+                value={formData.notes}
+                onChange={(e) => update("notes", e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border resize-none"
+                style={{
+                  background: COLORS.bg,
+                  borderColor: COLORS.border,
+                  color: COLORS.text,
+                }}
+                rows={3}
+                placeholder="Notas internas sobre o contrato..."
               />
             </Field>
           </div>
-
-          <Field label="Regra de acúmulo de horas">
-            <select
-              value={formData.carry_over_rule}
-              onChange={(e) => update("carry_over_rule", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border"
-              style={{
-                background: COLORS.bg,
-                borderColor: COLORS.border,
-                color: COLORS.text,
-              }}
-            >
-              {Object.entries(CARRY_OVER_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Data de início" required>
-            <input
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => update("start_date", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border"
-              style={{
-                background: COLORS.bg,
-                borderColor: COLORS.border,
-                color: COLORS.text,
-              }}
-            />
-          </Field>
 
           <div className="flex gap-3 pt-2">
             <button
