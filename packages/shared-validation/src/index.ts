@@ -414,10 +414,12 @@ export type MonitoringMetricsQueryInput = z.infer<
 
 // ========== SLA Schemas ==========
 export const createServiceSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  service_type: z.string().min(1),
-  status: z.string().min(1),
+  name: z.string().min(1).max(255),
+  description: z.string().max(2000).optional(),
+  service_type: z.string().min(1).max(100),
+  status: z
+    .enum(["operational", "degraded", "down", "maintenance"])
+    .default("operational"),
   device_ids: z.array(z.string()).default([]),
   sla_target_percentage: z.number().min(0).max(100),
   coverage_hours: z.string().default("24x7"),
@@ -431,10 +433,10 @@ export const createServiceSchema = z.object({
 export type CreateServiceInput = z.infer<typeof createServiceSchema>;
 
 export const updateServiceSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  service_type: z.string().optional(),
-  status: z.string().optional(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional(),
+  service_type: z.string().min(1).max(100).optional(),
+  status: z.enum(["operational", "degraded", "down", "maintenance"]).optional(),
   device_ids: z.array(z.string()).optional(),
   sla_target_percentage: z.number().min(0).max(100).optional(),
   coverage_hours: z.string().optional(),
@@ -448,12 +450,14 @@ export const updateServiceSchema = z.object({
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 
 export const createMaintenanceWindowSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
+  name: z.string().min(1).max(255),
+  description: z.string().max(2000).optional(),
   device_ids: z.array(z.string()).default([]),
   start_at: z.string(),
   end_at: z.string(),
-  maintenance_type: z.string().default("scheduled"),
+  maintenance_type: z
+    .enum(["scheduled", "emergency", "corrective"])
+    .default("scheduled"),
   metadata: z.record(z.unknown()).default({}),
 });
 export type CreateMaintenanceWindowInput = z.infer<
@@ -461,13 +465,13 @@ export type CreateMaintenanceWindowInput = z.infer<
 >;
 
 export const updateMaintenanceWindowSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional(),
   device_ids: z.array(z.string()).optional(),
   start_at: z.string().optional(),
   end_at: z.string().optional(),
-  status: z.string().optional(),
-  maintenance_type: z.string().optional(),
+  status: z.enum(["scheduled", "active", "completed", "cancelled"]).optional(),
+  maintenance_type: z.enum(["scheduled", "emergency", "corrective"]).optional(),
 });
 export type UpdateMaintenanceWindowInput = z.infer<
   typeof updateMaintenanceWindowSchema
@@ -475,14 +479,16 @@ export type UpdateMaintenanceWindowInput = z.infer<
 
 export const createServiceIncidentSchema = z.object({
   service_id: z.string().uuid(),
-  title: z.string().min(1),
-  description: z.string().optional(),
+  title: z.string().min(1).max(255),
+  description: z.string().max(5000).optional(),
   severity: z.number().int().min(0).max(5),
-  status: z.string().default("open"),
+  status: z
+    .enum(["open", "investigating", "resolved", "closed"])
+    .default("open"),
   started_at: z.string().optional(),
   resolved_at: z.string().optional(),
-  root_cause: z.string().optional(),
-  resolution_notes: z.string().optional(),
+  root_cause: z.string().max(5000).optional(),
+  resolution_notes: z.string().max(5000).optional(),
   affected_device_ids: z.array(z.string()).default([]),
   ticket_id: z.string().optional(),
   zabbix_event_id: z.string().optional(),
@@ -492,13 +498,13 @@ export type CreateServiceIncidentInput = z.infer<
 >;
 
 export const updateServiceIncidentSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().max(5000).optional(),
   severity: z.number().int().min(0).max(5).optional(),
-  status: z.string().optional(),
+  status: z.enum(["open", "investigating", "resolved", "closed"]).optional(),
   resolved_at: z.string().optional(),
-  root_cause: z.string().optional(),
-  resolution_notes: z.string().optional(),
+  root_cause: z.string().max(5000).optional(),
+  resolution_notes: z.string().max(5000).optional(),
   affected_device_ids: z.array(z.string()).optional(),
   ticket_id: z.string().optional(),
 });

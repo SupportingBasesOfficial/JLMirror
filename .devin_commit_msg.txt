@@ -1,43 +1,47 @@
-feat(assets): fix IDOR, schema mismatch, parallelize queries, add rate limiting
+feat(sla): fix IDOR, info disclosure, parallelize queries, add rate limiting
 
 Security (CRITICAL):
-- assets.ts: Fixed IDOR in GET /:id — asset_changes query now filters
-  by tenant_id via INNER JOIN with assets table (was only filtering by
-  asset_id, allowing cross-tenant change history access).
-- assets.ts: Added ownership verification in POST /:id/licenses —
-  checks asset belongs to tenant before adding license (was missing,
-  allowing license creation on other tenants' assets).
-- assets.ts: Added rateLimitWrite on POST /, PUT /:id, DELETE /:id,
-  POST /:id/licenses, PUT /:id/licenses/:licenseId,
-  DELETE /:id/licenses/:licenseId.
-- assets.ts: DELETE /:id now verifies asset exists and belongs to
-  tenant before deleting (was returning deleted:true even if nothing
-  was deleted).
-- shared-validation: Fixed createAssetSchema — removed dead field
-  'type' (was required but never used in INSERT). Made asset_tag and
-  asset_type required (was optional but used in INSERT). Added enum
-  validation for status and criticality. Added max length constraints.
-  Aligned updateAssetSchema with fieldMap (added asset_tag, asset_type,
-  category, and all missing fields).
+- sla.ts: Fixed information disclosure — all DB error messages were
+  leaked to client via `result.error.message`. Replaced with generic
+  Portuguese messages. Affects 8+ endpoints.
+- sla.ts: Fixed IDOR in POST /incidents — now verifies service_id
+  belongs to tenant before creating incident (was missing, allowing
+  incident creation on other tenants' services).
+- sla.ts: Fixed crash risk — `user.tenant_id` was used directly
+  instead of `user?.tenant_id ?? null`, causing crash if user is
+  undefined. Fixed in all 15+ endpoints.
+- sla.ts: Added rateLimitWrite on POST /services, PUT /services/:id,
+  DELETE /services/:id, POST /incidents, PUT /incidents/:id,
+  POST /maintenance, PUT /maintenance/:id, DELETE /maintenance/:id.
+- shared-validation: Added enum validation for service status
+  (operational, degraded, down, maintenance), incident status
+  (open, investigating, resolved, closed), maintenance status
+  (scheduled, active, completed, cancelled), and maintenance_type
+  (scheduled, emergency, corrective). Added max length constraints.
 
 Performance:
-- assets.ts: Parallelized 6 sequential queries in GET /stats with
-  Promise.all. Added httpCache(30).
-- assets.ts: Parallelized 3 sequential queries in GET /:id (licenses,
-  changes, children) with Promise.all.
+- sla.ts: Parallelized 2 sequential queries in GET / with Promise.all.
+  Added httpCache(30).
+- sla.ts: Parallelized 4 sequential queries in GET /dashboard with
+  Promise.all (slaResult, incidentsResult, aggregateResult, trendResult).
+  Added structured logging with durationMs.
+- sla.ts: Added httpCache(30) on /services, httpCache(15) on /incidents,
+  httpCache(30) on /maintenance.
 
 Code quality:
-- assets.ts: Added try/catch on all endpoints with graceful error
+- sla.ts: Added try/catch on all 15 endpoints with graceful error
   responses and structured logging via @repo/logger.
-- assets.ts: Added logger with tenantId, assetId, and error context.
+- sla.ts: Added logger with tenantId, serviceId, incidentId,
+  maintenanceId, and durationMs context.
 
 Tests:
-- assets.test.ts (NEW): 48 tests covering all Zod schemas (createAsset,
-  updateAsset, createLicense, updateLicense), filter logic, warranty
-  classification, and edge cases (empty tenant, limit validation,
-  null fields).
+- sla.test.ts (NEW): 64 tests covering all Zod schemas (createService,
+  updateService, createMaintenanceWindow, updateMaintenanceWindow,
+  createServiceIncident, updateServiceIncident, slaReportQuery),
+  uptime calculation, MTTR calculation, weighted SLA by priority,
+  and edge cases (empty tenant, feature flag, incident resolution).
 
-Total: 383 tests passing (was 335, +48 new).
+Total: 447 tests passing (was 383, +64 new).
 
 Generated with [Devin](https://devin.ai)
 
