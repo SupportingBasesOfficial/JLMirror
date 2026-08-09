@@ -1,63 +1,66 @@
-feat(notifications): fix 5 schemas, N+1 query, try/catch, rate limit, parallelize
+feat(changes): fix 4 schemas, SQL injection, N+1, try/catch, rate limit, parallelize
 
 Security (CRITICAL):
-- shared-validation/src/index.ts: Fixed all 5 notification schemas to match
-  DB migration. createChannelSchema had `type` field instead of
-  `channel_type`; was missing `discord`, `pagerduty`, `web_push` in enum;
-  had `whatsapp` which doesn't exist in DB. createRuleSchema had
-  `channel_id` (singular) instead of `channel_ids` (array); had
-  `conditions` field that doesn't exist in DB; had `severity_filter` as
-  array instead of string enum; `event_source` and `event_category` were
-  optional but DB is NOT NULL. updateRuleSchema only allowed updating
-  `name`, `conditions`, `is_active` — was missing `description`,
-  `event_source`, `event_category`, `severity_filter`, `channel_ids`,
-  `template_subject`, `template_body`, `cooldown_minutes`.
-  sendNotificationSchema had `event_source`, `event_category`, `severity`
-  as optional but DB is NOT NULL; `severity` was free string instead of
-  enum; had `channel_id` and `to` fields that don't map to DB columns.
-- notifications.ts: Fixed user.sub crash risk — replaced with user?.sub
-  ?? null in all 8 occurrences.
-- notifications.ts: Added rateLimitWrite on POST /channels, PUT
-  /channels/:id, DELETE /channels/:id, POST /channels/:id/test,
-  POST /rules, PUT /rules/:id, DELETE /rules/:id, POST /send
-  (8 endpoints).
+- shared-validation/src/index.ts: Fixed all 4 change management schemas to
+  match DB migration. createChangeRequestSchema had `priority` as number
+  (0-4) but DB is enum string (low/medium/high/critical); had `impact`
+  field that doesn't exist in DB; `change_type` and `risk_level` were free
+  strings but DB is enum; `description` was required but DB is nullable.
+  updateChangeRequestSchema had `priority` as number; was missing
+  `change_type`, `risk_level`, `assigned_to`, `planned_start_at`,
+  `planned_end_at`, `impact_assessment`, `rollback_plan`,
+  `rollback_status`, `implementation_notes`, `post_implementation_review`.
+  createChangeTaskSchema had `change_request_id` instead of `change_id`
+  (DB column); had `assignee_id` that doesn't exist in DB; `task_type`
+  default was "manual" but DB enum is
+  (pre_check/implementation/post_check/rollback). approveChangeSchema had
+  `change_request_id` and `approved` fields that weren't used by the
+  endpoint (uses :changeId from URL).
+- changes.ts: Fixed SQL injection vulnerability in GET /calendar/month —
+  `month` param was concatenated into startDate/endDate strings without
+  validation. Added isValidMonthFormat() regex validation (YYYY-MM) to
+  block injection attempts like `' OR 1=1 --`.
+- changes.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
+  in all 10+ occurrences.
+- changes.ts: Added rateLimitWrite on POST /, PUT /:changeId,
+  POST /:changeId/approve, POST /:changeId/reject,
+  POST /:changeId/implement, POST /:changeId/complete,
+  POST /:changeId/rollback, POST /:changeId/tasks,
+  PUT /:changeId/tasks/:taskId (9 endpoints).
 
 Performance:
-- notifications.ts: Parallelized 2 queries in GET / using Promise.all.
-- notifications.ts: Parallelized 4 queries in GET /stats using Promise.all
-  (channels + rules + log + byCategory were sequential).
-- notifications.ts: Eliminated N+1 query in POST /send — was querying
-  each channel individually inside nested loop. Now fetches all channels
-  in a single query using `WHERE id = ANY($1::uuid[])` and builds a Map
-  for O(1) lookup.
-- notifications.ts: Added httpCache(30) on GET /channels, GET /rules,
-  GET /log, GET /stats.
+- changes.ts: Parallelized 10 queries in GET /stats using Promise.all
+  (was 9 sequential queries + 1 for recent + 1 for upcoming = 11 total).
+- changes.ts: Parallelized 2 queries in GET /:changeId (approvals + tasks
+  were sequential).
+- changes.ts: Added httpCache(30) on GET /, GET /stats, GET /calendar/month
+  (60s for calendar).
 
 Code quality:
-- notifications.ts: Added try/catch on all 12 endpoints with generic
-  Portuguese error messages and structured logging.
-- notifications.ts: Added logger with tenantId, channelId, ruleId
-  context. Logs channel creation, rule creation, notification sends,
-  and channel tests.
-- notifications.ts: Added safeJsonBody() for safe request body parsing.
-- notifications.ts: Added validation error details (parsed.error.flatten())
-  to all error responses.
-- notifications.ts: Fixed DELETE /channels/:id, DELETE /rules/:id,
-  PUT /channels/:id, PUT /rules/:id to return 404 when not found
-  (was returning success regardless).
-- notifications.ts: Removed information disclosure — error message in
-  /channels/:id/test was leaking deliveryResult.error to client;
-  replaced with generic "Falha no teste do canal".
+- changes.ts: Added try/catch on all 13 endpoints with structured logging.
+- changes.ts: Added logger with tenantId, changeId, taskId context. Logs
+  change creation, approval, rejection, implementation start/complete,
+  rollback.
+- changes.ts: Added safeJsonBody() for safe request body parsing.
+- changes.ts: Added validation error details (parsed.error.flatten()) to
+  all error responses.
+- changes.ts: Fixed POST /:changeId/reject to verify change exists before
+  rejecting (was creating approval record for non-existent change).
+- changes.ts: Fixed POST /:changeId/tasks to verify change request exists
+  before creating task (was creating orphan tasks).
+- changes.ts: Fixed PUT /:changeId, POST /:changeId/complete,
+  POST /:changeId/rollback, PUT /:changeId/tasks/:taskId to return 404
+  when not found (was returning success regardless).
 
 Tests:
-- notifications.test.ts (REWRITTEN): 70 tests covering all 5 Zod schemas
-  (createChannel, updateChannel, createRule, updateRule, sendNotification)
-  with all enum values, defaults, and edge cases; cooldown logic;
-  template fallback logic (template_subject vs data.subject); severity
-  filter matching logic (all/info/warning/critical). Removed 7 obsolete
-  tests that used removed `type` field and `whatsapp` channel type.
+- changes.test.ts (NEW): 86 tests covering all 4 Zod schemas
+  (createChangeRequest, updateChangeRequest, createChangeTask,
+  approveChange) with all enum values, defaults, and edge cases; status
+  transition logic (approve/implement); task status logic (started_at/
+  completed_at triggers); rollback_status logic; success rate calculation;
+  month format validation (SQL injection prevention).
 
-Total: 795 tests passing (was 732, +63 net new).
+Total: 881 tests passing (was 795, +86 new).
 
 Generated with [Devin](https://devin.ai)
 

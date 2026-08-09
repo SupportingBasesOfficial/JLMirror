@@ -1299,18 +1299,17 @@ export type UpdatePolicyInput = z.infer<typeof updatePolicySchema>;
 
 // ========== Change Management Schemas ==========
 export const createChangeRequestSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-  priority: z.number().int().min(0).max(4).default(2),
-  impact: z.string().min(1),
-  rollback_plan: z.string().optional(),
-  change_type: z.string().optional(),
-  risk_level: z.string().optional(),
-  planned_start_at: z.string().optional(),
-  planned_end_at: z.string().optional(),
-  affected_systems: z.array(z.string()).optional(),
-  affected_services: z.array(z.string()).optional(),
-  impact_assessment: z.string().optional(),
+  title: z.string().min(1).max(500),
+  description: z.string().max(10000).optional(),
+  change_type: z.enum(["standard", "normal", "emergency"]),
+  priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  risk_level: z.enum(["low", "medium", "high", "critical"]).default("low"),
+  planned_start_at: z.string().datetime().optional(),
+  planned_end_at: z.string().datetime().optional(),
+  affected_systems: z.array(z.string()).default([]),
+  affected_services: z.array(z.string()).default([]),
+  impact_assessment: z.string().max(10000).optional(),
+  rollback_plan: z.string().max(10000).optional(),
   approval_required: z.boolean().default(true),
   related_ticket_id: z.string().uuid().optional(),
 });
@@ -1319,33 +1318,57 @@ export type CreateChangeRequestInput = z.infer<
 >;
 
 export const updateChangeRequestSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
-  priority: z.number().int().min(0).max(4).optional(),
-  status: z.string().optional(),
+  title: z.string().min(1).max(500).optional(),
+  description: z.string().max(10000).optional(),
+  change_type: z.enum(["standard", "normal", "emergency"]).optional(),
+  priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+  risk_level: z.enum(["low", "medium", "high", "critical"]).optional(),
+  status: z
+    .enum([
+      "draft",
+      "submitted",
+      "under_review",
+      "approved",
+      "rejected",
+      "scheduled",
+      "in_progress",
+      "implemented",
+      "failed",
+      "rolled_back",
+      "cancelled",
+    ])
+    .optional(),
+  assigned_to: z.string().uuid().optional(),
+  planned_start_at: z.string().datetime().optional(),
+  planned_end_at: z.string().datetime().optional(),
   affected_systems: z.array(z.string()).optional(),
   affected_services: z.array(z.string()).optional(),
+  impact_assessment: z.string().max(10000).optional(),
+  rollback_plan: z.string().max(10000).optional(),
+  rollback_status: z
+    .enum(["not_needed", "planned", "executed", "failed"])
+    .optional(),
+  implementation_notes: z.string().max(10000).optional(),
+  post_implementation_review: z.string().max(10000).optional(),
 });
 export type UpdateChangeRequestInput = z.infer<
   typeof updateChangeRequestSchema
 >;
 
 export const createChangeTaskSchema = z.object({
-  change_request_id: z.string().uuid(),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  assignee_id: z.string().uuid().optional(),
-  task_order: z.number().int().default(0),
-  task_type: z.string().default("manual"),
+  title: z.string().min(1).max(500),
+  description: z.string().max(10000).optional(),
+  task_order: z.number().int().min(0).default(0),
+  task_type: z
+    .enum(["pre_check", "implementation", "post_check", "rollback"])
+    .default("implementation"),
   assigned_to: z.string().uuid().optional(),
 });
 export type CreateChangeTaskInput = z.infer<typeof createChangeTaskSchema>;
 
 export const approveChangeSchema = z.object({
-  change_request_id: z.string().uuid(),
-  approved: z.boolean(),
-  comment: z.string().optional(),
-  approver_role: z.string().optional(),
+  comment: z.string().max(5000).optional(),
+  approver_role: z.string().max(255).optional(),
 });
 export type ApproveChangeInput = z.infer<typeof approveChangeSchema>;
 
