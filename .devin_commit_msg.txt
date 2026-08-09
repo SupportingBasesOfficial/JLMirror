@@ -1,71 +1,54 @@
-feat(compliance): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
+feat(chatops): add Teams token verification, mask bot_token, try/catch
 
-Security:
-- compliance.ts: Fixed user.sub crash risk — replaced with
-  user?.sub ?? null in all 8+ occurrences.
-- compliance.ts: Added rateLimitWrite on 5 write endpoints (POST
-  /policies, PUT /policies/:id, DELETE /policies/:id, POST /scans,
-  PUT /violations/:id).
-- compliance.ts: Replaced c.req.json() with safeJsonBody() in 4
-  endpoints.
-- shared-validation: Fixed createPolicySchema — removed phantom
-  `requirements` field (was in schema but never used in INSERT),
-  added severity enum (low/medium/high/critical), rule_type enum
-  (manual/automated/scheduled), name max 200, description max
-  5000, framework max 100, policy_category max 100,
-  check_interval_hours max 720.
-- shared-validation: Fixed updatePolicySchema — was missing 5
-  fields (framework, policy_category, severity, rule_type,
-  check_interval_hours) that were in the route's fieldMap. Now
-  includes all fields with same validation as create.
-- shared-validation: Added createScanSchema (policy_id UUID).
-- shared-validation: Added updateViolationSchema (status enum:
-  open/acknowledged/remediated/false_positive/wont_fix).
+Security (CRITICAL):
+- chatops.ts: Added Teams webhook token verification — was
+  completely unauthenticated, anyone could send commands as any
+  tenant. Now checks x-teams-token header against
+  teams_app_password if configured.
+- chatops.ts: GET /config now masks slack_bot_token as "***"
+  before returning — was leaking bot token in plaintext.
+- chatops.ts: Fixed user.tenant_id and user.sub crash risk —
+  replaced with user?.tenant_id ?? null and user?.sub ?? null.
+- chatops.ts: Added rateLimitApi on both webhook endpoints (Slack
+  + Teams) to prevent DoS via slash commands.
+- chatops.ts: Added rateLimitWrite on PUT /config.
+- shared-validation: Enhanced chatopsConfigSchema —
+  slack_verification_token max 200, slack_signing_secret max 200,
+  slack_bot_token max 500, teams_app_id max 200,
+  teams_app_password max 500, enabled_commands items max 50 +
+  array max 100.
 
 Bug fixes:
-- compliance.ts: All validation errors now return
-  parsed.error.flatten().
-- compliance.ts: PUT /policies/:id and DELETE /policies/:id now
-  return 404 if not found.
-- compliance.ts: PUT /violations/:id now returns 404 if not found.
-- compliance.ts: All audit logs migrated to writeAuditLog helper.
-- compliance.ts: POST /scans now uses createScanSchema instead of
-  inline validation.
-- compliance.ts: PUT /violations/:id now uses updateViolationSchema
-  instead of inline validation.
+- chatops.ts: All audit logs migrated to writeAuditLog helper.
+- chatops.ts: Command log inserts wrapped in try/catch (was
+  crashing silently if log table unavailable).
 
 Performance:
-- compliance.ts: Parallelized 4 queries in GET /stats (overview +
-  violations + framework + scans) using Promise.all — was 4
-  sequential queries.
-- compliance.ts: Parallelized all compliance checks in POST /scans
-  (MFA + SSL + firewall + backup + audit) using Promise.all — was
-  5 sequential queries.
-- compliance.ts: Parallelized 2 queries in POST /scans (update
-  scan + update policy last_scanned) using Promise.all.
-- compliance.ts: Added httpCache(30) on GET /, GET /policies, GET
-  /scans, GET /violations; httpCache(60) on GET /stats (5
+- chatops.ts: Parallelized 5 queries in GET /stats (total +
+  success + failed + byCommand + bySource) using Promise.all —
+  was 5 sequential queries.
+- chatops.ts: Added httpCache(60) on GET /; httpCache(15) on
+  GET /config, GET /history; httpCache(30) on GET /stats (4
   endpoints).
 
 Code quality:
-- compliance.ts: Added try/catch on all 10 endpoints with
-  structured logging.
-- compliance.ts: Added logger with policyId, scanId, violationId,
-  tenantId, score context.
+- chatops.ts: Added try/catch on all 7 endpoints with structured
+  logging.
+- chatops.ts: Added logger with tenantId, platform, configId
+  context.
 
 Tests:
-- compliance.test.ts (NEW): 37 tests covering:
-  - createPolicySchema (16 tests): name required + max 200,
-    framework required, severity enum, rule_type enum,
-    check_interval_hours 1-720, is_active default, rule_config.
-  - updatePolicySchema (7 tests): partial updates, severity enum
-    validation, framework, check_interval_hours.
-  - createScanSchema (3 tests): policy_id UUID required.
-  - updateViolationSchema (7 tests): all 5 status values, invalid
-    status rejected, missing status rejected.
-  - Compliance score logic (4 tests): 100%, 0%, 50%, total 0.
+- chatops.test.ts (NEW): 23 tests covering:
+  - chatopsConfigSchema (15 tests): platform enum (slack/teams),
+    required platform, slack_verification_token max 200,
+    slack_bot_token max 500, teams fields, enabled_commands items
+    max 50, is_active boolean, complete config.
+  - Command parsing logic (6 tests): simple command, command with
+    args, empty, extra spaces, slash removal, no slash removal.
+  - Token masking logic (2 tests): masks existing token, does not
+    mask null.
 
-Total: 2153 tests passing (was 2116, +37 new).
+Total: 2176 tests passing (was 2153, +23 new).
 
 Generated with [Devin](https://devin.ai)
 

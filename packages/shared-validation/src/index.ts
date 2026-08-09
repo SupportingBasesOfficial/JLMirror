@@ -2340,12 +2340,12 @@ export type ItsmCreateTicketInput = z.infer<typeof itsmCreateTicketSchema>;
 // ========== ChatOps Schemas ==========
 export const chatopsConfigSchema = z.object({
   platform: z.enum(["slack", "teams"]),
-  slack_verification_token: z.string().optional(),
-  slack_signing_secret: z.string().optional(),
-  slack_bot_token: z.string().optional(),
-  teams_app_id: z.string().optional(),
-  teams_app_password: z.string().optional(),
-  enabled_commands: z.array(z.string()).optional(),
+  slack_verification_token: z.string().max(200).optional(),
+  slack_signing_secret: z.string().max(200).optional(),
+  slack_bot_token: z.string().max(500).optional(),
+  teams_app_id: z.string().max(200).optional(),
+  teams_app_password: z.string().max(500).optional(),
+  enabled_commands: z.array(z.string().max(50)).max(100).optional(),
   is_active: z.boolean().optional(),
 });
 export type ChatopsConfigInput = z.infer<typeof chatopsConfigSchema>;
