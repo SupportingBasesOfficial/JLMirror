@@ -47,16 +47,32 @@ export type LdapBindInput = z.infer<typeof ldapBindSchema>;
 
 // ========== MFA Schemas ==========
 export const mfaSetupVerifySchema = z.object({
-  secret: z.string().min(1),
-  code: z.string().min(6).max(6),
+  code: z
+    .string()
+    .min(6)
+    .max(6)
+    .regex(/^\d{6}$/, "Código deve conter exatamente 6 dígitos"),
 });
 export type MfaSetupVerifyInput = z.infer<typeof mfaSetupVerifySchema>;
 
 export const mfaVerifySchema = z.object({
-  challenge_token: z.string().min(1),
-  code: z.string().min(6).max(6),
+  challenge_token: z.string().min(1).max(500),
+  code: z
+    .string()
+    .min(6)
+    .max(20)
+    .regex(/^[\w-]+$/, "Código inválido"),
 });
 export type MfaVerifyInput = z.infer<typeof mfaVerifySchema>;
+
+export const mfaDisableSchema = z.object({
+  code: z
+    .string()
+    .min(6)
+    .max(6)
+    .regex(/^\d{6}$/, "Código deve conter exatamente 6 dígitos"),
+});
+export type MfaDisableInput = z.infer<typeof mfaDisableSchema>;
 
 // ========== RBAC Schemas ==========
 export const createRoleSchema = z.object({

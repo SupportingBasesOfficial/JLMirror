@@ -1,51 +1,50 @@
-feat(push): fix missing auth, user?.sub, try/catch, enhance schemas
+feat(mfa): fix rate limit, user?.sub, safeJsonBody, try/catch, schemas
 
 Security:
-- push.ts: Fixed 6 endpoints without requirePermission — GET /,
-  GET /vapid-public-key, POST /subscribe, POST /unsubscribe,
-  GET /subscriptions, DELETE /subscriptions/:id, POST /test were
-  all accessible without authentication. Added requirePermission
-  to all 7 endpoints.
-- push.ts: Fixed user.tenant_id and user.sub crash risk — replaced
-  with user?.tenant_id ?? null and user?.sub ?? null in all 6+
-  occurrences.
-- push.ts: Added rateLimitWrite on 5 write endpoints (POST /subscribe,
-  POST /unsubscribe, DELETE /subscriptions/:id, POST /test,
-  POST /broadcast).
-- shared-validation: Enhanced pushSubscribeSchema — endpoint max 2000,
-  keys.p256dh max 500, keys.auth max 500, device_type max 100,
-  user_agent max 500.
-- shared-validation: Enhanced pushUnsubscribeSchema — endpoint max 2000.
-- shared-validation: Enhanced pushBroadcastSchema — title max 200,
-  message max 2000.
+- mfa.ts: Added rateLimitWrite on 4 endpoints (POST /setup,
+  POST /setup/verify, POST /verify, POST /disable) — critical for
+  POST /verify to prevent TOTP brute force (only 1M combinations).
+- mfa.ts: Replaced c.req.json() with safeJsonBody() in 3 endpoints
+  (POST /setup/verify, POST /verify, POST /disable).
+- shared-validation: Enhanced mfaSetupVerifySchema — removed unused
+  `secret` field (was not used by endpoint), added regex /^\d{6}$/
+  to enforce exactly 6 digits (was accepting letters).
+- shared-validation: Enhanced mfaVerifySchema — challenge_token max
+  500, code max 20 with regex /^[\w-]+$/ (accepts recovery codes
+  which are alphanumeric with hyphens).
+- shared-validation: Added mfaDisableSchema with 6-digit regex
+  validation (was inline regex in route).
 
 Bug fixes:
-- push.ts: DELETE /subscriptions/:id now returns 404 if not found.
-- push.ts: POST /subscribe now returns 500 if DB insert fails (was
-  returning id: undefined).
-- push.ts: All audit logs migrated to writeAuditLog helper.
+- mfa.ts: All validation errors now return parsed.error.flatten().
+- mfa.ts: All audit logs migrated to writeAuditLog helper.
+- mfa.ts: POST /setup/verify and POST /disable now update
+  users.mfa_enabled and users.mfa_method flags (was only updating
+  user_mfa_totp table, leaving users table stale).
+- auth-extended.test.ts: Updated mfaSetupVerifySchema tests to
+  match new schema (removed `secret` field).
 
 Performance:
-- push.ts: Added httpCache(60) on GET /; httpCache(300) on
-  GET /vapid-public-key; httpCache(15) on GET /subscriptions
-  (3 endpoints).
+- mfa.ts: Parallelized 2 queries in GET /status (totp + webauthn).
+- mfa.ts: Added httpCache(15) on GET / and GET /status.
 
 Code quality:
-- push.ts: Added try/catch on all 8 endpoints with structured logging.
-- push.ts: Added logger with userId, tenantId, subId context.
+- mfa.ts: Added try/catch on all 6 endpoints with structured logging.
+- mfa.ts: Added logger with userId context.
 
 Tests:
-- push.test.ts (NEW): 23 tests covering:
-  - pushSubscribeSchema (13 tests): endpoint URL validation, max
-    length, keys required (p256dh + auth), device_type max 100,
-    user_agent max 500.
-  - pushUnsubscribeSchema (3 tests): endpoint required, max length.
-  - pushBroadcastSchema (5 tests): title + message required, max
-    length.
-  - Push notification payload logic (2 tests): test payload
-    construction, broadcast payload construction.
+- mfa.test.ts (NEW): 27 tests covering:
+  - mfaSetupVerifySchema (7 tests): 6-digit validation, regex,
+    empty, letters, spaces rejection.
+  - mfaVerifySchema (9 tests): challenge_token required/max 500,
+    code 6-20 chars, recovery code alphanumeric, special chars
+    rejection.
+  - mfaDisableSchema (5 tests): 6-digit validation, letters, empty.
+  - TOTP code validation logic (3 tests): 6 digits valid, letters
+    invalid, recovery code accepted by mfaVerifySchema.
+  - Challenge expiry logic (3 tests): expired, valid, consumed.
 
-Total: 1900 tests passing (was 1877, +23 new).
+Total: 1927 tests passing (was 1900, +27 new).
 
 Generated with [Devin](https://devin.ai)
 
