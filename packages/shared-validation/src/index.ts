@@ -1684,6 +1684,48 @@ export const adminUpdateUserSchema = z.object({
 });
 export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
 
+// ========== Billing Schemas ==========
+export const createBillingSubscriptionSchema = z.object({
+  plan: z.enum(["starter", "pro", "enterprise"]).default("starter"),
+  billing_cycle: z.enum(["monthly", "quarterly", "yearly"]).default("monthly"),
+  payment_method: z.enum(["PIX", "BOLETO", "CREDIT_CARD"]).default("PIX"),
+  amount_cents: z.number().int().positive().max(99999999999),
+  customer_name: z.string().min(1).max(200),
+  customer_email: z.string().email().max(200),
+  customer_cpf_cnpj: z
+    .string()
+    .min(11)
+    .max(18)
+    .regex(
+      /^[\d./-]+$/,
+      "CPF/CNPJ deve conter apenas digitos, pontos, hifens e barras",
+    ),
+  customer_phone: z.string().max(20).optional(),
+});
+export type CreateBillingSubscriptionInput = z.infer<
+  typeof createBillingSubscriptionSchema
+>;
+
+export const createBillingPaymentSchema = z.object({
+  subscription_id: z.string().uuid().optional(),
+  amount_cents: z.number().int().positive().max(99999999999),
+  payment_method: z.enum(["PIX", "BOLETO", "CREDIT_CARD"]),
+  due_date: z.string().min(1).max(20),
+  description: z.string().max(500).optional(),
+});
+export type CreateBillingPaymentInput = z.infer<
+  typeof createBillingPaymentSchema
+>;
+
+export const asaasWebhookSchema = z.object({
+  event: z.string().max(100).optional(),
+  payment: z.object({
+    id: z.string().min(1).max(100),
+    status: z.string().max(50),
+  }),
+});
+export type AsaasWebhookInput = z.infer<typeof asaasWebhookSchema>;
+
 // ========== API Key Schemas ==========
 const ipAddressSchema = z
   .string()

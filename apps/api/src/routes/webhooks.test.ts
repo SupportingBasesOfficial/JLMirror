@@ -401,7 +401,7 @@ describe("webhooks — logica de HMAC signature", () => {
 
   it("signature tem 64 caracteres (sha256 hex)", () => {
     const sig = signPayload("secret", "payload");
-    expect(sig.length).toBe(64);
+    expect(sig).toHaveLength(64);
   });
 
   it("signature e hexadecimal", () => {
