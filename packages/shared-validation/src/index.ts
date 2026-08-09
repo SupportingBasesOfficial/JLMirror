@@ -1921,45 +1921,57 @@ export type UpsertClientCompanyInput = z.infer<
 // ========== Report Schemas (additional) ==========
 export const createReportSchema = z.object({
   template_id: z.string().uuid().optional(),
-  name: z.string().min(1),
-  type: z.string().min(1),
+  name: z.string().min(1).max(200),
+  type: z.string().min(1).max(100),
   format: z.enum(["pdf", "csv", "json"]).default("pdf"),
   parameters: z.record(z.unknown()).optional(),
-  report_type: z.string().optional(),
+  report_type: z
+    .enum([
+      "capacity_summary",
+      "trend_analysis",
+      "forecast",
+      "utilization_breakdown",
+    ])
+    .optional(),
   date_range_start: z.string().optional(),
   date_range_end: z.string().optional(),
   is_scheduled: z.boolean().default(false),
-  cron_expression: z.string().optional(),
+  cron_expression: z.string().max(100).optional(),
 });
 export type CreateReportInput = z.infer<typeof createReportSchema>;
 
 // ========== Threshold Schemas ==========
-export const createThresholdSchema = z.object({
-  resource_type: z.string().min(1),
-  resource_name: z.string().min(1),
-  warning_pct: z.number(),
-  critical_pct: z.number(),
-  is_active: z.boolean().default(true),
-});
+export const createThresholdSchema = z
+  .object({
+    resource_type: z.string().min(1).max(100),
+    resource_name: z.string().min(1).max(200),
+    warning_pct: z.number().min(0).max(100),
+    critical_pct: z.number().min(0).max(100),
+    is_active: z.boolean().default(true),
+  })
+  .refine((data) => data.critical_pct > data.warning_pct, {
+    message: "critical_pct deve ser maior que warning_pct",
+    path: ["critical_pct"],
+  });
 export type CreateThresholdInput = z.infer<typeof createThresholdSchema>;
 
 export const updateThresholdSchema = z.object({
-  warning_pct: z.number().optional(),
-  critical_pct: z.number().optional(),
+  warning_pct: z.number().min(0).max(100).optional(),
+  critical_pct: z.number().min(0).max(100).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateThresholdInput = z.infer<typeof updateThresholdSchema>;
 
 // ========== Metrics Ingestion Schemas ==========
 export const ingestMetricSchema = z.object({
-  resource_type: z.string().min(1),
-  resource_id: z.string().optional(),
-  resource_name: z.string().min(1),
-  metric_name: z.string().min(1),
+  resource_type: z.string().min(1).max(100),
+  resource_id: z.string().max(200).optional(),
+  resource_name: z.string().min(1).max(200),
+  metric_name: z.string().min(1).max(100),
   metric_value: z.number(),
-  metric_unit: z.string().optional(),
-  max_capacity: z.number().optional(),
-  utilization_pct: z.number().optional(),
+  metric_unit: z.string().max(50).optional(),
+  max_capacity: z.number().min(0).optional(),
+  utilization_pct: z.number().min(0).max(100).optional(),
   metadata: z.record(z.unknown()).optional(),
   timestamp: z.string().optional(),
 });
@@ -1968,7 +1980,7 @@ export type IngestMetricInput = z.infer<typeof ingestMetricSchema>;
 export const ingestMetricsBatchSchema = z
   .array(ingestMetricSchema)
   .min(1)
-  .max(10000);
+  .max(1000);
 export type IngestMetricsBatchInput = z.infer<typeof ingestMetricsBatchSchema>;
 
 // ========== Push Schemas ==========

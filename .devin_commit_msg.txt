@@ -1,61 +1,69 @@
-feat(firewall): fix Command Injection, user?.sub, safeJsonBody, try/catch, 404s
+feat(capacity): fix user?.sub, safeJsonBody, try/catch, batch insert, schemas
 
-Security (CRITICAL):
-- firewall.ts: Fixed Command Injection in execSshCommand — replaced
-  exec() with execFile() that doesn't interpret shell metacharacters.
-  Before: exec(`ssh -o StrictHostKeyChecking=no ${host} "${command}"`)
-  allowed injection via host or command. Now: execFile("ssh", [args])
-  with no shell interpretation.
-- firewall.ts: Removed StrictHostKeyChecking=no — was allowing
-  man-in-the-middle attacks. Now uses BatchMode=yes for non-interactive.
-- firewall.ts: Fixed Command Injection in POST /apply — replaced
-  exec(cmd) with execFile(cmd, args) using separate argument arrays.
-  Commands now built via buildIptablesArgs/buildNftablesArgs/buildUfwArgs
-  which return string[] instead of interpolated strings.
-- firewall.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 6+ occurrences.
-- firewall.ts: Added rateLimitWrite on 5 write endpoints (POST /rules,
-  PUT /rules/:id, DELETE /rules/:id, POST /dry-run, POST /apply).
-- firewall.ts: Replaced c.req.json() with safeJsonBody() in 4 endpoints
-  (POST /rules, PUT /rules/:id, POST /dry-run, POST /apply).
-- shared-validation: Enhanced updateFirewallRuleSchema — was missing 9
-  fields (backend, source_ip, source_port, destination_ip,
-  destination_port, interface_in, interface_out, state, priority,
-  is_enabled). Now supports all fields with same validation as create.
-
-Bug fixes:
-- firewall.ts: DELETE /rules/:id now returns 404 if not found.
-- firewall.ts: PUT /rules/:id now returns 404 if not found after update,
-  and 400 if no fields to update.
-- firewall.ts: All validation errors now return parsed.error.flatten().
-- firewall.ts: All audit logs migrated to writeAuditLog helper.
+Security:
+- capacity.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 3+ occurrences (POST /thresholds, POST /reports).
+- capacity.ts: Added rateLimitWrite on 6 write endpoints (POST /metrics,
+  POST /metrics/batch, POST /thresholds, PUT /thresholds/:id,
+  DELETE /thresholds/:id, POST /reports, DELETE /reports/:id).
+- capacity.ts: Replaced c.req.json() with safeJsonBody() in 4 endpoints.
+- shared-validation: Enhanced createThresholdSchema — warning_pct and
+  critical_pct now validated 0-100 range, added refine() to enforce
+  critical_pct > warning_pct (was accepting any number).
+- shared-validation: Enhanced createReportSchema — report_type now
+  enum (capacity_summary, trend_analysis, forecast,
+  utilization_breakdown) instead of free string, name max 200,
+  type max 100, cron_expression max 100.
+- shared-validation: Enhanced ingestMetricSchema — all string fields
+  now have max length, utilization_pct 0-100, max_capacity min 0.
+- shared-validation: Reduced ingestMetricsBatchSchema max from 10000
+  to 1000 (was DoS risk with serial loop).
 
 Performance:
-- firewall.ts: Parallelized 2 queries in GET /rules/:id (rule +
-  versions) using Promise.all.
-- firewall.ts: Added httpCache(30) on GET /, GET /hosts;
-  httpCache(15) on GET /rules, GET /rules/:id, GET /changes.
+- capacity.ts: Replaced serial loop in POST /metrics/batch with
+  multi-value INSERT (VALUES ($1,...), ($N,...)) in batches of 100.
+  Before: 1000 individual INSERT queries. Now: 10 batched queries.
+- capacity.ts: Parallelized 2 queries in GET / (metrics + thresholds).
+- capacity.ts: Parallelized 4 queries in GET /stats (overview,
+  by_type, top_utilized, forecasts) using Promise.all.
+- capacity.ts: Added httpCache(30) on GET /, GET /thresholds,
+  GET /reports; httpCache(15) on GET /metrics, GET /forecast,
+  GET /stats.
+
+Bug fixes:
+- capacity.ts: DELETE /thresholds/:id now returns 404 if not found.
+- capacity.ts: DELETE /reports/:id now returns 404 if not found.
+- capacity.ts: PUT /thresholds/:id now returns 404 if not found,
+  and 400 if no fields to update.
+- capacity.ts: All validation errors now return parsed.error.flatten().
+- capacity.ts: All audit logs migrated to writeAuditLog helper.
+- capacity.ts: hours validation in GET /metrics (NaN/negativo -> 24,
+  max 720).
 
 Code quality:
-- firewall.ts: Added try/catch on all 9 endpoints with structured logging.
-- firewall.ts: Added logger with ruleId, host, tenantId context.
-- firewall.ts: Refactored command building into separate functions
-  (buildIptablesArgs, buildNftablesArgs, buildUfwArgs) returning arrays.
+- capacity.ts: Added try/catch on all 11 endpoints with structured
+  logging.
+- capacity.ts: Added logger with tenantId, reportId context.
 
 Tests:
-- firewall.test.ts (NEW): 56 tests covering:
-  - createFirewallRuleSchema (28 tests): name, host shell injection
-    prevention, action/protocol/backend/chain enums, defaults, source_ip/
-    destination_port/interface_in shell injection prevention.
-  - updateFirewallRuleSchema (12 tests): partial updates, all 9 new
-    fields, priority range (0-32767), host shell injection.
-  - applyFirewallSchema (8 tests): device_id required, rule_ids min 1,
-    dry_run default, host shell injection.
-  - iptables args building (3 tests): simple rule, complete rule,
-    array verification (no string interpolation).
-  - Limit pagination (3 tests), version bump (2 tests).
+- capacity.test.ts (NEW): 73 tests covering:
+  - ingestMetricSchema (13 tests): required fields, max_capacity
+    range, utilization_pct 0-100, metadata, resource_id.
+  - ingestMetricsBatchSchema (7 tests): min 1, max 1000, empty
+    rejection, invalid metric rejection, non-array rejection.
+  - createThresholdSchema (12 tests): warning/critical 0-100 range,
+    critical > warning enforcement, defaults, boundaries.
+  - updateThresholdSchema (7 tests): partial updates, range
+    validation.
+  - createReportSchema (16 tests): format enum, report_type enum
+    (4 values), defaults, template_id UUID, date_range.
+  - Hours validation (7 tests): default, NaN, zero, negative, max.
+  - Batch insert logic (4 tests): BATCH_SIZE=100 division.
+  - Report type selection (4 tests): each type generates correct
+    summary key.
+  - Limit pagination (2 tests).
 
-Total: 1621 tests passing (was 1565, +56 new).
+Total: 1694 tests passing (was 1621, +73 new).
 
 Generated with [Devin](https://devin.ai)
 
