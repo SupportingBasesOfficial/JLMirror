@@ -1359,47 +1359,50 @@ const SAFE_HOST_PATH = z
   );
 
 export const createBackupJobSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
+  name: z.string().min(1).max(255),
+  description: z.string().max(5000).optional(),
   target_host: SAFE_HOST_PATH.min(1),
-  backup_type: z.enum(["full", "incremental", "differential"]),
+  backup_type: z.enum(["full", "incremental", "differential", "snapshot"]),
   source_path: SAFE_HOST_PATH.min(1),
-  destination_type: z.enum(["local", "s3", "sftp", "nfs"]),
+  destination_type: z.enum(["local", "s3", "sftp", "nfs", "azure_blob", "gcs"]),
   destination_path: SAFE_HOST_PATH.min(1),
-  retention_count: z.number().int().min(1).default(7),
-  retention_days: z.number().int().min(1).default(30),
-  compression: z.boolean().default(true),
+  retention_count: z.number().int().min(1).max(365).default(7),
+  retention_days: z.number().int().min(1).max(3650).default(30),
+  compression: z.enum(["none", "gzip", "zstd", "bzip2", "lz4"]).default("gzip"),
   encryption: z.boolean().default(false),
-  encryption_key_id: z.string().optional(),
+  encryption_key_id: z.string().max(255).optional(),
   is_scheduled: z.boolean().default(false),
-  cron_expression: z.string().optional(),
+  cron_expression: z.string().max(100).optional(),
 });
 export type CreateBackupJobInput = z.infer<typeof createBackupJobSchema>;
 
 export const updateBackupJobSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(5000).optional(),
   target_host: SAFE_HOST_PATH.optional(),
-  backup_type: z.enum(["full", "incremental", "differential"]).optional(),
+  backup_type: z
+    .enum(["full", "incremental", "differential", "snapshot"])
+    .optional(),
   source_path: SAFE_HOST_PATH.optional(),
-  destination_type: z.enum(["local", "s3", "sftp", "nfs"]).optional(),
+  destination_type: z
+    .enum(["local", "s3", "sftp", "nfs", "azure_blob", "gcs"])
+    .optional(),
   destination_path: SAFE_HOST_PATH.optional(),
-  retention_count: z.number().int().min(1).optional(),
-  retention_days: z.number().int().min(1).optional(),
-  compression: z.boolean().optional(),
+  retention_count: z.number().int().min(1).max(365).optional(),
+  retention_days: z.number().int().min(1).max(3650).optional(),
+  compression: z.enum(["none", "gzip", "zstd", "bzip2", "lz4"]).optional(),
   encryption: z.boolean().optional(),
+  encryption_key_id: z.string().max(255).optional(),
   is_scheduled: z.boolean().optional(),
-  cron_expression: z.string().optional(),
+  cron_expression: z.string().max(100).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateBackupJobInput = z.infer<typeof updateBackupJobSchema>;
 
 export const createRestoreSchema = z.object({
-  job_id: z.string().uuid(),
-  snapshot_id: z.string().optional(),
-  restore_path: SAFE_HOST_PATH.optional(),
-  target_host: SAFE_HOST_PATH.optional(),
-  target_path: SAFE_HOST_PATH.optional(),
+  snapshot_id: z.string().uuid(),
+  target_host: SAFE_HOST_PATH.min(1),
+  target_path: SAFE_HOST_PATH.min(1),
   overwrite_existing: z.boolean().default(false),
 });
 export type CreateRestoreInput = z.infer<typeof createRestoreSchema>;

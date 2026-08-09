@@ -1,65 +1,64 @@
-feat(system-health): fix schemas, SSRF, try/catch, parallelize queries, rate limit
+feat(backup): fix command injection, schemas, try/catch, parallelize, rate limit
 
 Security (CRITICAL):
-- shared-validation/src/index.ts: Fixed all 5 system-health schemas to match
-  DB migration. createHealthCheckSchema had fields (type, target, interval)
-  that don't exist in DB; was missing required service_type enum.
-  createIncidentSchema had severity as number(0-5) but DB expects string
-  enum (info/warning/major/critical/maintenance). recordMetricSchema
-  required health_check_id which doesn't exist in system_metric_snapshots
-  table; was missing required metric_name, metric_type, unit fields.
-  updateHealthCheckSchema was missing service_type, endpoint,
-  check_interval_seconds, timeout_seconds, expected_status_code fields.
-  updateIncidentSchema was missing root_cause, resolution_notes, impact
-  fields; had severity as number instead of string enum.
-- system-health.ts: Fixed SSRF vulnerability in POST /checks/:id/run.
-  fetch(check.endpoint) was calling arbitrary URLs including internal IPs
-  (e.g., 169.254.169.254 AWS metadata). Added isSafeUrl() helper that
-  blocks localhost, private IP ranges (10.x, 172.16-31.x, 192.168.x,
-  169.254.x), IPv6 loopback (::1), .internal/.local domains, and
-  non-HTTP protocols. Applied on both POST /checks (creation) and
-  POST /checks/:id/run (execution).
-- system-health.ts: Fixed user.sub crash risk — replaced with user?.sub
-  ?? null in POST /incidents and POST /checks/:id/run (was accessing
-  user.sub without optional chaining, would crash if user is null).
-- system-health.ts: Added rateLimitWrite on POST /checks, PUT /checks/:id,
-  DELETE /checks/:id, POST /checks/:id/run, POST /incidents,
-  PUT /incidents/:id, POST /metrics (7 endpoints).
+- backup.ts: Fixed command injection vulnerability in POST /jobs/:id/run and
+  POST /restore. tar/ssh commands were using unsanitized user input
+  (source_path, destination_path, target_host) directly in shell commands.
+  Added isSafePath() and isSafeHostname() helpers that block shell
+  metacharacters (;, |, `, $, &, etc.), path traversal (..), and command
+  substitution ($(), ``). Applied on POST /jobs (creation), PUT /jobs
+  (update), POST /jobs/:id/run (execution), and POST /restore.
+- backup.ts: Fixed calculateFileChecksum to use Node.js crypto.createHash
+  with streaming (createReadStream) instead of execSync(`sha256sum ...`)
+  which was vulnerable to command injection via filePath.
+- backup.ts: Revalidates paths from DB before using in shell commands
+  (defense in depth — even if DB data was tampered).
+- shared-validation/src/index.ts: Fixed createBackupJobSchema — compression
+  was boolean but DB expects string enum (none/gzip/zstd/bzip2/lz4).
+  backup_type was missing 'snapshot'. destination_type was missing
+  'azure_blob' and 'gcs'. createRestoreSchema required job_id but endpoint
+  uses snapshot_id; was missing required target_host and target_path.
+- backup.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
+  in all 8 occurrences (POST /jobs, PUT /jobs, DELETE /jobs, POST /jobs/:id/run,
+  POST /snapshots/:id/verify, POST /restore).
+- backup.ts: Added rateLimitWrite on POST /jobs, PUT /jobs/:id,
+  DELETE /jobs/:id, POST /jobs/:id/run, POST /snapshots/:id/verify,
+  POST /restore (6 endpoints).
 
 Performance:
-- system-health.ts: Parallelized 7 queries in GET /diagnostics using
-  Promise.all (was 7 sequential queries).
-- system-health.ts: Parallelized 4 queries in GET /stats using
-  Promise.all (was 4 sequential queries).
-- system-health.ts: Added httpCache(30) on GET /checks, GET /incidents,
-  GET /metrics, GET /stats. Already had httpCache(60) on GET /score.
+- backup.ts: Parallelized 2 queries in GET / using Promise.all.
+- backup.ts: Parallelized 2 queries in GET /jobs/:id using Promise.all
+  (snapshots + restores were sequential).
+- backup.ts: Parallelized 3 queries in GET /stats using Promise.all
+  (jobs + snapshots + recent were sequential).
+- backup.ts: Added httpCache(30) on GET /jobs, GET /snapshots,
+  GET /restores, GET /stats.
 
 Code quality:
-- system-health.ts: Added try/catch on all 12 endpoints with generic
-  Portuguese error messages and structured logging.
-- system-health.ts: Added logger with tenantId, checkId, incidentId
-  context. Logs incident auto-creation with severity.
-- system-health.ts: Added safeJsonBody() for safe request body parsing
-  (was using c.req.json directly which can throw on invalid JSON).
-- system-health.ts: Added validation error details (parsed.error.flatten())
-  to all error responses.
-- system-health.ts: Fixed JSON.stringify(data.metadata) / data.labels /
-  data.affected_services — added ?? {} / ?? [] fallbacks to prevent
-  "undefined" string being stored in JSONB columns.
-- system-health.ts: Fixed PUT /checks/:id and DELETE /checks/:id to
-  return 404 when check not found (was returning success regardless).
+- backup.ts: Added try/catch on all 12 endpoints with generic Portuguese
+  error messages and structured logging.
+- backup.ts: Added logger with tenantId, jobId, snapshotId, restoreId
+  context. Logs backup failures, successes, and restore outcomes.
+- backup.ts: Added safeJsonBody() for safe request body parsing.
+- backup.ts: Added validation error details (parsed.error.flatten()) to
+  all error responses.
+- backup.ts: Fixed error_message not being stored on backup_snapshots
+  and backup_restores when operations fail (now truncates to 5000 chars).
+- backup.ts: Fixed DELETE /jobs/:id and PUT /jobs/:id to return 404 when
+  job not found (was returning success regardless).
+- backup.ts: Removed unused imports (execSync, type imports).
 
 Tests:
-- system-health.test.ts (NEW): 84 tests covering all 5 Zod schemas
-  (createHealthCheck, updateHealthCheck, createIncident, updateIncident,
-  recordMetric) with all enum values, defaults, and edge cases; metric
-  status calculation logic (healthy/warning/critical thresholds);
-  isSafeUrl SSRF protection (17 URL tests covering public, localhost,
-  private IPs, AWS metadata, IPv6, .internal/.local, non-HTTP protocols);
-  automatic incident creation logic (3-failure threshold, severity
-  escalation at 5+ failures, consecutive counters reset).
+- backup.test.ts (NEW): 79 tests covering all 3 Zod schemas
+  (createBackupJob, updateBackupJob, createRestore) with all enum values,
+  defaults, and edge cases; isSafePath SSRF/command injection protection
+  (17 path tests covering traversal, semicolons, pipes, backticks, command
+  substitution, globs, newlines); isSafeHostname protection (12 host tests);
+  compression flag logic (gzip vs none vs zstd); restore logic (file
+  extension detection, overwrite flag, remote vs localhost, checksum
+  verification conditions).
 
-Total: 653 tests passing (was 569, +84 new).
+Total: 732 tests passing (was 653, +79 new).
 
 Generated with [Devin](https://devin.ai)
 
