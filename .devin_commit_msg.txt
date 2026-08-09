@@ -1,61 +1,58 @@
-feat(finops): fix user?.sub, try/catch, schemas, parallelize, 404
+feat(marketplace): add requirePermission, try/catch, parallelize, 404s
 
 Security:
-- finops.ts: Fixed user.tenant_id and user.sub crash risk —
+- marketplace.ts: Added requirePermission("marketplace:read") on
+  GET /apps and GET /apps/:slug — were completely public, exposing
+  catalog + tenant install status to anyone.
+- marketplace.ts: Fixed user.tenant_id and user.sub crash risk —
   replaced with user?.tenant_id ?? null and user?.sub ?? null in
   all 8+ occurrences.
-- finops.ts: Added rateLimitWrite on POST /costs, POST
-  /optimizations, PUT /optimizations/:id/status, PUT /budgets (4
-  endpoints).
-- shared-validation: Enhanced all 4 finops schemas with max
-  length: finopsCostSchema (period_start/end max 50, category max
-  100, resource_name max 200, resource_type max 100, currency max
-  10, usage_unit max 50, source max 100), finopsOptimizationSchema
-  (category max 100, resource_name max 200, title max 500,
-  description max 10000, currency max 10), finopsBudgetSchema
-  (category max 100, currency max 10, alert_threshold_pct 0-100
-  range validation).
+- marketplace.ts: Added rateLimitWrite on POST /install, PUT
+  /configure, PUT /activate, PUT /disable, DELETE /installs/:id
+  (5 endpoints).
+- marketplace.ts: Replaced c.req.json().catch() with safeJsonBody
+  on POST /install.
 
 Bug fixes:
-- finops.ts: PUT /optimizations/:id/status now returns 404 if
-  optimization not found.
-- finops.ts: All audit logs migrated to writeAuditLog helper (was
-  only 1 inline audit log, now 3 endpoints with audit logs).
+- marketplace.ts: PUT /configure, PUT /activate, PUT /disable now
+  return 404 if install not found (3 endpoints).
+- marketplace.ts: DELETE /installs/:id now returns 404 if install
+  not found.
+- marketplace.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- finops.ts: Parallelized 3 queries in GET /summary (by_month +
-  by_category + total) using Promise.all — was 3 sequential
-  queries.
-- finops.ts: Parallelized 5 queries in GET /stats (total_cost +
-  total_savings + implemented_savings + pending_optimizations +
-  budget) using Promise.all — was 5 sequential queries.
-- finops.ts: Added httpCache(60) on GET /, GET /summary, GET
-  /budgets, GET /stats; httpCache(30) on GET /costs, GET
-  /optimizations (6 endpoints).
+- marketplace.ts: Parallelized 2 queries in GET /apps (apps list +
+  tenant installs) using Promise.all — was 2 sequential queries.
+- marketplace.ts: Parallelized 4 queries in GET /stats (total_apps
+  + installed + active + by_category) using Promise.all — was 4
+  sequential queries.
+- marketplace.ts: Parallelized 3 operations in POST /install
+  (increment count + audit log) using Promise.all.
+- marketplace.ts: Parallelized 3 operations in DELETE /installs
+  (delete + decrement count + audit log) using Promise.all.
+- marketplace.ts: Added httpCache(60) on GET /, GET /apps, GET
+  /apps/:slug, GET /stats; httpCache(30) on GET /installs (5
+  endpoints).
 
 Code quality:
-- finops.ts: Added try/catch on all 9 endpoints with structured
-  logging (was zero).
-- finops.ts: Added logger with costId, optId, budgetId, category,
-  title, status, month, year, tenantId context.
+- marketplace.ts: Added try/catch on all 9 endpoints with
+  structured logging (was zero).
+- marketplace.ts: Added logger with installId, appId, appSlug,
+  tenantId context.
 
 Tests:
-- finops.test.ts (NEW): 33 tests covering:
-  - finopsCostSchema (9 tests): period_start/end required,
-    category required + max 100, resource_name max 200, currency
-    max 10, complete cost.
-  - finopsOptimizationSchema (7 tests): title required + max 500,
-    effort enum (low/medium/high), invalid effort rejected,
-    estimated_savings_annual.
-  - finopsOptimizationStatusSchema (7 tests): all 5 status values,
-    invalid status rejected, actual_savings_monthly.
-  - finopsBudgetSchema (8 tests): month 1-12, year >= 2000,
-    category, alert_threshold_pct 0-100 range, invalid values
-    rejected.
-  - Savings calculation logic (2 tests): annual = monthly * 12,
-    default annual calculation.
+- marketplace.test.ts (NEW): 17 tests covering:
+  - marketplaceConfigureSchema (4 tests): empty config, with
+    config, nested objects, null values.
+  - Installed map logic (3 tests): map creation, installed check,
+    install_status retrieval.
+  - Install status logic (4 tests): all 4 valid statuses.
+  - Default config logic (3 tests): body config, app default,
+    empty fallback.
+  - Installs count logic (3 tests): increment, decrement,
+    GREATEST(0) non-negative.
 
-Total: 2276 tests passing (was 2243, +33 new).
+Total: 2293 tests passing (was 2276, +17 new).
 
 Generated with [Devin](https://devin.ai)
 
