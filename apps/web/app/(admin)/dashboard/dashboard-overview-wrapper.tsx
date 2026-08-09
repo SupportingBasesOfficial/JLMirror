@@ -82,9 +82,34 @@ export default async function DashboardOverviewWrapper() {
   );
 
   if (result.error || !result.data) {
+    const errorCode = result.error?.code ?? "UNKNOWN";
+    const errorMsg = result.error?.message ?? "Sem dados disponíveis";
+    const isDbError = errorCode === "DASHBOARD_OVERVIEW_ERROR";
+    const isNetworkError = errorCode === "NETWORK_ERROR";
     return (
-      <div className="text-sm" style={{ color: "var(--text-muted)" }}>
-        Sem dados disponíveis
+      <div
+        className="rounded-lg p-4"
+        style={{
+          background: "var(--status-error-bg)",
+          border: "1px solid var(--status-error-border)",
+        }}
+      >
+        <div
+          className="text-sm font-medium"
+          style={{ color: "var(--status-error-text)" }}
+        >
+          {isDbError
+            ? "Falha ao carregar dashboard"
+            : isNetworkError
+              ? "Erro de conexão"
+              : "Dados indisponíveis"}
+        </div>
+        <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
+          {errorMsg}
+        </div>
+        <div className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+          Tente recarregar a página. Se o problema persistir, contate o suporte.
+        </div>
       </div>
     );
   }

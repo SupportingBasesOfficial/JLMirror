@@ -19,6 +19,7 @@ import {
 import type { ZabbixHost, ZabbixTrigger } from "@repo/zabbix";
 import DashboardOverviewWrapper from "./dashboard-overview-wrapper";
 import { DeviceSyncTrigger } from "./device-sync-trigger";
+import { DashboardAutoRefresh } from "./dashboard-auto-refresh";
 
 async function getZabbixDevices(accessToken: string, refreshToken?: string) {
   const result = await serverApiGetWithToken<{ devices: ZabbixHost[] }>(
@@ -99,6 +100,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-5" style={{ animation: "fadeIn 0.3s ease-out" }}>
+      {/* Header com titulo e auto-refresh */}
+      <div className="flex items-center justify-between">
+        <h1
+          className="text-xl font-bold"
+          style={{ color: "var(--text-primary)" }}
+        >
+          Dashboard
+        </h1>
+        <DashboardAutoRefresh />
+      </div>
+
       {/* Dispara sync de devices do Zabbix imediatamente ao carregar o dashboard */}
       <DeviceSyncTrigger />
 
