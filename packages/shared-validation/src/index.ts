@@ -1690,12 +1690,18 @@ export type UpdateClientContactInput = z.infer<
 >;
 
 export const upsertClientCompanySchema = z.object({
-  name: z.string().min(1),
-  cnpj: z.string().optional(),
-  industry: z.string().optional(),
-  website: z.string().url().optional(),
-  address: z.string().optional(),
-  phone: z.string().optional(),
+  legal_name: z.string().max(255).optional(),
+  cnpj: z.string().max(18).optional(),
+  contract_value: z.number().min(0).optional(),
+  billing_day: z.number().int().min(1).max(28).optional(),
+  billing_cycle: z.enum(["monthly", "quarterly", "yearly"]).optional(),
+  plan_tier: z.enum(["basic", "pro", "enterprise", "custom"]).optional(),
+  address_street: z.string().max(255).optional(),
+  address_city: z.string().max(100).optional(),
+  address_state: z.string().max(50).optional(),
+  address_zip: z.string().max(20).optional(),
+  address_country: z.string().max(50).optional(),
+  notes: z.string().max(10000).optional(),
 });
 export type UpsertClientCompanyInput = z.infer<
   typeof upsertClientCompanySchema
