@@ -1376,9 +1376,16 @@ export type ApproveChangeInput = z.infer<typeof approveChangeSchema>;
 export const createExportTemplateSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
-  source_table: z.string().min(1),
+  source_table: z
+    .string()
+    .min(1)
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de tabela inválido"),
   format: z.enum(["csv", "json", "sql"]).default("csv"),
-  columns: z.array(z.string()).default([]),
+  columns: z
+    .array(
+      z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de coluna inválido"),
+    )
+    .default([]),
   filters: z.record(z.unknown()).default({}),
   include_headers: z.boolean().default(true),
   delimiter: z.string().default(","),
@@ -1392,9 +1399,16 @@ export type CreateExportTemplateInput = z.infer<
 export const updateExportTemplateSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
-  source_table: z.string().optional(),
+  source_table: z
+    .string()
+    .regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de tabela inválido")
+    .optional(),
   format: z.enum(["csv", "json", "sql"]).optional(),
-  columns: z.array(z.string()).optional(),
+  columns: z
+    .array(
+      z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, "Nome de coluna inválido"),
+    )
+    .optional(),
   filters: z.record(z.unknown()).optional(),
   include_headers: z.boolean().optional(),
   delimiter: z.string().optional(),
@@ -1434,6 +1448,11 @@ export const createDataImportSchema = z.object({
   options: z.record(z.unknown()).optional(),
 });
 export type CreateDataImportInput = z.infer<typeof createDataImportSchema>;
+
+export const runImportSchema = z.object({
+  data: z.array(z.record(z.unknown())).min(1).max(10000),
+});
+export type RunImportInput = z.infer<typeof runImportSchema>;
 
 // ========== Execution Schemas ==========
 export const approveExecutionSchema = z.object({
