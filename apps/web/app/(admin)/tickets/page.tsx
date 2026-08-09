@@ -225,6 +225,7 @@ export default function TicketsPage() {
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError("Erro ao carregar comentários do ticket");
     }
   }
 
@@ -242,9 +243,13 @@ export default function TicketsPage() {
         }
         mutateTickets();
         mutateStats();
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error?.message ?? "Erro ao atualizar status");
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError("Erro de conexão ao atualizar status");
     }
   }
 
@@ -264,9 +269,13 @@ export default function TicketsPage() {
         setNewComment("");
         setCommentInternal(false);
         handleSelectTicket(selectedTicket);
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error?.message ?? "Erro ao adicionar comentário");
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError("Erro de conexão ao adicionar comentário");
     }
   }
 
@@ -307,9 +316,15 @@ export default function TicketsPage() {
         method: "DELETE",
         credentials: "include",
       });
-      if (res.ok) mutateCategories();
+      if (res.ok) {
+        mutateCategories();
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error?.message ?? "Erro ao excluir categoria");
+      }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError("Erro de conexão ao excluir categoria");
     }
   }
 

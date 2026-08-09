@@ -558,9 +558,8 @@ export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
 
 export const createCommentSchema = z.object({
   ticket_id: z.string().uuid(),
-  content: z.string().min(1),
   is_internal: z.boolean().default(false),
-  body: z.string().min(1),
+  body: z.string().min(1).max(10000),
 });
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 

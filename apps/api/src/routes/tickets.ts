@@ -2,6 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import {
   createCategorySchema,
   updateCategorySchema,
@@ -15,6 +16,8 @@ import {
   type CreateCommentInput,
 } from "@repo/shared-validation";
 import { requirePermission } from "../middleware/require-permission.js";
+import { rateLimitWrite } from "../middleware/rate-limit.js";
+import { httpCache } from "../middleware/http-cache.js";
 import {
   parsePaginationParams,
   buildPaginatedResponse,
@@ -25,18 +28,24 @@ export const ticketRoute = new Hono();
 
 // ========== Categories ==========
 
-ticketRoute.get("/categories", requirePermission("tickets:read"), async (c) => {
-  const user = c.get("user");
-  const result = await query(
-    "SELECT id, tenant_id, name, description, color, sla_response_hours, sla_resolution_hours, is_active, created_at, updated_at FROM public.ticket_categories WHERE tenant_id = $1 ORDER BY name",
-    [user?.tenant_id ?? null],
-  );
+ticketRoute.get(
+  "/categories",
+  httpCache(60),
+  requirePermission("tickets:read"),
+  async (c) => {
+    const user = c.get("user");
+    const result = await query(
+      "SELECT id, tenant_id, name, description, color, sla_response_hours, sla_resolution_hours, is_active, created_at, updated_at FROM public.ticket_categories WHERE tenant_id = $1 ORDER BY name",
+      [user?.tenant_id ?? null],
+    );
 
-  return c.json({ categories: result.data?.rows ?? [] });
-});
+    return c.json({ categories: result.data?.rows ?? [] });
+  },
+);
 
 ticketRoute.post(
   "/categories",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const user = c.get("user");
@@ -224,64 +233,81 @@ ticketRoute.get("/", requirePermission("tickets:read"), async (c) => {
 
 // ========== Stats ==========
 
-ticketRoute.get("/stats", requirePermission("tickets:read"), async (c) => {
-  const user = c.get("user");
+ticketRoute.get(
+  "/stats",
+  httpCache(30),
+  requirePermission("tickets:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const startedAt = Date.now();
 
-  const statusResult = await query(
-    `SELECT status, COUNT(*) as count
-     FROM public.tickets WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`,
-    [user?.tenant_id ?? null],
-  );
+    // Paraleliza 5 queries independentes (antes eram seriais)
+    const [
+      statusResult,
+      priorityResult,
+      slaResult,
+      categoryResult,
+      totalResult,
+    ] = await Promise.all([
+      query(
+        `SELECT status, COUNT(*) as count
+         FROM public.tickets WHERE tenant_id = $1 GROUP BY status ORDER BY count DESC`,
+        [tenantId],
+      ),
+      query(
+        `SELECT priority, COUNT(*) as count
+         FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')
+         GROUP BY priority ORDER BY
+           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END`,
+        [tenantId],
+      ),
+      query(
+        `SELECT
+           COUNT(*) FILTER (WHERE is_overdue = true) as overdue,
+           COUNT(*) FILTER (WHERE status NOT IN ('resolved','closed','cancelled')) as open_tickets,
+           AVG(response_time_mins) FILTER (WHERE response_time_mins IS NOT NULL) as avg_response_mins,
+           AVG(resolution_time_mins) FILTER (WHERE resolution_time_mins IS NOT NULL) as avg_resolution_mins,
+           AVG(rating) FILTER (WHERE rating IS NOT NULL) as avg_rating
+         FROM public.tickets WHERE tenant_id = $1`,
+        [tenantId],
+      ),
+      query(
+        `SELECT tc.name, tc.color,
+           COUNT(t.id) as ticket_count,
+           COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved','closed','cancelled')) as open_count
+         FROM public.ticket_categories tc
+         LEFT JOIN public.tickets t ON tc.id = t.category_id AND t.tenant_id = $1
+         WHERE tc.tenant_id = $1 AND tc.is_active = true
+         GROUP BY tc.name, tc.color ORDER BY open_count DESC`,
+        [tenantId],
+      ),
+      query(
+        "SELECT COUNT(*) as total FROM public.tickets WHERE tenant_id = $1",
+        [tenantId],
+      ),
+    ]);
 
-  const priorityResult = await query(
-    `SELECT priority, COUNT(*) as count
-     FROM public.tickets WHERE tenant_id = $1 AND status NOT IN ('resolved','closed','cancelled')
-     GROUP BY priority ORDER BY
-       CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END`,
-    [user?.tenant_id ?? null],
-  );
+    logger.info("Tickets stats consultado", {
+      tenantId,
+      durationMs: Date.now() - startedAt,
+    });
 
-  const slaResult = await query(
-    `SELECT
-       COUNT(*) FILTER (WHERE is_overdue = true) as overdue,
-       COUNT(*) FILTER (WHERE status NOT IN ('resolved','closed','cancelled')) as open_tickets,
-       AVG(response_time_mins) FILTER (WHERE response_time_mins IS NOT NULL) as avg_response_mins,
-       AVG(resolution_time_mins) FILTER (WHERE resolution_time_mins IS NOT NULL) as avg_resolution_mins,
-       AVG(rating) FILTER (WHERE rating IS NOT NULL) as avg_rating
-     FROM public.tickets WHERE tenant_id = $1`,
-    [user?.tenant_id ?? null],
-  );
-
-  const categoryResult = await query(
-    `SELECT tc.name, tc.color,
-       COUNT(t.id) as ticket_count,
-       COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved','closed','cancelled')) as open_count
-     FROM public.ticket_categories tc
-     LEFT JOIN public.tickets t ON tc.id = t.category_id AND t.tenant_id = $1
-     WHERE tc.tenant_id = $1 AND tc.is_active = true
-     GROUP BY tc.name, tc.color ORDER BY open_count DESC`,
-    [user?.tenant_id ?? null],
-  );
-
-  const totalResult = await query(
-    "SELECT COUNT(*) as total FROM public.tickets WHERE tenant_id = $1",
-    [user?.tenant_id ?? null],
-  );
-
-  return c.json({
-    total: totalResult.data?.rows[0]?.total ?? "0",
-    by_status: statusResult.data?.rows ?? [],
-    by_priority: priorityResult.data?.rows ?? [],
-    sla: slaResult.data?.rows[0] ?? {
-      overdue: "0",
-      open_tickets: "0",
-      avg_response_mins: null,
-      avg_resolution_mins: null,
-      avg_rating: null,
-    },
-    by_category: categoryResult.data?.rows ?? [],
-  });
-});
+    return c.json({
+      total: totalResult.data?.rows[0]?.total ?? "0",
+      by_status: statusResult.data?.rows ?? [],
+      by_priority: priorityResult.data?.rows ?? [],
+      sla: slaResult.data?.rows[0] ?? {
+        overdue: "0",
+        open_tickets: "0",
+        avg_response_mins: null,
+        avg_resolution_mins: null,
+        avg_rating: null,
+      },
+      by_category: categoryResult.data?.rows ?? [],
+    });
+  },
+);
 
 ticketRoute.get("/:id", requirePermission("tickets:read"), async (c) => {
   const ticketId = c.req.param("id");
@@ -313,234 +339,248 @@ ticketRoute.get("/:id", requirePermission("tickets:read"), async (c) => {
   });
 });
 
-ticketRoute.post("/", requirePermission("tickets:write"), async (c) => {
-  const user = c.get("user");
-  const body = await c.req.json<CreateTicketInput>();
-  const parsed = createTicketSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-      400,
-    );
-  }
-
-  const data = parsed.data;
-
-  // Gera número do ticket
-  const numberResult = await query<{ generate_ticket_number: string }>(
-    "SELECT public.generate_ticket_number($1) as generate_ticket_number",
-    [user?.tenant_id ?? null],
-  );
-
-  if (numberResult.error || !numberResult.data?.rows[0]) {
-    return c.json(
-      {
-        error: {
-          code: "CREATE_ERROR",
-          message: "Erro ao gerar número do ticket",
-        },
-      },
-      500,
-    );
-  }
-
-  const ticketNumber = numberResult.data.rows[0].generate_ticket_number;
-
-  // Calcula SLA se categoria fornecida
-  let slaResponseDue: string | null = null;
-  let slaResolutionDue: string | null = null;
-
-  if (data.category_id) {
-    const slaResult = await query<{
-      sla_response_due: string;
-      sla_resolution_due: string;
-    }>("SELECT * FROM public.calculate_ticket_sla($1, $2)", [
-      data.category_id,
-      data.priority,
-    ]);
-    if (slaResult.data?.rows[0]) {
-      slaResponseDue = slaResult.data.rows[0].sla_response_due;
-      slaResolutionDue = slaResult.data.rows[0].sla_resolution_due;
+ticketRoute.post(
+  "/",
+  rateLimitWrite,
+  requirePermission("tickets:write"),
+  async (c) => {
+    const user = c.get("user");
+    const body = await c.req.json<CreateTicketInput>();
+    const parsed = createTicketSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
     }
-  }
 
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.tickets (tenant_id, ticket_number, category_id, subject, description, status, priority, source,
+    const data = parsed.data;
+
+    // Gera número do ticket
+    const numberResult = await query<{ generate_ticket_number: string }>(
+      "SELECT public.generate_ticket_number($1) as generate_ticket_number",
+      [user?.tenant_id ?? null],
+    );
+
+    if (numberResult.error || !numberResult.data?.rows[0]) {
+      return c.json(
+        {
+          error: {
+            code: "CREATE_ERROR",
+            message: "Erro ao gerar número do ticket",
+          },
+        },
+        500,
+      );
+    }
+
+    const ticketNumber = numberResult.data.rows[0].generate_ticket_number;
+
+    // Calcula SLA se categoria fornecida
+    let slaResponseDue: string | null = null;
+    let slaResolutionDue: string | null = null;
+
+    if (data.category_id) {
+      const slaResult = await query<{
+        sla_response_due: string;
+        sla_resolution_due: string;
+      }>("SELECT * FROM public.calculate_ticket_sla($1, $2)", [
+        data.category_id,
+        data.priority,
+      ]);
+      if (slaResult.data?.rows[0]) {
+        slaResponseDue = slaResult.data.rows[0].sla_response_due;
+        slaResolutionDue = slaResult.data.rows[0].sla_resolution_due;
+      }
+    }
+
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.tickets (tenant_id, ticket_number, category_id, subject, description, status, priority, source,
      requester_name, requester_email, requester_phone, assigned_to, tags, metadata, sla_response_due, sla_resolution_due, created_by)
      VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING id`,
-    [
-      user?.tenant_id ?? null,
-      ticketNumber,
-      data.category_id ?? null,
-      data.subject,
-      data.description,
-      data.priority,
-      data.source,
-      data.requester_name,
-      data.requester_email,
-      data.requester_phone ?? null,
-      data.assigned_to ?? null,
-      JSON.stringify(data.tags),
-      JSON.stringify(data.metadata),
-      slaResponseDue,
-      slaResolutionDue,
-      user.sub,
-    ],
-  );
-
-  if (result.error || !result.data?.rows[0]) {
-    return c.json(
-      { error: { code: "CREATE_ERROR", message: "Erro ao criar ticket" } },
-      500,
+      [
+        user?.tenant_id ?? null,
+        ticketNumber,
+        data.category_id ?? null,
+        data.subject,
+        data.description,
+        data.priority,
+        data.source,
+        data.requester_name,
+        data.requester_email,
+        data.requester_phone ?? null,
+        data.assigned_to ?? null,
+        JSON.stringify(data.tags),
+        JSON.stringify(data.metadata),
+        slaResponseDue,
+        slaResolutionDue,
+        user.sub,
+      ],
     );
-  }
 
-  const ticketId = result.data.rows[0].id;
-
-  // Comentário automático do sistema
-  await query(
-    `INSERT INTO public.ticket_comments (tenant_id, ticket_id, author_name, author_type, body, is_internal)
-     VALUES ($1, $2, 'Sistema', 'system', 'Ticket criado via $3', false)`,
-    [user?.tenant_id ?? null, ticketId, data.source],
-  );
-
-  await query(
-    "SELECT public.write_audit_log($1, NULL, 'ticket.create', 'ticket', $2, $3, NULL, NULL)",
-    [
-      user.sub,
-      ticketId,
-      JSON.stringify({
-        ticket_number: ticketNumber,
-        subject: data.subject,
-        priority: data.priority,
-      }),
-    ],
-  );
-
-  return c.json({ id: ticketId, ticket_number: ticketNumber }, 201);
-});
-
-ticketRoute.put("/:id", requirePermission("tickets:write"), async (c) => {
-  const ticketId = c.req.param("id");
-  const user = c.get("user");
-  const body = await c.req.json<UpdateTicketInput>();
-  const parsed = updateTicketSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-      400,
-    );
-  }
-
-  const data = parsed.data;
-  const updateFields: string[] = [];
-  const params: unknown[] = [];
-  let paramIdx = 1;
-
-  const fieldMap: Record<string, string> = {
-    category_id: "category_id",
-    subject: "subject",
-    description: "description",
-    status: "status",
-    priority: "priority",
-    assigned_to: "assigned_to",
-    assigned_name: "assigned_name",
-    rating: "rating",
-    rating_comment: "rating_comment",
-  };
-
-  for (const [key, dbField] of Object.entries(fieldMap)) {
-    if (data[key as keyof typeof data] !== undefined) {
-      updateFields.push(`${dbField} = $${paramIdx++}`);
-      params.push(data[key as keyof typeof data]);
+    if (result.error || !result.data?.rows[0]) {
+      return c.json(
+        { error: { code: "CREATE_ERROR", message: "Erro ao criar ticket" } },
+        500,
+      );
     }
-  }
 
-  if (data.tags !== undefined) {
-    updateFields.push(`tags = $${paramIdx++}`);
-    params.push(JSON.stringify(data.tags));
-  }
+    const ticketId = result.data.rows[0].id;
 
-  // Marca timestamps baseado em mudança de status
-  if (data.status === "resolved") {
-    updateFields.push(`resolved_at = timezone('utc'::text, now())`);
-    // Calcula tempo de resolução
-    updateFields.push(
-      `resolution_time_mins = EXTRACT(EPOCH FROM (timezone('utc'::text, now()) - created_at)) / 60`,
+    // Comentário automático do sistema
+    await query(
+      `INSERT INTO public.ticket_comments (tenant_id, ticket_id, author_name, author_type, body, is_internal)
+     VALUES ($1, $2, 'Sistema', 'system', 'Ticket criado via $3', false)`,
+      [user?.tenant_id ?? null, ticketId, data.source],
     );
-  } else if (data.status === "closed") {
-    updateFields.push(`closed_at = timezone('utc'::text, now())`);
-  }
 
-  // Se mudou prioridade ou categoria, recalcula SLA
-  if (data.priority || data.category_id) {
-    const currentResult = await query<{
-      priority: string;
-      category_id: string | null;
-    }>("SELECT priority, category_id FROM public.tickets WHERE id = $1", [
-      ticketId,
-    ]);
-    if (currentResult.data?.rows[0]) {
-      const current = currentResult.data.rows[0];
-      const newPriority = data.priority ?? current.priority;
-      const newCategoryId = data.category_id ?? current.category_id;
-      if (newCategoryId) {
-        const slaResult = await query<{
-          sla_response_due: string;
-          sla_resolution_due: string;
-        }>("SELECT * FROM public.calculate_ticket_sla($1, $2)", [
-          newCategoryId,
-          newPriority,
-        ]);
-        if (slaResult.data?.rows[0]) {
-          updateFields.push(
-            `sla_response_due = $${paramIdx++}`,
-            `sla_resolution_due = $${paramIdx++}`,
-          );
-          params.push(
-            slaResult.data.rows[0].sla_response_due,
-            slaResult.data.rows[0].sla_resolution_due,
-          );
+    await query(
+      "SELECT public.write_audit_log($1, NULL, 'ticket.create', 'ticket', $2, $3, NULL, NULL)",
+      [
+        user.sub,
+        ticketId,
+        JSON.stringify({
+          ticket_number: ticketNumber,
+          subject: data.subject,
+          priority: data.priority,
+        }),
+      ],
+    );
+
+    return c.json({ id: ticketId, ticket_number: ticketNumber }, 201);
+  },
+);
+
+ticketRoute.put(
+  "/:id",
+  rateLimitWrite,
+  requirePermission("tickets:write"),
+  async (c) => {
+    const ticketId = c.req.param("id");
+    const user = c.get("user");
+    const body = await c.req.json<UpdateTicketInput>();
+    const parsed = updateTicketSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
+
+    const data = parsed.data;
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+
+    const fieldMap: Record<string, string> = {
+      category_id: "category_id",
+      subject: "subject",
+      description: "description",
+      status: "status",
+      priority: "priority",
+      assignee_id: "assigned_to",
+      rating: "rating",
+      rating_comment: "rating_comment",
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (data[key as keyof typeof data] !== undefined) {
+        updateFields.push(`${dbField} = $${paramIdx++}`);
+        params.push(data[key as keyof typeof data]);
+      }
+    }
+
+    if (data.tags !== undefined) {
+      updateFields.push(`tags = $${paramIdx++}`);
+      params.push(JSON.stringify(data.tags));
+    }
+
+    // Marca timestamps baseado em mudança de status
+    if (data.status === "resolved") {
+      updateFields.push(`resolved_at = timezone('utc'::text, now())`);
+      // Calcula tempo de resolução
+      updateFields.push(
+        `resolution_time_mins = EXTRACT(EPOCH FROM (timezone('utc'::text, now()) - created_at)) / 60`,
+      );
+    } else if (data.status === "closed") {
+      updateFields.push(`closed_at = timezone('utc'::text, now())`);
+    }
+
+    // Se mudou prioridade ou categoria, recalcula SLA
+    if (data.priority || data.category_id) {
+      const currentResult = await query<{
+        priority: string;
+        category_id: string | null;
+      }>("SELECT priority, category_id FROM public.tickets WHERE id = $1", [
+        ticketId,
+      ]);
+      if (currentResult.data?.rows[0]) {
+        const current = currentResult.data.rows[0];
+        const newPriority = data.priority ?? current.priority;
+        const newCategoryId = data.category_id ?? current.category_id;
+        if (newCategoryId) {
+          const slaResult = await query<{
+            sla_response_due: string;
+            sla_resolution_due: string;
+          }>("SELECT * FROM public.calculate_ticket_sla($1, $2)", [
+            newCategoryId,
+            newPriority,
+          ]);
+          if (slaResult.data?.rows[0]) {
+            updateFields.push(
+              `sla_response_due = $${paramIdx++}`,
+              `sla_resolution_due = $${paramIdx++}`,
+            );
+            params.push(
+              slaResult.data.rows[0].sla_response_due,
+              slaResult.data.rows[0].sla_resolution_due,
+            );
+          }
         }
       }
     }
-  }
 
-  if (updateFields.length === 0) {
-    return c.json({ id: ticketId });
-  }
+    if (updateFields.length === 0) {
+      return c.json({ id: ticketId });
+    }
 
-  params.push(ticketId, user?.tenant_id ?? null);
+    params.push(ticketId, user?.tenant_id ?? null);
 
-  await query(
-    `UPDATE public.tickets SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
-    params,
-  );
-
-  // Comentário do sistema para mudança de status
-  if (data.status) {
     await query(
-      `INSERT INTO public.ticket_comments (tenant_id, ticket_id, author_name, author_type, body, is_internal)
-       VALUES ($1, $2, $3, 'system', 'Status alterado para: $4', false)`,
-      [user?.tenant_id ?? null, ticketId, user.sub, data.status],
+      `UPDATE public.tickets SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
+      params,
     );
-  }
 
-  return c.json({ id: ticketId });
-});
+    // Comentário do sistema para mudança de status
+    if (data.status) {
+      await query(
+        `INSERT INTO public.ticket_comments (tenant_id, ticket_id, author_name, author_type, body, is_internal)
+       VALUES ($1, $2, $3, 'system', 'Status alterado para: $4', false)`,
+        [user?.tenant_id ?? null, ticketId, user.sub, data.status],
+      );
+    }
 
-ticketRoute.delete("/:id", requirePermission("tickets:write"), async (c) => {
-  const ticketId = c.req.param("id");
-  const user = c.get("user");
+    return c.json({ id: ticketId });
+  },
+);
 
-  await query("DELETE FROM public.tickets WHERE id = $1 AND tenant_id = $2", [
-    ticketId,
-    user?.tenant_id ?? null,
-  ]);
+ticketRoute.delete(
+  "/:id",
+  rateLimitWrite,
+  requirePermission("tickets:write"),
+  async (c) => {
+    const ticketId = c.req.param("id");
+    const user = c.get("user");
 
-  return c.json({ deleted: true });
-});
+    await query("DELETE FROM public.tickets WHERE id = $1 AND tenant_id = $2", [
+      ticketId,
+      user?.tenant_id ?? null,
+    ]);
+
+    return c.json({ deleted: true });
+  },
+);
 
 // ========== Comments ==========
 
@@ -549,9 +589,11 @@ ticketRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const ticketId = c.req.param("id");
+    const user = c.get("user");
+    // IDOR protection: filtra por tenant_id para nao vazar comentarios cross-tenant
     const result = await query(
-      "SELECT id, tenant_id, ticket_id, author_id, author_name, author_type, body, is_internal, created_at FROM public.ticket_comments WHERE ticket_id = $1 ORDER BY created_at ASC",
-      [ticketId],
+      "SELECT id, tenant_id, ticket_id, author_id, author_name, author_type, body, is_internal, created_at FROM public.ticket_comments WHERE ticket_id = $1 AND tenant_id = $2 ORDER BY created_at ASC",
+      [ticketId, user?.tenant_id ?? null],
     );
 
     return c.json({ comments: result.data?.rows ?? [] });
@@ -560,6 +602,7 @@ ticketRoute.get(
 
 ticketRoute.post(
   "/:id/comments",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const ticketId = c.req.param("id");
