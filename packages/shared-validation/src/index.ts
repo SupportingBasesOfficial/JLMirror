@@ -1199,17 +1199,22 @@ export const createKbCategorySchema = z.object({
 export type CreateKbCategoryInput = z.infer<typeof createKbCategorySchema>;
 
 export const updateKbCategorySchema = z.object({
-  name: z.string().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(1000).optional(),
+  slug: z.string().max(200).optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  sort_order: z.number().int().min(0).optional(),
+  is_active: z.boolean().optional(),
 });
 export type UpdateKbCategoryInput = z.infer<typeof updateKbCategorySchema>;
 
 export const createKbArticleSchema = z.object({
   category_id: z.string().uuid().optional(),
-  title: z.string().min(1),
+  title: z.string().min(1).max(300),
   content: z.string().min(1),
-  tags: z.array(z.string()).optional(),
-  status: z.string().default("draft"),
-  summary: z.string().optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  status: z.enum(["draft", "published", "archived"]).default("draft"),
+  summary: z.string().max(500).optional(),
   content_format: z.enum(["markdown", "html", "plaintext"]).default("markdown"),
   visibility: z.enum(["public", "internal", "private"]).default("internal"),
   is_pinned: z.boolean().default(false),
@@ -1217,14 +1222,23 @@ export const createKbArticleSchema = z.object({
 export type CreateKbArticleInput = z.infer<typeof createKbArticleSchema>;
 
 export const updateKbArticleSchema = z.object({
-  title: z.string().optional(),
-  content: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  is_published: z.boolean().optional(),
-  summary: z.string().optional(),
-  status: z.string().optional(),
+  category_id: z.string().uuid().nullable().optional(),
+  title: z.string().min(1).max(300).optional(),
+  content: z.string().min(1).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  summary: z.string().max(500).optional(),
+  content_format: z.enum(["markdown", "html", "plaintext"]).optional(),
+  status: z.enum(["draft", "published", "archived"]).optional(),
+  visibility: z.enum(["public", "internal", "private"]).optional(),
+  is_pinned: z.boolean().optional(),
+  expires_at: z.string().datetime().nullable().optional(),
 });
 export type UpdateKbArticleInput = z.infer<typeof updateKbArticleSchema>;
+
+export const kbArticleFeedbackSchema = z.object({
+  helpful: z.boolean(),
+});
+export type KbArticleFeedbackInput = z.infer<typeof kbArticleFeedbackSchema>;
 
 // ========== SSL Schemas ==========
 export const createSslCertificateSchema = z.object({

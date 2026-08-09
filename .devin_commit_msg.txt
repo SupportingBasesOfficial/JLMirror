@@ -1,69 +1,75 @@
-feat(reports): fix user?.sub, safeJsonBody, try/catch, 2 Zod schemas, parallelize stats
+feat(kb): fix user?.sub, safeJsonBody, try/catch, enhance 2 schemas, 1 new schema, parallelize
 
 Security (CRITICAL):
-- reports.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
-  in all 8+ occurrences. All audit log calls now guarded with if (user?.sub).
-- reports.ts: Added rateLimitWrite on 7 write endpoints (POST /templates,
-  DELETE /templates/:templateId, POST /, PUT /:reportId, DELETE /:reportId,
-  POST /:reportId/run, PUT /branding, PUT /delivery-config).
-- reports.ts: Replaced c.req.json() with safeJsonBody() in 5 endpoints
-  (POST /templates, POST /, PUT /:reportId, PUT /branding,
-  PUT /delivery-config) — was crashing on invalid JSON.
-- shared-validation/src/index.ts: Added reportBrandingSchema (Zod) —
-  PUT /branding was using raw c.req.json() with manual validation (only
-  checked company_name). Now validates all 13 fields: company_name
-  (required), logo_url (URL), logo_width (1-500), colors (hex format
-  /^#[0-9a-fA-F]{6}$/), footer_text (max 500), footer_url (URL),
-  font_family (max 100), is_active (boolean).
-- shared-validation/src/index.ts: Added reportDeliveryConfigSchema (Zod) —
-  PUT /delivery-config was using raw c.req.json() with ZERO validation.
-  Now validates all 11 fields: auto_reports_enabled, allowed_delivery_methods
-  (enum array), default_delivery_method (enum), email_from (email),
-  slack/teams/webhook URLs (URL format), webhook_headers (record),
-  monthly_report_limit (0-10000).
-- shared-validation/src/index.ts: Enhanced updateScheduledReportSchema —
-  was missing name, description, schedule_cron, schedule_description,
-  delivery_method fields. Now supports all 9 fields for partial update.
-- shared-validation/src/index.ts: Enhanced createScheduledReportSchema —
-  recipients now requires .min(1) (was allowing empty array).
+- kb.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null in all
+  6+ occurrences in POST /articles and PUT /articles/:id.
+- kb.ts: Added rateLimitWrite on 7 write endpoints (POST /categories,
+  PUT /categories/:id, DELETE /categories/:id, POST /articles,
+  PUT /articles/:id, DELETE /articles/:id, POST /articles/:id/feedback).
+- kb.ts: Replaced c.req.json() with safeJsonBody() in 5 endpoints
+  (POST /categories, PUT /categories/:id, POST /articles,
+  PUT /articles/:id, POST /articles/:id/feedback) — was crashing on
+  invalid JSON.
+- shared-validation/src/index.ts: Added kbArticleFeedbackSchema (Zod) —
+  POST /articles/:id/feedback was using raw c.req.json<{helpful: boolean}>()
+  without validation. Now validates helpful (boolean required).
+- shared-validation/src/index.ts: Enhanced updateKbCategorySchema —
+  was only { name: string.optional() }. Now supports all 6 fields:
+  name, description, slug, parent_id (UUID nullable), sort_order, is_active.
+- shared-validation/src/index.ts: Enhanced updateKbArticleSchema —
+  was missing category_id, content_format, visibility, is_pinned,
+  expires_at. Now supports all 10 fields. Also tightened status to
+  enum ["draft", "published", "archived"] (was string).
+- shared-validation/src/index.ts: Enhanced createKbArticleSchema —
+  status now enum ["draft", "published", "archived"] (was string),
+  title max 300, tags max 20 items max 50 chars each, summary max 500.
 
 Bug fixes:
-- reports.ts: DELETE /templates/:templateId now returns 404 if template
-  not found (was returning { deleted: true } even when nothing was deleted).
-- reports.ts: DELETE /:reportId now returns 404 if report not found.
-- reports.ts: PUT /:reportId now returns 404 if report not found.
-- reports.ts: PUT /:reportId now returns 400 if no fields to update
-  (was silently succeeding with no changes).
-- reports.ts: POST /:reportId/run now checks deliveryId exists before
-  proceeding (was crashing if INSERT failed).
-- reports.ts: All validation errors now return parsed.error.flatten()
-  details (was generic "Dados inválidos").
-- reports.ts: All audit logs migrated from inline SQL to writeAuditLog
-  helper (consistency). Audit log failures no longer block main operation.
+- kb.ts: DELETE /categories/:id now returns 404 if not found (was
+  returning { deleted: true } even when nothing was deleted).
+- kb.ts: DELETE /articles/:id now returns 404 if not found.
+- kb.ts: PUT /categories/:id now returns 404 if not found, and 400 if
+  no fields to update (was returning { id } silently).
+- kb.ts: PUT /articles/:id now returns 404 if not found (both in
+  version check and in update).
+- kb.ts: POST /articles/:id/feedback now returns 404 if article not
+  found (was incrementing counter on non-existent article).
+- kb.ts: All validation errors now return parsed.error.flatten() details
+  (was generic "Dados inválidos").
+- kb.ts: All audit logs migrated from inline SQL to writeAuditLog helper.
+  Added audit logs for: category.create, category.update, category.delete,
+  article.update, article.delete (was only article.create).
+- kb.ts: GET /articles/:id now checks tenant_id in version query (was
+  querying by article_id only, potential cross-tenant leak).
 
 Performance:
-- reports.ts: Parallelized 7 queries in GET /stats using Promise.all
-  (was 7 sequential queries — major bottleneck).
-- reports.ts: Added httpCache(30) on GET /templates, httpCache(15) on
-  GET / and GET /:reportId/deliveries, httpCache(30) on GET /stats,
-  httpCache(60) on GET /branding and GET /delivery-config (6 endpoints).
+- kb.ts: Parallelized 2 queries in GET / (overview) using Promise.all
+  (was 2 sequential queries).
+- kb.ts: Parallelized 2 queries in GET /articles/:id (article + versions)
+  using Promise.all (was 3 sequential queries — article, view_count,
+  versions). View count update is now fire-and-forget.
+- kb.ts: Parallelized 3 queries in GET /stats using Promise.all
+  (was 3 sequential queries).
+- kb.ts: Added httpCache(30) on GET /, GET /categories, GET /stats;
+  httpCache(15) on GET /articles, GET /articles/:id, GET /search
+  (6 endpoints).
 
 Code quality:
-- reports.ts: Added try/catch on all 11 endpoints with structured logging.
-  Before: zero try/catch. Now: all 11 endpoints protected.
-- reports.ts: Added logger with templateId, reportId, deliveryId, tenantId,
-  rowCount, durationMs context.
+- kb.ts: Added try/catch on all 12 endpoints with structured logging.
+  Before: zero try/catch. Now: all 12 endpoints protected.
+- kb.ts: Added logger with categoryId, articleId, tenantId context.
 
 Tests:
-- reports.test.ts (NEW): 69 tests covering all 5 Zod schemas
-  (createReportTemplate, createScheduledReport, updateScheduledReport,
-  reportBranding, reportDeliveryConfig) with all field validations,
-  hex color regex, URL format, email format, enum validations, defaults,
-  min/max constraints; next_run calculation logic (24h vs 7d based on
-  cron); success rate calculation logic (0%, 50%, 100%, rounding);
-  limit pagination logic.
+- kb.test.ts (NEW): 72 tests covering all 5 Zod schemas (createKbCategory,
+  updateKbCategory, createKbArticle, updateKbArticle, kbArticleFeedback)
+  with all field validations, enum validations (status, visibility,
+  content_format), UUID validations, max length constraints, tag limits;
+  slug generation logic (special chars, spaces, custom slug);
+  published_at logic (published vs draft vs archived); limit pagination
+  logic (articles 200 max, search 100 max); version bump logic
+  (increment, change_summary).
 
-Total: 1277 tests passing (was 1227, +50 new).
+Total: 1349 tests passing (was 1277, +72 new).
 
 Generated with [Devin](https://devin.ai)
 
