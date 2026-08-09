@@ -1,72 +1,40 @@
-feat(users): fix user?.sub/tenant_id, safeJsonBody, try/catch, 4 Zod schemas, rate limit
+feat(audit): fix try/catch, query param validation, tenant isolation, parallelize
 
 Security (CRITICAL):
-- users.ts: Fixed user.tenant_id and user.sub crash risk — replaced with
-  user?.tenant_id ?? null and user?.sub in all 14+ occurrences. All audit
-  log calls now guarded with if (user?.sub).
-- users.ts: Added rateLimitWrite on POST /, PUT /:userId/role,
-  PUT /:userId/status, DELETE /:userId, PUT /:userId/password,
-  PUT /:userId/details, POST /custom-roles (7 endpoints).
-- users.ts: Replaced c.req.json() with safeJsonBody() in 6 endpoints
-  (POST /, PUT /:userId/role, PUT /:userId/status, PUT /:userId/password,
-  PUT /:userId/details, POST /custom-roles) — was crashing on invalid JSON.
-- shared-validation/src/index.ts: Added updateUserRoleSchema (Zod) —
-  PUT /:userId/role was using raw c.req.json<{role, scope?, tenant_id?}>()
-  without validation. Now validates role (required, max 100), scope (enum),
-  tenant_id (UUID optional).
-- shared-validation/src/index.ts: Added updateUserStatusSchema (Zod) —
-  PUT /:userId/status was using raw c.req.json<{is_active, tenant_id?}>()
-  without validation. Now validates is_active (boolean required),
-  tenant_id (UUID optional).
-- shared-validation/src/index.ts: Added resetUserPasswordSchema (Zod) —
-  PUT /:userId/password was using raw c.req.json<{password,
-  must_change_password?}>() without validation. Now validates password
-  (min 8, max 128), must_change_password (boolean optional).
-- shared-validation/src/index.ts: Added updateUserDetailsSchema (Zod) —
-  PUT /:userId/details was using raw c.req.json<{full_name?, email?}>()
-  without validation. Now validates full_name (max 255), email (format).
-- shared-validation/src/index.ts: Enhanced createCustomRoleSchema —
-  key now has regex /^[a-z][a-z0-9_:]*$/ (was just min(1)), permissions
-  now requires UUID array (was string array).
+- audit.ts: Added tenant isolation on GET /logs — non-global users can
+  only see logs from their own tenant. Before: any tenant user could
+  query logs from any tenant by passing tenant_id query param.
+- audit.ts: Added tenant isolation on GET /stats — non-global users
+  only see stats for their own tenant. Before: any tenant user could
+  see global audit stats.
+- audit.ts: Added Zod validation for all query params (auditLogsQuerySchema)
+  — user_id and tenant_id now validated as UUID, from/to as ISO datetime,
+  action max 100 chars, limit 1-500, offset >= 0. Before: invalid params
+  could cause DB errors or SQL injection via ILIKE.
 
 Bug fixes:
-- users.ts: POST /custom-roles now checks if role key already exists in
-  tenant before creating (was allowing duplicates). Returns 409
-  ROLE_ALREADY_EXISTS.
-- users.ts: All audit logs now use writeAuditLog helper (was inline SQL).
-  Audit log failures no longer block the main operation (wrapped in
-  try/catch).
-- users.ts: DELETE /:userId now uses user?.sub for self-delete check
-  (was user.sub which could crash).
-- users.ts: All validation errors now return parsed.error.flatten()
-  details (was generic "Dados inválidos" or first error message only).
+- audit.ts: GET /logs now parallelizes data + count queries using
+  Promise.all (was 2 sequential queries).
+- audit.ts: All validation errors now return parsed.error.flatten()
+  details (was generic error).
 
 Performance:
-- users.ts: Parallelized 2 queries in GET /roles using Promise.all
-  (was 2 sequential queries).
-- users.ts: Added httpCache(15) on GET /, GET /all; httpCache(60) on
-  GET /roles (3 endpoints).
+- audit.ts: Added httpCache(60) on GET /, httpCache(15) on GET /logs,
+  httpCache(30) on GET /stats (3 endpoints).
 
 Code quality:
-- users.ts: Added try/catch on all 9 endpoints with structured logging.
-  Before: zero try/catch. Now: all 9 endpoints protected.
-- users.ts: Added logger with userId, tenantId, email, role context.
-  Logs create, role update, status update, delete, password reset,
-  details update, custom role create.
-- users.ts: Migrated all audit logs from inline SQL to writeAuditLog
-  helper (consistency with auth.ts and admin.ts).
+- audit.ts: Added try/catch on GET /logs and GET /stats with structured
+  logging. Before: zero try/catch.
+- audit.ts: Added logger with error context.
 
 Tests:
-- users.test.ts (NEW): 53 tests covering all 6 Zod schemas
-  (createTenantUser, createCustomRole, updateUserRole, updateUserStatus,
-  resetUserPassword, updateUserDetails) with all field validations,
-  regex constraints (role key format), enum validations (scope),
-  UUID validations (tenant_id, permissions), defaults (scope=tenant,
-  permissions=[], must_change_password=true); self-delete logic;
-  scope logic (global vs tenant); role key format logic; tenant target
-  logic; must_change_password default logic.
+- audit.test.ts (NEW): 36 tests covering auditLogsQuerySchema (all
+  field validations: UUID, datetime, max length, coerce, defaults,
+  limits); tenant isolation logic (global vs tenant scope, query
+  tenant_id override); WHERE clause logic; pagination logic; stats
+  scope logic.
 
-Total: 1191 tests passing (was 1143, +48 new).
+Total: 1227 tests passing (was 1191, +36 new).
 
 Generated with [Devin](https://devin.ai)
 
