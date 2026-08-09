@@ -2302,7 +2302,7 @@ export type FinopsBudgetInput = z.infer<typeof finopsBudgetSchema>;
 
 // ========== ITSM Schemas ==========
 export const itsmConnectorSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   connector_type: z.enum([
     "jira",
     "freshservice",
@@ -2310,17 +2310,31 @@ export const itsmConnectorSchema = z.object({
     "zendesk",
     "custom",
   ]),
-  base_url: z.string().min(1),
-  auth_type: z.string().min(1),
-  api_key: z.string().optional(),
-  username: z.string().optional(),
-  password: z.string().optional(),
-  bearer_token: z.string().optional(),
-  oauth_client_id: z.string().optional(),
-  oauth_client_secret: z.string().optional(),
-  oauth_token_url: z.string().optional(),
+  base_url: z
+    .string()
+    .min(1)
+    .max(2000)
+    .url()
+    .refine((url) => url.startsWith("http://") || url.startsWith("https://"), {
+      message: "base_url deve ser HTTP ou HTTPS",
+    }),
+  auth_type: z.enum(["api_key", "basic", "bearer", "oauth2"]),
+  api_key: z.string().max(500).optional(),
+  username: z.string().max(200).optional(),
+  password: z.string().max(500).optional(),
+  bearer_token: z.string().max(2000).optional(),
+  oauth_client_id: z.string().max(200).optional(),
+  oauth_client_secret: z.string().max(500).optional(),
+  oauth_token_url: z
+    .string()
+    .max(2000)
+    .url()
+    .refine((url) => url.startsWith("http://") || url.startsWith("https://"), {
+      message: "oauth_token_url deve ser HTTP ou HTTPS",
+    })
+    .optional(),
   field_mapping: z.record(z.unknown()).optional(),
-  sync_direction: z.string().optional(),
+  sync_direction: z.enum(["inbound", "outbound", "bidirectional"]).optional(),
   auto_create_on_incident: z.boolean().optional(),
   auto_update_on_resolve: z.boolean().optional(),
   is_active: z.boolean().optional(),
@@ -2328,11 +2342,11 @@ export const itsmConnectorSchema = z.object({
 export type ItsmConnectorInput = z.infer<typeof itsmConnectorSchema>;
 
 export const itsmCreateTicketSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
+  title: z.string().min(1).max(500),
+  description: z.string().max(10000).optional(),
   severity: z.enum(["info", "warning", "critical"]).optional(),
-  source_id: z.string().optional(),
-  source_type: z.string().optional(),
+  source_id: z.string().max(200).optional(),
+  source_type: z.string().max(100).optional(),
   extra_fields: z.record(z.unknown()).optional(),
 });
 export type ItsmCreateTicketInput = z.infer<typeof itsmCreateTicketSchema>;

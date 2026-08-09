@@ -1,48 +1,55 @@
-feat(client-portal): fix user?.tenant_id, try/catch, parallelize, 404
+feat(itsm): fix user?.sub, try/catch, URL validation, auth_type enum
 
 Security:
-- client-portal.ts: Fixed user.tenant_id crash risk — replaced
-  with user?.tenant_id ?? null in all 5+ occurrences.
-- client-portal.ts: Added rateLimitWrite on POST /users and
-  DELETE /users/:id.
-- shared-validation: Enhanced clientPortalUserSchema — email max
-  255, contact_name max 200, company_name max 200, phone max 50.
+- itsm.ts: Fixed user.tenant_id and user.sub crash risk —
+  replaced with user?.tenant_id ?? null and user?.sub ?? null in
+  all 8+ occurrences.
+- itsm.ts: Added rateLimitWrite on POST /connectors, DELETE
+  /connectors/:id, POST /connectors/:id/test, POST
+  /connectors/:id/create-ticket (4 endpoints).
+- shared-validation: Enhanced itsmConnectorSchema — base_url now
+  requires valid URL with HTTP/HTTPS protocol (SSRF prevention),
+  auth_type changed from string to enum (api_key/basic/bearer/
+  oauth2), sync_direction changed to enum (inbound/outbound/
+  bidirectional), oauth_token_url requires valid URL, all string
+  fields have max length (name 200, base_url 2000, api_key 500,
+  username 200, password 500, bearer_token 2000, oauth_client_id
+  200, oauth_client_secret 500).
+- shared-validation: Enhanced itsmCreateTicketSchema — title max
+  500, description max 10000, source_id max 200, source_type max
+  100.
 
 Bug fixes:
-- client-portal.ts: DELETE /users/:id now returns 404 if user not
-  found (was returning 200 with deactivated: true even if nothing
-  was updated).
-- client-portal.ts: All audit logs migrated to writeAuditLog
-  helper.
-- client-portal.ts: Feature flag middleware now wrapped in
-  try/catch (was crashing if DB unavailable).
+- itsm.ts: DELETE /connectors/:id now returns 404 if connector
+  not found.
+- itsm.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- client-portal.ts: Parallelized 4 queries in GET /overview
-  (services + incidents + sla + recent_incidents) using
-  Promise.all — was 4 sequential queries.
-- client-portal.ts: Added httpCache(60) on GET / and GET
-  /services; httpCache(30) on GET /overview and GET /incidents;
-  httpCache(15) on GET /users (5 endpoints).
+- itsm.ts: Parallelized 5 queries in GET /stats (connectors +
+  syncs + success + failed + byType) using Promise.all — was 5
+  sequential queries.
+- itsm.ts: Parallelized 2 queries in POST /create-ticket (log
+  insert + connector status update) using Promise.all.
+- itsm.ts: Added httpCache(30) on GET /, GET /connectors, GET
+  /sync-log; httpCache(60) on GET /stats (4 endpoints).
 
 Code quality:
-- client-portal.ts: Added try/catch on all 7 endpoints with
-  structured logging (was zero).
-- client-portal.ts: Added logger with portalUserId, email,
-  tenantId context.
+- itsm.ts: Added try/catch on all 8 endpoints with structured
+  logging (was zero).
+- itsm.ts: Added logger with connectorId, name, connector_type,
+  success, externalId, tenantId context.
 
 Tests:
-- client-portal.test.ts (NEW): 22 tests covering:
-  - clientPortalUserSchema (16 tests): email required + valid +
-    max 255, contact_name required + max 200, company_name max
-    200, phone max 50, all 4 boolean permissions, complete user.
-  - Portal token logic (2 tests): UUID format, uniqueness.
-  - Permissions default logic (4 tests): can_view_incidents
-    default true, can_view_sla default true, can_view_services
-    default true, can_create_tickets default false.
+- itsm.test.ts (NEW): 32 tests covering:
+  - itsmConnectorSchema (21 tests): name required + max 200, all
+    5 connector_type values, base_url URL validation + HTTP/HTTPS
+    + reject FTP, all 4 auth_type values, all 3 sync_direction
+    values, oauth_token_url validation, complete connector.
+  - itsmCreateTicketSchema (11 tests): title required + max 500,
+    description max 10000, all 3 severity values, invalid
+    severity rejected, extra_fields.
 
-Total: 2211 tests passing (was 2196, +22 new — note: 5 tests
-reduced from previous count due to test file consolidation).
+Total: 2243 tests passing (was 2211, +32 new).
 
 Generated with [Devin](https://devin.ai)
 
