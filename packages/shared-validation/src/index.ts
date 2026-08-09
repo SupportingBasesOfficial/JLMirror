@@ -1677,23 +1677,35 @@ export const adminUpdateUserSchema = z.object({
 export type AdminUpdateUserInput = z.infer<typeof adminUpdateUserSchema>;
 
 // ========== API Key Schemas ==========
+const ipAddressSchema = z
+  .string()
+  .regex(
+    /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/,
+    "IP inválido: use formato IPv4 ou CIDR (ex: 192.168.1.0/24)",
+  );
+
 export const createApiKeySchema = z.object({
-  name: z.string().min(1),
-  scopes: z.array(z.string()).default([]),
+  name: z.string().min(1).max(200),
+  scopes: z.array(z.string().min(1).max(100)).max(50).default([]),
   expires_at: z.string().optional(),
-  description: z.string().optional(),
-  allowed_ips: z.array(z.string()).optional(),
-  rate_limit_per_min: z.number().int().min(0).optional(),
-  rate_limit_per_hour: z.number().int().min(0).optional(),
-  rate_limit_per_day: z.number().int().min(0).optional(),
+  description: z.string().max(2000).optional(),
+  allowed_ips: z.array(ipAddressSchema).max(50).optional(),
+  rate_limit_per_min: z.number().int().min(0).max(100000).optional(),
+  rate_limit_per_hour: z.number().int().min(0).max(1000000).optional(),
+  rate_limit_per_day: z.number().int().min(0).max(10000000).optional(),
 });
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 
 export const updateApiKeySchema = z.object({
-  name: z.string().optional(),
-  scopes: z.array(z.string()).optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  scopes: z.array(z.string().min(1).max(100)).max(50).optional(),
   is_active: z.boolean().optional(),
-  allowed_ips: z.array(z.string()).optional(),
+  allowed_ips: z.array(ipAddressSchema).max(50).optional(),
+  rate_limit_per_min: z.number().int().min(0).max(100000).optional(),
+  rate_limit_per_hour: z.number().int().min(0).max(1000000).optional(),
+  rate_limit_per_day: z.number().int().min(0).max(10000000).optional(),
+  expires_at: z.string().optional(),
 });
 export type UpdateApiKeyInput = z.infer<typeof updateApiKeySchema>;
 

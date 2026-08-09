@@ -1,69 +1,57 @@
-feat(capacity): fix user?.sub, safeJsonBody, try/catch, batch insert, schemas
+feat(api-keys): fix user?.sub, safeJsonBody, try/catch, enhance schemas, 404s
 
 Security:
-- capacity.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 3+ occurrences (POST /thresholds, POST /reports).
-- capacity.ts: Added rateLimitWrite on 6 write endpoints (POST /metrics,
-  POST /metrics/batch, POST /thresholds, PUT /thresholds/:id,
-  DELETE /thresholds/:id, POST /reports, DELETE /reports/:id).
-- capacity.ts: Replaced c.req.json() with safeJsonBody() in 4 endpoints.
-- shared-validation: Enhanced createThresholdSchema — warning_pct and
-  critical_pct now validated 0-100 range, added refine() to enforce
-  critical_pct > warning_pct (was accepting any number).
-- shared-validation: Enhanced createReportSchema — report_type now
-  enum (capacity_summary, trend_analysis, forecast,
-  utilization_breakdown) instead of free string, name max 200,
-  type max 100, cron_expression max 100.
-- shared-validation: Enhanced ingestMetricSchema — all string fields
-  now have max length, utilization_pct 0-100, max_capacity min 0.
-- shared-validation: Reduced ingestMetricsBatchSchema max from 10000
-  to 1000 (was DoS risk with serial loop).
-
-Performance:
-- capacity.ts: Replaced serial loop in POST /metrics/batch with
-  multi-value INSERT (VALUES ($1,...), ($N,...)) in batches of 100.
-  Before: 1000 individual INSERT queries. Now: 10 batched queries.
-- capacity.ts: Parallelized 2 queries in GET / (metrics + thresholds).
-- capacity.ts: Parallelized 4 queries in GET /stats (overview,
-  by_type, top_utilized, forecasts) using Promise.all.
-- capacity.ts: Added httpCache(30) on GET /, GET /thresholds,
-  GET /reports; httpCache(15) on GET /metrics, GET /forecast,
-  GET /stats.
+- api-keys.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 4+ occurrences (POST /, PUT /:id, DELETE /:id,
+  POST /:id/rotate).
+- api-keys.ts: Added rateLimitWrite on 4 write endpoints (POST /,
+  PUT /:id, DELETE /:id, POST /:id/rotate).
+- api-keys.ts: Replaced c.req.json() with safeJsonBody() in 2 endpoints
+  (POST /, PUT /:id).
+- shared-validation: Enhanced createApiKeySchema — name max 200,
+  description max 2000, scopes max 50 items max 100 chars each,
+  allowed_ips now uses ipAddressSchema (IPv4/CIDR format validation,
+  rejects hostnames and IPv6), rate_limit max values enforced.
+- shared-validation: Enhanced updateApiKeySchema — was missing 5
+  fields (description, rate_limit_per_min/hour/day, expires_at).
+  Now supports all fields with same validation as create.
+- shared-validation: Added ipAddressSchema with IPv4/CIDR regex.
 
 Bug fixes:
-- capacity.ts: DELETE /thresholds/:id now returns 404 if not found.
-- capacity.ts: DELETE /reports/:id now returns 404 if not found.
-- capacity.ts: PUT /thresholds/:id now returns 404 if not found,
-  and 400 if no fields to update.
-- capacity.ts: All validation errors now return parsed.error.flatten().
-- capacity.ts: All audit logs migrated to writeAuditLog helper.
-- capacity.ts: hours validation in GET /metrics (NaN/negativo -> 24,
-  max 720).
+- api-keys.ts: DELETE /:id now returns 404 if not found.
+- api-keys.ts: PUT /:id now returns 404 if not found, and 400 if
+  no fields to update.
+- api-keys.ts: All validation errors now return parsed.error.flatten().
+- api-keys.ts: All audit logs migrated to writeAuditLog helper.
+- api-keys.ts: allowed_ips now stored as null when undefined (was
+  storing "undefined" string via JSON.stringify).
+
+Performance:
+- api-keys.ts: Parallelized 3 queries in GET /stats (overview,
+  top_keys, recent_usage) using Promise.all.
+- api-keys.ts: Added httpCache(15) on GET /, GET /stats,
+  GET /:id/usage (3 endpoints).
 
 Code quality:
-- capacity.ts: Added try/catch on all 11 endpoints with structured
+- api-keys.ts: Added try/catch on all 7 endpoints with structured
   logging.
-- capacity.ts: Added logger with tenantId, reportId context.
+- api-keys.ts: Added logger with keyId, tenantId context.
 
 Tests:
-- capacity.test.ts (NEW): 73 tests covering:
-  - ingestMetricSchema (13 tests): required fields, max_capacity
-    range, utilization_pct 0-100, metadata, resource_id.
-  - ingestMetricsBatchSchema (7 tests): min 1, max 1000, empty
-    rejection, invalid metric rejection, non-array rejection.
-  - createThresholdSchema (12 tests): warning/critical 0-100 range,
-    critical > warning enforcement, defaults, boundaries.
-  - updateThresholdSchema (7 tests): partial updates, range
-    validation.
-  - createReportSchema (16 tests): format enum, report_type enum
-    (4 values), defaults, template_id UUID, date_range.
-  - Hours validation (7 tests): default, NaN, zero, negative, max.
-  - Batch insert logic (4 tests): BATCH_SIZE=100 division.
-  - Report type selection (4 tests): each type generates correct
-    summary key.
-  - Limit pagination (2 tests).
+- api-keys.test.ts (NEW): 45 tests covering:
+  - createApiKeySchema (21 tests): name, scopes limits, description,
+    expires_at, allowed_ips IPv4/CIDR validation (rejects hostnames,
+    IPv6, invalid), rate_limit ranges.
+  - updateApiKeySchema (10 tests): partial updates, all new fields,
+    allowed_ips validation.
+  - Key generation logic (8 tests): jl_ prefix, 67 char key, 12 char
+    prefix, 64 char sha256 hash, hex validation, uniqueness,
+    determinism.
+  - Limit pagination (3 tests): default 50, max 200.
+  - Rotation logic (3 tests): creates new + deactivates old,
+    rotated_from linkage.
 
-Total: 1694 tests passing (was 1621, +73 new).
+Total: 1739 tests passing (was 1694, +45 new).
 
 Generated with [Devin](https://devin.ai)
 
