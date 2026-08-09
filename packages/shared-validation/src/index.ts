@@ -2053,24 +2053,24 @@ export type IngestMetricsBatchInput = z.infer<typeof ingestMetricsBatchSchema>;
 
 // ========== Push Schemas ==========
 export const pushSubscribeSchema = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().max(2000),
   keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
+    p256dh: z.string().min(1).max(500),
+    auth: z.string().min(1).max(500),
   }),
-  device_type: z.string().optional(),
-  user_agent: z.string().optional(),
+  device_type: z.string().max(100).optional(),
+  user_agent: z.string().max(500).optional(),
 });
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
 
 export const pushUnsubscribeSchema = z.object({
-  endpoint: z.string().min(1),
+  endpoint: z.string().min(1).max(2000),
 });
 export type PushUnsubscribeInput = z.infer<typeof pushUnsubscribeSchema>;
 
 export const pushBroadcastSchema = z.object({
-  title: z.string().min(1),
-  message: z.string().min(1),
+  title: z.string().min(1).max(200),
+  message: z.string().min(1).max(2000),
 });
 export type PushBroadcastInput = z.infer<typeof pushBroadcastSchema>;
 

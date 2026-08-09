@@ -1,59 +1,51 @@
-feat(k8s): fix Command Injection, user?.sub, safeJsonBody, try/catch, schemas
+feat(push): fix missing auth, user?.sub, try/catch, enhance schemas
 
-Security (CRITICAL):
-- k8s.ts: Fixed Command Injection in execKubectl — was using exec()
-  with shell interpolation of kubeconfigPath, context, and nsFlag.
-  If kubeconfig_path contained '"; rm -rf /; "' or context contained
-  '&& cat /etc/passwd', arbitrary commands would execute. Replaced
-  exec() with execFile() (no shell) with args passed as array.
-  Args are treated as string literals, not shell-interpreted.
-- k8s.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 4+ occurrences.
-- k8s.ts: Added rateLimitWrite on 4 write endpoints (POST /clusters,
-  PUT /clusters/:id, DELETE /clusters/:id, POST /:id/resources/:type/sync).
-- k8s.ts: Replaced c.req.json() with safeJsonBody() in 2 endpoints
-  (POST /clusters, PUT /clusters/:id).
-- shared-validation: Enhanced updateK8sClusterSchema — was missing 5
-  fields (display_name, api_server_url, context, namespace,
-  kubeconfig_path, is_active). Now supports all fields with same
-  validation as create (SAFE_PATH, SAFE_CONTEXT, namespace regex).
+Security:
+- push.ts: Fixed 6 endpoints without requirePermission — GET /,
+  GET /vapid-public-key, POST /subscribe, POST /unsubscribe,
+  GET /subscriptions, DELETE /subscriptions/:id, POST /test were
+  all accessible without authentication. Added requirePermission
+  to all 7 endpoints.
+- push.ts: Fixed user.tenant_id and user.sub crash risk — replaced
+  with user?.tenant_id ?? null and user?.sub ?? null in all 6+
+  occurrences.
+- push.ts: Added rateLimitWrite on 5 write endpoints (POST /subscribe,
+  POST /unsubscribe, DELETE /subscriptions/:id, POST /test,
+  POST /broadcast).
+- shared-validation: Enhanced pushSubscribeSchema — endpoint max 2000,
+  keys.p256dh max 500, keys.auth max 500, device_type max 100,
+  user_agent max 500.
+- shared-validation: Enhanced pushUnsubscribeSchema — endpoint max 2000.
+- shared-validation: Enhanced pushBroadcastSchema — title max 200,
+  message max 2000.
 
 Bug fixes:
-- k8s.ts: DELETE /clusters/:id now returns 404 if not found.
-- k8s.ts: PUT /clusters/:id now returns 404 if not found, and 400 if
-  no fields to update.
-- k8s.ts: All validation errors now return parsed.error.flatten().
-- k8s.ts: All audit logs migrated to writeAuditLog helper.
-- k8s.ts: POST /clusters agora aceita api_server_url OU api_server
-  (backward compatible).
+- push.ts: DELETE /subscriptions/:id now returns 404 if not found.
+- push.ts: POST /subscribe now returns 500 if DB insert fails (was
+  returning id: undefined).
+- push.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- k8s.ts: Parallelized 2 queries in GET /:clusterId/overview
-  (resource_counts + event_counts) using Promise.all.
-- k8s.ts: Added httpCache(30) on GET /, GET /clusters; httpCache(15)
-  on GET /:id/resources/:type, GET /:id/events, GET /:id/overview
-  (5 endpoints).
+- push.ts: Added httpCache(60) on GET /; httpCache(300) on
+  GET /vapid-public-key; httpCache(15) on GET /subscriptions
+  (3 endpoints).
 
 Code quality:
-- k8s.ts: Added try/catch on all 8 endpoints with structured logging.
-- k8s.ts: Added logger with clusterId, resourceType, tenantId context.
+- push.ts: Added try/catch on all 8 endpoints with structured logging.
+- push.ts: Added logger with userId, tenantId, subId context.
 
 Tests:
-- k8s.test.ts (NEW): 43 tests covering:
-  - createK8sClusterSchema (15 tests): name, api_server URL, context
-    SAFE_CONTEXT regex (rejects injection, spaces), kubeconfig_path
-    SAFE_PATH regex (rejects injection, spaces), namespace regex,
-    token, ca_cert.
-  - updateK8sClusterSchema (11 tests): partial updates, all 5 new
-    fields, api_server_url validation, context injection rejection.
-  - k8sResourceTypeSchema (8 tests): pods/services/deployments/nodes/
-    namespaces valid, invalid types rejected, injection rejected.
-  - execKubectl Command Injection prevention (5 tests): args as array
-    not shell interpolation, null kubeconfig/context handling,
-    namespace flag logic.
-  - Limit/offset pagination (4 tests).
+- push.test.ts (NEW): 23 tests covering:
+  - pushSubscribeSchema (13 tests): endpoint URL validation, max
+    length, keys required (p256dh + auth), device_type max 100,
+    user_agent max 500.
+  - pushUnsubscribeSchema (3 tests): endpoint required, max length.
+  - pushBroadcastSchema (5 tests): title + message required, max
+    length.
+  - Push notification payload logic (2 tests): test payload
+    construction, broadcast payload construction.
 
-Total: 1877 tests passing (was 1834, +43 new).
+Total: 1900 tests passing (was 1877, +23 new).
 
 Generated with [Devin](https://devin.ai)
 
