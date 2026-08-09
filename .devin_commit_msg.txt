@@ -1,50 +1,61 @@
-feat(mfa): fix rate limit, user?.sub, safeJsonBody, try/catch, schemas
+feat(profile): fix user?.sub, safeJsonBody, try/catch, enhance schemas
 
 Security:
-- mfa.ts: Added rateLimitWrite on 4 endpoints (POST /setup,
-  POST /setup/verify, POST /verify, POST /disable) — critical for
-  POST /verify to prevent TOTP brute force (only 1M combinations).
-- mfa.ts: Replaced c.req.json() with safeJsonBody() in 3 endpoints
-  (POST /setup/verify, POST /verify, POST /disable).
-- shared-validation: Enhanced mfaSetupVerifySchema — removed unused
-  `secret` field (was not used by endpoint), added regex /^\d{6}$/
-  to enforce exactly 6 digits (was accepting letters).
-- shared-validation: Enhanced mfaVerifySchema — challenge_token max
-  500, code max 20 with regex /^[\w-]+$/ (accepts recovery codes
-  which are alphanumeric with hyphens).
-- shared-validation: Added mfaDisableSchema with 6-digit regex
-  validation (was inline regex in route).
+- profile.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 10+ occurrences.
+- profile.ts: Fixed user.roles[0] crash — replaced with
+  user?.roles?.length ? user.roles[0] : null.
+- profile.ts: Added rateLimitWrite on 5 write endpoints (PUT /,
+  PUT /avatar, PUT /preferences, DELETE /sessions/:id,
+  DELETE /sessions).
+- profile.ts: Replaced c.req.json() with safeJsonBody() in 3
+  endpoints (PUT /, PUT /avatar, PUT /preferences).
+- shared-validation: Enhanced updateProfileSchema — display_name
+  max 200, bio max 2000, phone max 50, location max 200, timezone
+  max 100, locale max 20, job_title max 200, department max 200,
+  skills items max 100 + array max 50, social_links values max 500,
+  email max 255, full_name max 255.
+- shared-validation: Enhanced updatePreferencesSchema —
+  quiet_hours_start/end regex /^([01]\d|2[0-3]):[0-5]\d$/ (HH:MM).
+- shared-validation: Enhanced updateAvatarSchema — avatar_url max
+  2000, avatar_initials max 10, avatar_color regex
+  /^#[0-9a-fA-F]{3,8}$/ (hex color).
 
 Bug fixes:
-- mfa.ts: All validation errors now return parsed.error.flatten().
-- mfa.ts: All audit logs migrated to writeAuditLog helper.
-- mfa.ts: POST /setup/verify and POST /disable now update
-  users.mfa_enabled and users.mfa_method flags (was only updating
-  user_mfa_totp table, leaving users table stale).
-- auth-extended.test.ts: Updated mfaSetupVerifySchema tests to
-  match new schema (removed `secret` field).
+- profile.ts: All validation errors now return parsed.error.flatten().
+- profile.ts: DELETE /sessions/:sessionId now returns 404 if not
+  found.
+- profile.ts: Security log inserts now wrapped in try/catch (was
+  crashing silently if log table unavailable).
 
 Performance:
-- mfa.ts: Parallelized 2 queries in GET /status (totp + webauthn).
-- mfa.ts: Added httpCache(15) on GET / and GET /status.
+- profile.ts: Parallelized 2 queries in GET / (profile + user data)
+  using Promise.all.
+- profile.ts: Added httpCache(15) on GET /, GET /preferences,
+  GET /sessions, GET /security/log (4 endpoints).
 
 Code quality:
-- mfa.ts: Added try/catch on all 6 endpoints with structured logging.
-- mfa.ts: Added logger with userId context.
+- profile.ts: Added try/catch on all 8 endpoints with structured
+  logging.
+- profile.ts: Added logger with userId, tenantId, sessionId context.
 
 Tests:
-- mfa.test.ts (NEW): 27 tests covering:
-  - mfaSetupVerifySchema (7 tests): 6-digit validation, regex,
-    empty, letters, spaces rejection.
-  - mfaVerifySchema (9 tests): challenge_token required/max 500,
-    code 6-20 chars, recovery code alphanumeric, special chars
-    rejection.
-  - mfaDisableSchema (5 tests): 6-digit validation, letters, empty.
-  - TOTP code validation logic (3 tests): 6 digits valid, letters
-    invalid, recovery code accepted by mfaVerifySchema.
-  - Challenge expiry logic (3 tests): expired, valid, consumed.
+- profile.test.ts (NEW): 56 tests covering:
+  - updateProfileSchema (21 tests): display_name/bio/phone/location/
+    timezone/locale/job_title/department max length, skills array
+    max 50 + item max 100, social_links value max 500, email
+    validation.
+  - updatePreferencesSchema (18 tests): notification booleans,
+    digest_frequency enum, quiet_hours HH:MM regex, theme/density
+    enums, sidebar_collapsed, dashboard_layout.
+  - updateAvatarSchema (10 tests): avatar_url URL + max 2000,
+    avatar_initials max 10, avatar_color hex regex (#FFF, #FF5733,
+    invalid "red", missing #).
+  - Initials generation logic (4 tests): name, 1-char, email,
+    fallback.
+  - Limit pagination logic (3 tests).
 
-Total: 1927 tests passing (was 1900, +27 new).
+Total: 1983 tests passing (was 1927, +56 new).
 
 Generated with [Devin](https://devin.ai)
 

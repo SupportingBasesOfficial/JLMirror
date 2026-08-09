@@ -142,18 +142,18 @@ export type AssignRolePermissionsInput = z.infer<
 
 // ========== Profile Schemas ==========
 export const updateProfileSchema = z.object({
-  full_name: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  display_name: z.string().optional(),
-  bio: z.string().optional(),
-  phone: z.string().optional(),
-  location: z.string().optional(),
-  timezone: z.string().optional(),
-  locale: z.string().optional(),
-  job_title: z.string().optional(),
-  department: z.string().optional(),
-  skills: z.array(z.string()).optional(),
-  social_links: z.record(z.string()).optional(),
+  full_name: z.string().min(1).max(255).optional(),
+  email: z.string().email().max(255).optional(),
+  display_name: z.string().max(200).optional(),
+  bio: z.string().max(2000).optional(),
+  phone: z.string().max(50).optional(),
+  location: z.string().max(200).optional(),
+  timezone: z.string().max(100).optional(),
+  locale: z.string().max(20).optional(),
+  job_title: z.string().max(200).optional(),
+  department: z.string().max(200).optional(),
+  skills: z.array(z.string().max(100)).max(50).optional(),
+  social_links: z.record(z.string(), z.string().max(500)).optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
@@ -164,8 +164,14 @@ export const updatePreferencesSchema = z.object({
   notification_digest_frequency: z
     .enum(["instant", "hourly", "daily", "weekly"])
     .optional(),
-  quiet_hours_start: z.string().optional(),
-  quiet_hours_end: z.string().optional(),
+  quiet_hours_start: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Formato HH:MM")
+    .optional(),
+  quiet_hours_end: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Formato HH:MM")
+    .optional(),
   theme: z.enum(["light", "dark", "system"]).optional(),
   density: z.enum(["compact", "comfortable"]).optional(),
   sidebar_collapsed: z.boolean().optional(),
@@ -174,9 +180,13 @@ export const updatePreferencesSchema = z.object({
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
 
 export const updateAvatarSchema = z.object({
-  avatar_url: z.string().url().optional(),
-  avatar_initials: z.string().optional(),
-  avatar_color: z.string().optional(),
+  avatar_url: z.string().url().max(2000).optional(),
+  avatar_initials: z.string().max(10).optional(),
+  avatar_color: z
+    .string()
+    .max(20)
+    .regex(/^#[0-9a-fA-F]{3,8}$/, "Cor hex inválida")
+    .optional(),
 });
 export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 
