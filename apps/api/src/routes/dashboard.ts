@@ -6,6 +6,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeCount, safeRows } from "../lib/query-helpers.js";
 import { syncTenantDevices } from "../lib/device-sync.js";
+import { createZabbixClient } from "./zabbix/shared.js";
 import "../types.js";
 
 export const dashboardRoute = new Hono();
@@ -189,6 +190,21 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
   const pendingChanges = safeCount(pendingChangesR);
   const inProgressChanges = safeCount(inProgressChangesR);
   const totalAssets = safeCount(totalAssetsR);
+
+  // Para admin global, soma devices do Zabbix ao total de assets
+  // (tenant normal ja tem seus devices sincronizados na tabela public.devices)
+  let zabbixDeviceCount = 0;
+  if (user.scope === "global") {
+    try {
+      const ctx = await createZabbixClient(tenantId, true);
+      if (ctx) {
+        const zDevices = await ctx.client.getDevices(undefined);
+        zabbixDeviceCount = zDevices.length;
+      }
+    } catch {
+      // Silencioso — nao quebra o dashboard se Zabbix falhar
+    }
+  }
   const totalScripts = safeCount(totalScriptsR);
   const unreadNotifications = safeCount(unreadNotificationsR);
   const recentActivity = safeRows(recentActivityR);
@@ -216,7 +232,7 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
       },
       firewall: { total: firewallRules, active: activeFirewallRules },
       changes: { pending: pendingChanges, in_progress: inProgressChanges },
-      assets: { total: totalAssets },
+      assets: { total: totalAssets + zabbixDeviceCount },
       scripts: { total: totalScripts },
       notifications: { unread: unreadNotifications },
     },
