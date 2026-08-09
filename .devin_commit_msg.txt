@@ -1,65 +1,59 @@
-feat(billing): fix webhook signature, user?.tenant_id, safeJsonBody, schemas
+feat(k8s): fix Command Injection, user?.sub, safeJsonBody, try/catch, schemas
 
 Security (CRITICAL):
-- billing.ts: Fixed webhook do Asaas sem verificacao de assinatura —
-  qualquer um podia POSTar e mudar status de faturas. Adicionado
-  verificacao HMAC (X-Asaas-Signature) usando ASAAS_WEBHOOK_SECRET
-  com timingSafeEqual. Se secret nao configurado, mantem comportamento
-  original (backward compatible).
-- billing.ts: Fixed user.tenant_id crash risk — replaced with
-  user?.tenant_id ?? null in all 5+ occurrences.
-- billing.ts: Added rateLimitWrite on 4 write endpoints (POST
-  /subscriptions, POST /payments, POST /webhook).
-- billing.ts: Replaced c.req.json() with safeJsonBody() in 3 endpoints
-  (POST /subscriptions, POST /payments, POST /webhook).
-- shared-validation: Moved 2 inline schemas to shared-validation:
-  createBillingSubscriptionSchema, createBillingPaymentSchema.
-- shared-validation: Enhanced createBillingSubscriptionSchema —
-  amount_cents max 99999999999, customer_name max 200,
-  customer_email max 200, customer_cpf_cnpj regex (apenas digitos,
-  pontos, hifens, barras) max 18, customer_phone max 20.
-- shared-validation: Enhanced createBillingPaymentSchema —
-  amount_cents max 99999999999, due_date max 20, description max 500.
-- shared-validation: Added asaasWebhookSchema para validacao do
-  webhook do Asaas.
+- k8s.ts: Fixed Command Injection in execKubectl — was using exec()
+  with shell interpolation of kubeconfigPath, context, and nsFlag.
+  If kubeconfig_path contained '"; rm -rf /; "' or context contained
+  '&& cat /etc/passwd', arbitrary commands would execute. Replaced
+  exec() with execFile() (no shell) with args passed as array.
+  Args are treated as string literals, not shell-interpreted.
+- k8s.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 4+ occurrences.
+- k8s.ts: Added rateLimitWrite on 4 write endpoints (POST /clusters,
+  PUT /clusters/:id, DELETE /clusters/:id, POST /:id/resources/:type/sync).
+- k8s.ts: Replaced c.req.json() with safeJsonBody() in 2 endpoints
+  (POST /clusters, PUT /clusters/:id).
+- shared-validation: Enhanced updateK8sClusterSchema — was missing 5
+  fields (display_name, api_server_url, context, namespace,
+  kubeconfig_path, is_active). Now supports all fields with same
+  validation as create (SAFE_PATH, SAFE_CONTEXT, namespace regex).
 
 Bug fixes:
-- billing.ts: All validation errors now return parsed.error.flatten().
-- billing.ts: All audit logs migrated to writeAuditLog helper.
-- billing.ts: POST /subscriptions e POST /payments agora retornam 500
-  se dbResult nao tiver id (antes retornava id undefined).
-- billing.ts: POST /webhook agora valida body com asaasWebhookSchema.
-- billing.ts: POST /webhook agora loga warning se paymentId
-  desconhecido.
+- k8s.ts: DELETE /clusters/:id now returns 404 if not found.
+- k8s.ts: PUT /clusters/:id now returns 404 if not found, and 400 if
+  no fields to update.
+- k8s.ts: All validation errors now return parsed.error.flatten().
+- k8s.ts: All audit logs migrated to writeAuditLog helper.
+- k8s.ts: POST /clusters agora aceita api_server_url OU api_server
+  (backward compatible).
 
 Performance:
-- billing.ts: Parallelized 2 queries in GET / (subs + invoices).
-- billing.ts: Parallelized 2 queries in GET /stats (revenue + subs).
-- billing.ts: Added httpCache(30) on GET /, GET /stats,
-  GET /subscriptions, GET /invoices; httpCache(15) on
-  GET /payments/:paymentId/status (5 endpoints).
+- k8s.ts: Parallelized 2 queries in GET /:clusterId/overview
+  (resource_counts + event_counts) using Promise.all.
+- k8s.ts: Added httpCache(30) on GET /, GET /clusters; httpCache(15)
+  on GET /:id/resources/:type, GET /:id/events, GET /:id/overview
+  (5 endpoints).
 
 Code quality:
-- billing.ts: Added try/catch on all 8 endpoints with structured
-  logging.
-- billing.ts: Added logger with tenantId, subscriptionId, invoiceId
-  context.
+- k8s.ts: Added try/catch on all 8 endpoints with structured logging.
+- k8s.ts: Added logger with clusterId, resourceType, tenantId context.
 
 Tests:
-- billing.test.ts (NEW): 50 tests covering:
-  - createBillingSubscriptionSchema (23 tests): plan/billing_cycle/
-    payment_method enums, amount_cents range, customer_name/email,
-    customer_cpf_cnpj regex (CPF/CNPJ format), customer_phone.
-  - createBillingPaymentSchema (11 tests): subscription_id UUID,
-    amount_cents range, payment_method enum, due_date, description.
-  - asaasWebhookSchema (6 tests): event optional, payment required,
-    payment.id/status required, empty rejection.
-  - HMAC webhook verification (3 tests): valid signature, invalid
-    signature, length mismatch.
-  - Amount conversion logic (3 tests): cents to reais.
-  - Cycle mapping (3 tests): monthly/quarterly/yearly.
+- k8s.test.ts (NEW): 43 tests covering:
+  - createK8sClusterSchema (15 tests): name, api_server URL, context
+    SAFE_CONTEXT regex (rejects injection, spaces), kubeconfig_path
+    SAFE_PATH regex (rejects injection, spaces), namespace regex,
+    token, ca_cert.
+  - updateK8sClusterSchema (11 tests): partial updates, all 5 new
+    fields, api_server_url validation, context injection rejection.
+  - k8sResourceTypeSchema (8 tests): pods/services/deployments/nodes/
+    namespaces valid, invalid types rejected, injection rejected.
+  - execKubectl Command Injection prevention (5 tests): args as array
+    not shell interpolation, null kubeconfig/context handling,
+    namespace flag logic.
+  - Limit/offset pagination (4 tests).
 
-Total: 1834 tests passing (was 1794, +40 new).
+Total: 1877 tests passing (was 1834, +43 new).
 
 Generated with [Devin](https://devin.ai)
 

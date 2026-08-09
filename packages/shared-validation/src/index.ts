@@ -1239,10 +1239,16 @@ export const createK8sClusterSchema = z.object({
 export type CreateK8sClusterInput = z.infer<typeof createK8sClusterSchema>;
 
 export const updateK8sClusterSchema = z.object({
-  name: z.string().optional(),
-  api_server: z.string().url().optional(),
-  token: z.string().optional(),
-  ca_cert: z.string().optional(),
+  name: z.string().min(1).max(100).optional(),
+  display_name: z.string().max(200).optional(),
+  api_server_url: z.string().url().optional(),
+  context: SAFE_CONTEXT.optional(),
+  namespace: z
+    .string()
+    .regex(/^[a-zA-Z0-9.\-_]+$/)
+    .optional(),
+  kubeconfig_path: SAFE_PATH.optional(),
+  is_active: z.boolean().optional(),
 });
 export type UpdateK8sClusterInput = z.infer<typeof updateK8sClusterSchema>;
 
