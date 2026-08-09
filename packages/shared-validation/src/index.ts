@@ -1169,16 +1169,29 @@ export const createFirewallRuleSchema = z.object({
 export type CreateFirewallRuleInput = z.infer<typeof createFirewallRuleSchema>;
 
 export const updateFirewallRuleSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().min(1).max(200).optional(),
   action: z.enum(["allow", "deny", "reject"]).optional(),
   protocol: z.enum(["tcp", "udp", "icmp", "any"]).optional(),
   source: SAFE_IP.optional(),
   destination: SAFE_IP.optional(),
   port: SAFE_PORT.optional(),
   is_active: z.boolean().optional(),
+  is_enabled: z.boolean().optional(),
   host: SAFE_HOSTNAME.optional(),
+  backend: SAFE_BACKEND.optional(),
   chain: z.enum(["INPUT", "OUTPUT", "FORWARD"]).optional(),
-  description: z.string().optional(),
+  source_ip: SAFE_IP.optional(),
+  source_port: SAFE_PORT.optional(),
+  destination_ip: SAFE_IP.optional(),
+  destination_port: SAFE_PORT.optional(),
+  interface_in: SAFE_INTERFACE.optional(),
+  interface_out: SAFE_INTERFACE.optional(),
+  state: z
+    .string()
+    .regex(/^[A-Z_,]+$/)
+    .optional(),
+  priority: z.number().int().min(0).max(32767).optional(),
+  description: z.string().max(2000).optional(),
 });
 export type UpdateFirewallRuleInput = z.infer<typeof updateFirewallRuleSchema>;
 

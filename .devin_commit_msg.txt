@@ -1,38 +1,61 @@
-feat(apm): fix try/catch, parallelize 6 queries, minutes validation, httpCache
+feat(firewall): fix Command Injection, user?.sub, safeJsonBody, try/catch, 404s
 
-Security:
-- apm.ts: Added minutes validation in GET /throughput — parseInt can
-  return NaN or negative values. Now validates: NaN -> default 15,
-  < 1 -> default 15, > 60 -> capped at 60. Before: NaN would crash
-  make_interval() in PostgreSQL.
+Security (CRITICAL):
+- firewall.ts: Fixed Command Injection in execSshCommand — replaced
+  exec() with execFile() that doesn't interpret shell metacharacters.
+  Before: exec(`ssh -o StrictHostKeyChecking=no ${host} "${command}"`)
+  allowed injection via host or command. Now: execFile("ssh", [args])
+  with no shell interpretation.
+- firewall.ts: Removed StrictHostKeyChecking=no — was allowing
+  man-in-the-middle attacks. Now uses BatchMode=yes for non-interactive.
+- firewall.ts: Fixed Command Injection in POST /apply — replaced
+  exec(cmd) with execFile(cmd, args) using separate argument arrays.
+  Commands now built via buildIptablesArgs/buildNftablesArgs/buildUfwArgs
+  which return string[] instead of interpolated strings.
+- firewall.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 6+ occurrences.
+- firewall.ts: Added rateLimitWrite on 5 write endpoints (POST /rules,
+  PUT /rules/:id, DELETE /rules/:id, POST /dry-run, POST /apply).
+- firewall.ts: Replaced c.req.json() with safeJsonBody() in 4 endpoints
+  (POST /rules, PUT /rules/:id, POST /dry-run, POST /apply).
+- shared-validation: Enhanced updateFirewallRuleSchema — was missing 9
+  fields (backend, source_ip, source_port, destination_ip,
+  destination_port, interface_in, interface_out, state, priority,
+  is_enabled). Now supports all fields with same validation as create.
+
+Bug fixes:
+- firewall.ts: DELETE /rules/:id now returns 404 if not found.
+- firewall.ts: PUT /rules/:id now returns 404 if not found after update,
+  and 400 if no fields to update.
+- firewall.ts: All validation errors now return parsed.error.flatten().
+- firewall.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- apm.ts: Parallelized 6 queries in GET /overview using Promise.all
-  (was 6 sequential queries: traceStats, topServices, slowOperations,
-  recentErrors, throughput, taskStats). All 6 are independent and
-  can run concurrently.
-- apm.ts: Added httpCache(60) on GET /, httpCache(15) on GET /overview
-  and GET /throughput (3 endpoints). APM data from 15min window doesn't
-  change every request.
+- firewall.ts: Parallelized 2 queries in GET /rules/:id (rule +
+  versions) using Promise.all.
+- firewall.ts: Added httpCache(30) on GET /, GET /hosts;
+  httpCache(15) on GET /rules, GET /rules/:id, GET /changes.
 
 Code quality:
-- apm.ts: Added try/catch on all 3 endpoints with structured logging.
-  Before: zero try/catch. Now: all 3 endpoints protected.
-- apm.ts: Added logger with tenantId, minutes context.
-- apm.ts: GET /throughput now returns minutes in response for client
-  transparency.
+- firewall.ts: Added try/catch on all 9 endpoints with structured logging.
+- firewall.ts: Added logger with ruleId, host, tenantId context.
+- firewall.ts: Refactored command building into separate functions
+  (buildIptablesArgs, buildNftablesArgs, buildUfwArgs) returning arrays.
 
 Tests:
-- apm.test.ts (NEW): 24 tests covering:
-  - Minutes validation (10 tests): default 15, NaN, negative, zero,
-    valid values, max 60 cap, boundary conditions.
-  - Window calculation (3 tests): 1/15/60 min in milliseconds.
-  - Throughput data structure (2 tests): populated and empty.
-  - Overview response structure (2 tests): complete and null/empty.
-  - Error rate calculation (4 tests): normal, 0%, 100%, no spans.
-  - Percentile interpretation (3 tests): p99 >= p95, avg <= p95.
+- firewall.test.ts (NEW): 56 tests covering:
+  - createFirewallRuleSchema (28 tests): name, host shell injection
+    prevention, action/protocol/backend/chain enums, defaults, source_ip/
+    destination_port/interface_in shell injection prevention.
+  - updateFirewallRuleSchema (12 tests): partial updates, all 9 new
+    fields, priority range (0-32767), host shell injection.
+  - applyFirewallSchema (8 tests): device_id required, rule_ids min 1,
+    dry_run default, host shell injection.
+  - iptables args building (3 tests): simple rule, complete rule,
+    array verification (no string interpolation).
+  - Limit pagination (3 tests), version bump (2 tests).
 
-Total: 1565 tests passing (was 1541, +24 new).
+Total: 1621 tests passing (was 1565, +56 new).
 
 Generated with [Devin](https://devin.ai)
 
