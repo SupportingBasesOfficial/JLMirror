@@ -1,58 +1,30 @@
-feat(rbac): add requirePermission to GET endpoints, fix user?.sub, schemas
+feat(branding): add try/catch, httpCache, rate limit, logger
 
-Security (CRITICAL):
-- rbac.ts: Added requirePermission("tenant:settings:read") on 4
-  GET endpoints (GET /, GET /permissions, GET /roles,
-  GET /roles/:id/permissions) — were completely unprotected, any
-  authenticated user could list all permissions and roles.
-- rbac.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 3+ occurrences.
-- rbac.ts: Added rateLimitWrite on 2 write endpoints (POST /roles,
-  PUT /roles/:id/permissions).
-- rbac.ts: Replaced c.req.json() with safeJsonBody() in 2
-  endpoints.
-- rbac.ts: POST /roles now checks for duplicate key before insert
-  — returns 409 CONFLICT if key already exists (was returning
-  generic 500).
-- rbac.ts: PUT /roles/:id/permissions now validates role exists
-  and is not a system role — returns 404 if not found, 403 if
-  system role (was silently updating non-existent or system roles).
-- shared-validation: Enhanced createRoleSchema — name max 200,
-  description max 2000, key regex /^[\w-]+$/ + max 100,
-  permissions UUID validation + max 500.
-- shared-validation: Fixed assignRolePermissionsSchema — removed
-  duplicate `permissions` field (was duplicating `permission_ids`),
-  permission_ids now UUID validation + max 500.
-
-Bug fixes:
-- rbac.ts: All validation errors now return parsed.error.flatten().
-- rbac.ts: All audit logs migrated to writeAuditLog helper.
-- rbac.ts: GET /me/permissions now uses user?.sub ?? null and
-  user.roles ?? [].
+Security:
+- branding.ts: Added rateLimitApi on GET /:tenantSlug (public
+  endpoint, was unprotected from abuse).
 
 Performance:
-- rbac.ts: Added httpCache(60) on GET /, GET /permissions,
-  GET /roles, GET /me/permissions; httpCache(30) on
-  GET /roles/:id/permissions (5 endpoints).
+- branding.ts: Added httpCache(300) on GET /:tenantSlug (5 min,
+  public endpoint called on every login page load); httpCache(600)
+  on GET / (10 min, static defaults).
 
 Code quality:
-- rbac.ts: Added try/catch on all 6 endpoints with structured
-  logging.
-- rbac.ts: Added logger with roleId, tenantId, userId context.
+- branding.ts: Added try/catch on GET /:tenantSlug with structured
+  logging — returns default branding on error instead of crashing
+  (public endpoint must not break the login page).
+- branding.ts: Added logger with tenantSlug context.
 
 Tests:
-- rbac.test.ts (NEW): 19 tests covering:
-  - createRoleSchema (11 tests): name required + max 200,
-    description max 2000, key regex + max 100, permissions UUID
-    validation + default empty, multiple UUIDs.
-  - assignRolePermissionsSchema (4 tests): permission_ids UUID
-    validation, default empty, multiple UUIDs.
-  - Role key generation logic (2 tests): uses key if provided,
-    falls back to name.
-  - System role protection logic (2 tests): system role cannot
-    be modified, custom role can.
+- branding.test.ts (NEW): 13 tests covering:
+  - Default branding values (6 tests): primary_color hex, secondary
+    color hex, null fields.
+  - Tenant slug normalization logic (5 tests): spaces to hifens,
+    multiple spaces, uppercase, no spaces, empty.
+  - Branding response logic (2 tests): defaults when not found,
+    tenant branding when found.
 
-Total: 2103 tests passing (was 2093, +10 net new).
+Total: 2116 tests passing (was 2103, +13 new).
 
 Generated with [Devin](https://devin.ai)
 
