@@ -18,6 +18,7 @@ import {
   classifyZabbixHost,
   ASSET_TYPE_ICONS,
   ASSET_TYPE_LABELS,
+  type AssetType,
 } from "@/lib/classify-zabbix-host";
 
 const COLORS = {
@@ -132,6 +133,12 @@ interface Asset {
   department: string | null;
   warranty_expiry: string | null;
   tags: string[];
+  // Campos extras para devices do Zabbix
+  _source?: "zabbix" | "cmdb";
+  _hostGroup?: string;
+  _confidence?: "high" | "medium" | "low";
+  _os?: string | null;
+  _hostid?: string;
 }
 
 interface AssetLicense {
@@ -202,7 +209,7 @@ export default function AssetsPage() {
   } = useApi<{ assets: Asset[] }>(assetsQuery);
   const { data: stats, mutate: mutateStats } =
     useApi<AssetStats>("/api/assets/stats");
-  const assets = aData?.assets ?? [];
+  const assets = useMemo(() => aData?.assets ?? [], [aData]);
 
   // Dispositivos do Zabbix — busca todos os hosts monitorados
   const {
@@ -211,6 +218,60 @@ export default function AssetsPage() {
     mutate: mutateZabbix,
   } = useApi<{ devices: ZabbixHost[] }>("/api/zabbix/devices");
   const zDevices = useMemo(() => zData?.devices ?? [], [zData]);
+
+  // Converte dispositivos Zabbix em assets virtuais para exibir na tabela unificada
+  const zabbixAsAssets = useMemo(() => {
+    return zDevices.map((d) => {
+      const classification = classifyZabbixHost(d);
+      const iface = d.interfaces?.[0];
+      const hg = d.hostgroups ?? d.groups ?? [];
+      return {
+        id: `zbx-${d.hostid}`,
+        asset_tag: `ZBX-${d.hostid}`,
+        name: d.name,
+        asset_type: classification.assetType,
+        category: classification.category,
+        status: d.status === "0" ? "active" : "inactive",
+        criticality: "medium",
+        hostname: d.host,
+        ip_address: iface?.ip ?? iface?.dns ?? null,
+        serial_number: d.inventory?.serialno_a ?? null,
+        manufacturer: d.inventory?.vendor ?? null,
+        model: d.inventory?.model ?? null,
+        location: hg[0]?.name ?? null,
+        assigned_to: null,
+        department: null,
+        warranty_expiry: null,
+        tags: ["zabbix", classification.assetType],
+        _source: "zabbix" as const,
+        _hostGroup: hg[0]?.name ?? "Sem categoria",
+        _confidence: classification.confidence,
+        _os: d.inventory?.os ?? null,
+        _hostid: d.hostid,
+      };
+    });
+  }, [zDevices]);
+
+  // Lista unificada: CMDB assets + Zabbix devices (aplica filtros)
+  const unifiedAssets = useMemo(() => {
+    const combined = [...assets, ...zabbixAsAssets];
+    if (!search && !filterStatus && !filterType) return combined;
+    return combined.filter((a) => {
+      if (
+        search &&
+        !(
+          a.name?.toLowerCase().includes(search.toLowerCase()) ||
+          a.hostname?.toLowerCase().includes(search.toLowerCase()) ||
+          a.ip_address?.toLowerCase().includes(search.toLowerCase()) ||
+          a.asset_tag?.toLowerCase().includes(search.toLowerCase())
+        )
+      )
+        return false;
+      if (filterStatus && a.status !== filterStatus) return false;
+      if (filterType && a.asset_type !== filterType) return false;
+      return true;
+    });
+  }, [assets, zabbixAsAssets, search, filterStatus, filterType]);
 
   // Agrupa dispositivos do Zabbix por host group
   const zabbixByGroup = useMemo(() => {
@@ -659,9 +720,9 @@ export default function AssetsPage() {
           border: `1px solid ${COLORS.border}`,
         }}
       >
-        {loading ? (
+        {loading || zLoading ? (
           <LoadingState label="Carregando ativos..." />
-        ) : assets.length === 0 ? (
+        ) : unifiedAssets.length === 0 ? (
           <div
             className="p-8 text-center text-sm"
             style={{ color: COLORS.muted }}
@@ -700,7 +761,7 @@ export default function AssetsPage() {
                   className="text-left px-3 py-2 font-bold uppercase text-[10px]"
                   style={{ color: COLORS.muted }}
                 >
-                  Criticidade
+                  Host Group
                 </th>
                 <th
                   className="text-left px-3 py-2 font-bold uppercase text-[10px]"
@@ -718,13 +779,7 @@ export default function AssetsPage() {
                   className="text-left px-3 py-2 font-bold uppercase text-[10px]"
                   style={{ color: COLORS.muted }}
                 >
-                  Local
-                </th>
-                <th
-                  className="text-left px-3 py-2 font-bold uppercase text-[10px]"
-                  style={{ color: COLORS.muted }}
-                >
-                  Atribuído
+                  Origem
                 </th>
                 <th
                   className="text-right px-3 py-2 font-bold uppercase text-[10px]"
@@ -733,28 +788,61 @@ export default function AssetsPage() {
               </tr>
             </thead>
             <tbody>
-              {assets.map((a) => (
+              {unifiedAssets.map((a) => (
                 <tr
                   key={a.id}
                   style={{
                     borderBottom: `1px solid ${COLORS.border}`,
-                    cursor: "pointer",
+                    cursor: a._source === "zabbix" ? "pointer" : "pointer",
                   }}
-                  onClick={() => handleSelectAsset(a)}
+                  onClick={() => {
+                    if (a._source === "zabbix" && a._hostid) {
+                      window.location.href = `/dashboard/devices/${a._hostid}`;
+                    } else {
+                      handleSelectAsset(a);
+                    }
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSelectAsset(a);
+                    if (e.key === "Enter") {
+                      if (a._source === "zabbix" && a._hostid) {
+                        window.location.href = `/dashboard/devices/${a._hostid}`;
+                      } else {
+                        handleSelectAsset(a);
+                      }
+                    }
                   }}
                 >
                   <td className="px-3 py-2" style={{ color: COLORS.muted }}>
                     {a.asset_tag}
                   </td>
                   <td className="px-3 py-2" style={{ color: COLORS.teal }}>
-                    {TYPE_ICONS[a.asset_type] ?? "•"} {a.name}
+                    {a._source === "zabbix"
+                      ? `${ASSET_TYPE_ICONS[a.asset_type as AssetType] ?? "•"} ${a.name}`
+                      : `${TYPE_ICONS[a.asset_type] ?? "•"} ${a.name}`}
                   </td>
-                  <td className="px-3 py-2" style={{ color: COLORS.muted }}>
-                    {a.asset_type}
+                  <td className="px-3 py-2">
+                    <span
+                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                      style={{
+                        background: `${COLORS.teal}15`,
+                        color: COLORS.teal,
+                      }}
+                    >
+                      {a._source === "zabbix"
+                        ? (ASSET_TYPE_LABELS[a.asset_type as AssetType] ??
+                          a.asset_type)
+                        : a.asset_type}
+                    </span>
+                    {a._source === "zabbix" && a._confidence !== "high" && (
+                      <span
+                        className="ml-1 text-[8px]"
+                        style={{ color: COLORS.muted }}
+                      >
+                        ~{a._confidence}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span
@@ -764,20 +852,19 @@ export default function AssetsPage() {
                         color: STATUS_COLORS[a.status] ?? COLORS.muted,
                       }}
                     >
-                      {a.status}
+                      {a._source === "zabbix"
+                        ? a.status === "active"
+                          ? "ON"
+                          : "OFF"
+                        : a.status}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
-                      style={{
-                        background: `${CRITICALITY_COLORS[a.criticality] ?? COLORS.muted}15`,
-                        color:
-                          CRITICALITY_COLORS[a.criticality] ?? COLORS.muted,
-                      }}
-                    >
-                      {a.criticality}
-                    </span>
+                  <td
+                    className="px-3 py-2 text-[11px] truncate max-w-[200px]"
+                    style={{ color: COLORS.muted }}
+                    title={a._hostGroup ?? a.location ?? ""}
+                  >
+                    {a._hostGroup ?? a.location ?? "—"}
                   </td>
                   <td className="px-3 py-2" style={{ color: COLORS.muted }}>
                     {a.hostname ?? "—"}
@@ -785,28 +872,39 @@ export default function AssetsPage() {
                   <td className="px-3 py-2" style={{ color: COLORS.muted }}>
                     {a.ip_address ?? "—"}
                   </td>
-                  <td className="px-3 py-2" style={{ color: COLORS.muted }}>
-                    {a.location ?? "—"}
-                  </td>
-                  <td className="px-3 py-2" style={{ color: COLORS.muted }}>
-                    {a.assigned_to ?? "—"}
+                  <td className="px-3 py-2">
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+                      style={{
+                        background:
+                          a._source === "zabbix"
+                            ? `${COLORS.blue}15`
+                            : `${COLORS.muted}15`,
+                        color:
+                          a._source === "zabbix" ? COLORS.blue : COLORS.muted,
+                      }}
+                    >
+                      {a._source === "zabbix" ? "Zabbix" : "CMDB"}
+                    </span>
                   </td>
                   <td
                     className="px-3 py-2 text-right"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      onClick={() => handleDelete(a.id)}
-                      className="px-2 py-1 rounded text-[10px] font-bold"
-                      style={{
-                        background: `color-mix(in srgb, var(--status-error-text) 12%, transparent)`,
-                        border: `1px solid var(--status-error-border)`,
-                        color: COLORS.red,
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✕
-                    </button>
+                    {a._source !== "zabbix" && (
+                      <button
+                        onClick={() => handleDelete(a.id)}
+                        className="px-2 py-1 rounded text-[10px] font-bold"
+                        style={{
+                          background: `color-mix(in srgb, var(--status-error-text) 12%, transparent)`,
+                          border: `1px solid var(--status-error-border)`,
+                          color: COLORS.red,
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1,7 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 // Classificacao automatica de hosts do Zabbix em tipos de ativos
-// Baseado em: templates anexados, nome do host, tipo de interface, inventory
+// Baseado em: OS do inventory, templates, nome do host, tipo de interface
 
 import type { ZabbixHost } from "@repo/zabbix";
 
@@ -29,6 +29,41 @@ interface ClassificationResult {
   confidence: "high" | "medium" | "low";
   reason: string;
 }
+
+// Tipo de interface do Zabbix: 1=agent, 2=SNMP, 3=IPMI, 4=JMX
+const SNMP_INTERFACE_TYPE = 2;
+
+// Padroes de OS do inventory para classificacao (alta confianca)
+const OS_PATTERNS: {
+  patterns: RegExp[];
+  type: AssetType;
+  category: ClassificationResult["category"];
+}[] = [
+  // Windows Server → servidor
+  {
+    patterns: [/windows.*server/i, /windows\s+server/i],
+    type: "server",
+    category: "hardware",
+  },
+  // Linux → servidor (geralmente)
+  {
+    patterns: [/linux/i],
+    type: "server",
+    category: "hardware",
+  },
+  // FreeBSD → appliance/servidor
+  {
+    patterns: [/freebsd/i],
+    type: "server",
+    category: "hardware",
+  },
+  // Windows 10/11 (nao Server) → workstation
+  {
+    patterns: [/windows\s*1[01]/i, /windows.*pro/i],
+    type: "workstation",
+    category: "hardware",
+  },
+];
 
 // Padroes de nome de template para classificacao
 const TEMPLATE_PATTERNS: {
@@ -150,13 +185,7 @@ const TEMPLATE_PATTERNS: {
     type: "storage",
     category: "hardware",
   },
-  // Workstations
-  {
-    patterns: [/template.*workstation/i, /template.*desktop/i, /template.*pc/i],
-    type: "workstation",
-    category: "hardware",
-  },
-  // IoT / sensores
+  // IoT / sensores / UPS
   {
     patterns: [
       /template.*iot/i,
@@ -165,83 +194,125 @@ const TEMPLATE_PATTERNS: {
       /template.*humidity/i,
       /template.*ups/i,
       /template.*apc/i,
-      /template.*nutanix/i,
       /template.*pdu/i,
     ],
     type: "iot",
     category: "hardware",
   },
-  // Appliances
-  {
-    patterns: [
-      /template.*appliance/i,
-      /template.*proxy/i,
-      /template.*squid/i,
-      /template.*cache/i,
-    ],
-    type: "appliance",
-    category: "hardware",
-  },
 ];
 
-// Padroes de nome de host para classificacao
+// Padroes de nome de host — match em qualquer parte do hostname (nao so prefixo)
 const HOSTNAME_PATTERNS: {
   patterns: RegExp[];
   type: AssetType;
   category: ClassificationResult["category"];
 }[] = [
-  { patterns: [/^srv-|^server-|^s\d+/i], type: "server", category: "hardware" },
-  { patterns: [/^vm-|^vps-|^cloud-/i], type: "vm", category: "virtual" },
+  // Firewalls — FW, FOGATTI, PFSENSE, FORTIGATE
   {
-    patterns: [/^sw-|^switch-|^acs-/i],
-    type: "network_switch",
-    category: "network",
-  },
-  { patterns: [/^rt-|^router-|^rtr-/i], type: "router", category: "network" },
-  {
-    patterns: [/^fw-|^firewall-|^pf-/i],
+    patterns: [/\bFW\b/i, /FOGATTI/i, /PFSENSE/i, /FORTIGATE/i, /FIREWALL/i],
     type: "firewall",
     category: "network",
   },
+  // VMs — vSRV, VM-, VPS-, HYPERV
   {
-    patterns: [/^lb-|^loadbalanc/i],
-    type: "load_balancer",
+    patterns: [/vSRV/i, /\bVM\b/i, /^vm-/i, /^vps-/i, /HYPERV/i],
+    type: "vm",
+    category: "virtual",
+  },
+  // Switches — SW, SWITCH, CATALYST
+  {
+    patterns: [/\bSW\b/i, /SWITCH/i, /CATALYST/i, /PROCURVE/i],
+    type: "network_switch",
     category: "network",
   },
+  // Routers — RT, ROUTER, MIKROTIK
   {
-    patterns: [/^pr-|^printer-|^imp-|^hp-|^ricoh-/i],
+    patterns: [/\bRT\b/i, /ROUTER/i, /MIKROTIK/i, /\bRTR\b/i],
+    type: "router",
+    category: "network",
+  },
+  // Impressoras — PR, IMP, PRINTER
+  {
+    patterns: [/\bPR\b/i, /\bIMP\b/i, /PRINTER/i, /LASER/i],
     type: "printer",
     category: "hardware",
   },
+  // Storage — NAS, STORAGE, SAN
   {
-    patterns: [/^nas-|^storage-|^san-/i],
+    patterns: [/\bNAS\b/i, /STORAGE/i, /\bSAN\b/i, /NETAPP/i, /SYNOLOGY/i],
     type: "storage",
     category: "hardware",
   },
+  // Servidores — SRV, SERVER, SQL, ORCL, BD, AD, APL, APP, MAIL, DB
   {
-    patterns: [/^ws-|^pc-|^desktop-/i],
-    type: "workstation",
+    patterns: [
+      /\bSRV\b/i,
+      /\bSERVER\b/i,
+      /\bSQL\b/i,
+      /\bORCL\b/i,
+      /\bBD\b/i,
+      /\bDB\b/i,
+      /\bAD\b/i,
+      /\bAPL\b/i,
+      /\bAPP\b/i,
+      /MAIL/i,
+      /SVNO/i,
+    ],
+    type: "server",
     category: "hardware",
   },
-  { patterns: [/^ups-|^sensor-|^iot-/i], type: "iot", category: "hardware" },
+  // IoT / UPS
+  {
+    patterns: [/\bUPS\b/i, /SENSOR/i, /\bIOT\b/i, /\bAPC\b/i],
+    type: "iot",
+    category: "hardware",
+  },
 ];
-
-// Tipo de interface do Zabbix: 1=agent, 2=SNMP, 3=IPMI, 4=JMX
-// SNMP geralmente indica dispositivo de rede / impressora / appliance
-const SNMP_INTERFACE_TYPE = 2;
 
 export function classifyZabbixHost(host: ZabbixHost): ClassificationResult {
   const templates = host.parentTemplates ?? host.templates ?? [];
   const hostname = host.host ?? "";
+  const name = host.name ?? "";
   const inventory = host.inventory;
+  const os = inventory?.os ?? "";
   const inventoryType = inventory?.type ?? "";
   const interfaces = host.interfaces ?? [];
+  const combinedName = `${hostname} ${name}`;
 
-  // 1. Tenta classificar pelo inventory.type (mais confiavel se preenchido)
+  // 1. OS do inventory — alta confianca (Windows Server, Linux, etc)
+  if (os) {
+    for (const { patterns, type, category } of OS_PATTERNS) {
+      if (patterns.some((p) => p.test(os))) {
+        // Se OS diz server mas hostname indica firewall, prioriza firewall
+        if (type === "server") {
+          const fwMatch = HOSTNAME_PATTERNS.find(
+            (h) =>
+              h.type === "firewall" &&
+              h.patterns.some((p) => p.test(combinedName)),
+          );
+          if (fwMatch) {
+            return {
+              assetType: "firewall",
+              category: "network",
+              confidence: "high",
+              reason: `hostname + OS: "${os}" indica firewall`,
+            };
+          }
+        }
+        return {
+          assetType: type,
+          category,
+          confidence: "high",
+          reason: `OS: "${os}"`,
+        };
+      }
+    }
+  }
+
+  // 2. inventory.type
   if (inventoryType) {
-    const lowerType = inventoryType.toLowerCase();
     for (const { patterns, type, category } of TEMPLATE_PATTERNS) {
-      if (patterns.some((p) => p.test(lowerType))) {
+      if (patterns.some((p) => p.test(inventoryType))) {
         return {
           assetType: type,
           category,
@@ -252,7 +323,7 @@ export function classifyZabbixHost(host: ZabbixHost): ClassificationResult {
     }
   }
 
-  // 2. Tenta classificar pelos templates anexados
+  // 3. Templates anexados
   for (const { patterns, type, category } of TEMPLATE_PATTERNS) {
     for (const tpl of templates) {
       const tplName = tpl.name ?? tpl.host ?? "";
@@ -267,9 +338,9 @@ export function classifyZabbixHost(host: ZabbixHost): ClassificationResult {
     }
   }
 
-  // 3. Tenta classificar pelo nome do host
+  // 4. Padroes no nome do host (match em qualquer parte)
   for (const { patterns, type, category } of HOSTNAME_PATTERNS) {
-    if (patterns.some((p) => p.test(hostname))) {
+    if (patterns.some((p) => p.test(combinedName))) {
       return {
         assetType: type,
         category,
@@ -279,26 +350,26 @@ export function classifyZabbixHost(host: ZabbixHost): ClassificationResult {
     }
   }
 
-  // 4. Heuristica por tipo de interface
+  // 5. Heuristica por tipo de interface
   const hasSnmp = interfaces.some((i) => i.type === SNMP_INTERFACE_TYPE);
   if (hasSnmp) {
-    // SNMP sem template especifico — provavelmente switch/router/appliance de rede
+    // SNMP sem template — dispositivo de rede
     return {
-      assetType: "network_switch",
+      assetType: "firewall",
       category: "network",
       confidence: "low",
-      reason: "interface SNMP sem template especifico",
+      reason: "interface SNMP sem template — provavelmente firewall/router",
     };
   }
 
-  // 5. Fallback — assume server se tem interface agent (tipo 1)
+  // 6. Fallback — agent interface = servidor
   const hasAgent = interfaces.some((i) => i.type === 1);
   if (hasAgent) {
     return {
       assetType: "server",
       category: "hardware",
       confidence: "low",
-      reason: "interface agent (Zabbix) sem template especifico",
+      reason: "interface agent (Zabbix) sem classificacao especifica",
     };
   }
 
