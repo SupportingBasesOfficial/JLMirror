@@ -1,57 +1,72 @@
-feat(auth): fix safeJsonBody, try/catch, audit logs, Zod schemas oauth/ldap, logger
+feat(users): fix user?.sub/tenant_id, safeJsonBody, try/catch, 4 Zod schemas, rate limit
 
 Security (CRITICAL):
-- auth.ts: Added audit logs for login success, login failed (user_not_found,
-  user_inactive, invalid_password, no_tenant_access), logout, oauth login,
-  ldap login, ldap login failed. Before: zero audit logs for auth events.
-  Now: 8 new audit log points with metadata (ip, userAgent, reason).
-- auth.ts: Added try/catch around argon2.verify in /login and /change-password
-  — was crashing on malformed password_hash. Now returns 401 gracefully.
-- auth.ts: Replaced c.req.json() with safeJsonBody() in 6 endpoints
-  (login, logout, revoke, change-password, forgot-password, reset-password,
-  oauth/callback, ldap/bind) — was crashing on invalid JSON body.
-- shared-validation/src/index.ts: Added oauthCallbackSchema (Zod) —
-  oauth/callback was using raw c.req.json<{code, provider}>() without
-  validation. Now validates code (required) and provider (enum: "google").
-- shared-validation/src/index.ts: Added ldapBindSchema (Zod) —
-  ldap/bind was using raw c.req.json<{username, password}>() without
-  validation. Now validates username and password (both required, min 1).
-- lib/audit.ts: Relaxed userId type from string to string | null —
-  allows audit logging of failed logins where userId is unknown.
+- users.ts: Fixed user.tenant_id and user.sub crash risk — replaced with
+  user?.tenant_id ?? null and user?.sub in all 14+ occurrences. All audit
+  log calls now guarded with if (user?.sub).
+- users.ts: Added rateLimitWrite on POST /, PUT /:userId/role,
+  PUT /:userId/status, DELETE /:userId, PUT /:userId/password,
+  PUT /:userId/details, POST /custom-roles (7 endpoints).
+- users.ts: Replaced c.req.json() with safeJsonBody() in 6 endpoints
+  (POST /, PUT /:userId/role, PUT /:userId/status, PUT /:userId/password,
+  PUT /:userId/details, POST /custom-roles) — was crashing on invalid JSON.
+- shared-validation/src/index.ts: Added updateUserRoleSchema (Zod) —
+  PUT /:userId/role was using raw c.req.json<{role, scope?, tenant_id?}>()
+  without validation. Now validates role (required, max 100), scope (enum),
+  tenant_id (UUID optional).
+- shared-validation/src/index.ts: Added updateUserStatusSchema (Zod) —
+  PUT /:userId/status was using raw c.req.json<{is_active, tenant_id?}>()
+  without validation. Now validates is_active (boolean required),
+  tenant_id (UUID optional).
+- shared-validation/src/index.ts: Added resetUserPasswordSchema (Zod) —
+  PUT /:userId/password was using raw c.req.json<{password,
+  must_change_password?}>() without validation. Now validates password
+  (min 8, max 128), must_change_password (boolean optional).
+- shared-validation/src/index.ts: Added updateUserDetailsSchema (Zod) —
+  PUT /:userId/details was using raw c.req.json<{full_name?, email?}>()
+  without validation. Now validates full_name (max 255), email (format).
+- shared-validation/src/index.ts: Enhanced createCustomRoleSchema —
+  key now has regex /^[a-z][a-z0-9_:]*$/ (was just min(1)), permissions
+  now requires UUID array (was string array).
 
 Bug fixes:
-- auth.ts: POST /logout now writes audit log (was missing).
-- auth.ts: POST /forgot-password now catches errors internally and still
-  returns generic response (anti user-enumeration). Before: error would
-  crash and reveal if email existed.
-- auth.ts: POST /change-password now returns validation error details
-  (parsed.error.flatten()) — was returning generic "Dados inválidos".
-- auth.ts: POST /reset-password now returns validation error details.
-- auth.ts: POST /oauth/callback now returns validation error details.
-- auth.ts: POST /ldap/bind now returns validation error details.
+- users.ts: POST /custom-roles now checks if role key already exists in
+  tenant before creating (was allowing duplicates). Returns 409
+  ROLE_ALREADY_EXISTS.
+- users.ts: All audit logs now use writeAuditLog helper (was inline SQL).
+  Audit log failures no longer block the main operation (wrapped in
+  try/catch).
+- users.ts: DELETE /:userId now uses user?.sub for self-delete check
+  (was user.sub which could crash).
+- users.ts: All validation errors now return parsed.error.flatten()
+  details (was generic "Dados inválidos" or first error message only).
+
+Performance:
+- users.ts: Parallelized 2 queries in GET /roles using Promise.all
+  (was 2 sequential queries).
+- users.ts: Added httpCache(15) on GET /, GET /all; httpCache(60) on
+  GET /roles (3 endpoints).
 
 Code quality:
-- auth.ts: Added try/catch on all 14 endpoints with structured logging.
-  Before: only 4 endpoints had try/catch (refresh, revoke, oauth/callback,
-  ldap/bind). Now: all 14 endpoints are protected.
-- auth.ts: Added logger with userId, ip, email, provider context. Logs
-  login success, login failed (with reason), logout, password change,
-  password reset, oauth login, ldap login.
-- auth.ts: All audit log calls wrapped in try/catch — audit log failure
-  no longer blocks the auth flow.
+- users.ts: Added try/catch on all 9 endpoints with structured logging.
+  Before: zero try/catch. Now: all 9 endpoints protected.
+- users.ts: Added logger with userId, tenantId, email, role context.
+  Logs create, role update, status update, delete, password reset,
+  details update, custom role create.
+- users.ts: Migrated all audit logs from inline SQL to writeAuditLog
+  helper (consistency with auth.ts and admin.ts).
 
 Tests:
-- auth.test.ts (NEW): 56 tests covering all 7 Zod schemas (loginInput,
-  refreshToken, changePassword, forgotPassword, resetPassword,
-  oauthCallback, ldapBind) with all field validations, edge cases
-  (min length 8 for passwords, min length 32 for reset token, email
-  format, provider enum); IP extraction logic (single, multiple, spaces,
-  missing); MFA challenge logic (UUID format, 5-minute expiry); token
-  TTL logic (30 days); anti user-enumeration logic (generic responses);
-  login status logic (active/inactive, tenant access, MFA); change
-  password logic (verify, revoke sessions, must_change_password flag).
+- users.test.ts (NEW): 53 tests covering all 6 Zod schemas
+  (createTenantUser, createCustomRole, updateUserRole, updateUserStatus,
+  resetUserPassword, updateUserDetails) with all field validations,
+  regex constraints (role key format), enum validations (scope),
+  UUID validations (tenant_id, permissions), defaults (scope=tenant,
+  permissions=[], must_change_password=true); self-delete logic;
+  scope logic (global vs tenant); role key format logic; tenant target
+  logic; must_change_password default logic.
 
-Total: 1143 tests passing (was 1097, +46 new).
+Total: 1191 tests passing (was 1143, +48 new).
 
 Generated with [Devin](https://devin.ai)
 

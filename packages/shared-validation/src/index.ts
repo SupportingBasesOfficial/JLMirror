@@ -77,11 +77,43 @@ export const createTenantUserSchema = z.object({
 export type CreateTenantUserInput = z.infer<typeof createTenantUserSchema>;
 
 export const createCustomRoleSchema = z.object({
-  key: z.string().min(1),
-  description: z.string().optional(),
-  permissions: z.array(z.string()).default([]),
+  key: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[a-z][a-z0-9_:]*$/,
+      "Key deve começar com letra e conter apenas minúsculas, números, _ ou :",
+    ),
+  description: z.string().max(500).optional(),
+  permissions: z.array(z.string().uuid()).default([]),
 });
 export type CreateCustomRoleInput = z.infer<typeof createCustomRoleSchema>;
+
+export const updateUserRoleSchema = z.object({
+  role: z.string().min(1).max(100),
+  scope: z.enum(["global", "tenant"]).optional(),
+  tenant_id: z.string().uuid().optional(),
+});
+export type UpdateUserRoleInput = z.infer<typeof updateUserRoleSchema>;
+
+export const updateUserStatusSchema = z.object({
+  is_active: z.boolean(),
+  tenant_id: z.string().uuid().optional(),
+});
+export type UpdateUserStatusInput = z.infer<typeof updateUserStatusSchema>;
+
+export const resetUserPasswordSchema = z.object({
+  password: z.string().min(8).max(128),
+  must_change_password: z.boolean().optional(),
+});
+export type ResetUserPasswordInput = z.infer<typeof resetUserPasswordSchema>;
+
+export const updateUserDetailsSchema = z.object({
+  full_name: z.string().max(255).optional(),
+  email: z.string().email().optional(),
+});
+export type UpdateUserDetailsInput = z.infer<typeof updateUserDetailsSchema>;
 
 export const assignRolePermissionsSchema = z.object({
   role_id: z.string().uuid(),
