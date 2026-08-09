@@ -1,58 +1,56 @@
-feat(drift): fix N+1 subquery, batch insert, try/catch, 404s
+feat(predictions): fix user?.sub, try/catch, parallelize, 404s, audit
 
 Security:
-- drift.ts: Fixed user.tenant_id and user.sub crash risk —
+- predictions.ts: Fixed user.tenant_id and user.sub crash risk —
   replaced with user?.tenant_id ?? null and user?.sub ?? null in
-  all 7+ occurrences.
-- drift.ts: Added rateLimitWrite on POST /baselines, DELETE
-  /baselines/:id, POST /scan, PUT /events/:id/resolve, PUT
-  /events/:id/acknowledge (5 endpoints).
-- shared-validation: Enhanced driftBaselineSchema and
-  driftScanSchema — device_id max 200, name max 200.
+  all 9+ occurrences.
+- predictions.ts: Added rateLimitWrite on POST /analyze, PUT
+  /:id/acknowledge, PUT /:id/mitigate, PUT /:id/occurred, PUT
+  /:id/false-positive, PUT /config (6 endpoints).
+- shared-validation: Enhanced predictionAnalyzeSchema — device_id
+  max 200, metric_name max 200, values max 10000.
+- shared-validation: Enhanced predictionConfigSchema — metric_name
+  max 200, window_size max 8760, prediction_horizon_hours max 720.
 
 Bug fixes:
-- drift.ts: DELETE /baselines/:id now returns 404 if baseline not
-  found.
-- drift.ts: PUT /events/:id/resolve now returns 404 if event not
-  found.
-- drift.ts: PUT /events/:id/acknowledge now returns 404 if event
-  not found.
-- drift.ts: All audit logs migrated to writeAuditLog helper.
+- predictions.ts: PUT /:id/acknowledge now returns 404 if
+  prediction not found.
+- predictions.ts: PUT /:id/mitigate now returns 404.
+- predictions.ts: PUT /:id/occurred now returns 404.
+- predictions.ts: PUT /:id/false-positive now returns 404.
+- predictions.ts: Added writeAuditLog on POST /analyze and PUT
+  /config (was zero audit logs).
 
 Performance:
-- drift.ts: Fixed N+1 subquery in GET /baselines — replaced
-  correlated subquery (open_drifts per row) with LEFT JOIN +
-  aggregation.
-- drift.ts: Parallelized 2 queries in GET / (baselines + events)
-  using Promise.all.
-- drift.ts: Parallelized 5 queries in GET /stats (total_baselines
-  + open_drifts + critical_drifts + recent_drifts + by_device)
-  using Promise.all — was 5 sequential queries.
-- drift.ts: Replaced serial drift inserts in POST /scan with
-  batch insert (single query with multi-VALUES) — was N queries
-  for N drifts.
-- drift.ts: Added httpCache(30) on GET /, GET /baselines, GET
-  /events; httpCache(60) on GET /stats (4 endpoints).
+- predictions.ts: Parallelized 7 queries in GET /stats (total +
+  open + critical + occurred + mitigated + false_positive +
+  by_model) using Promise.all — was 7 sequential queries.
+- predictions.ts: Added httpCache(30) on GET / and GET /config;
+  httpCache(60) on GET /stats (3 endpoints).
 
 Code quality:
-- drift.ts: Added try/catch on all 8 endpoints with structured
-  logging (was zero).
-- drift.ts: Added logger with baselineId, device_id, name,
-  driftsFound, eventId, tenantId context.
+- predictions.ts: Added try/catch on all 9 endpoints with
+  structured logging (was zero).
+- predictions.ts: Added logger with predictionId, device_id,
+  metric_name, severity, configId, tenantId context.
 
 Tests:
-- drift.test.ts (NEW): 20 tests covering:
-  - driftBaselineSchema (7 tests): device_id required + max 200,
-    name required + max 200, config_snapshot empty + nested.
-  - driftScanSchema (4 tests): device_id required + max 200,
-    current_config empty.
-  - Config hash logic (3 tests): SHA-256 consistency, different
-    configs different hashes, 64-char hex format.
-  - Drift detection logic (6 tests): added key, removed key,
-    modified key, identical configs, multiple simultaneous drifts,
-    empty configs.
+- predictions.test.ts (NEW): 33 tests covering:
+  - predictionAnalyzeSchema (9 tests): device_id required + max
+    200, metric_name required + max 200, values required + max
+    10000, single value, decimal values.
+  - predictionConfigSchema (16 tests): metric_name required + max
+    200, threshold_value required, all 4 model_type values,
+    invalid model_type rejected, window_size 2-8760,
+    threshold_direction above/below, prediction_horizon_hours max
+    720, warning_probability 0-1, critical_probability 0-1,
+    complete config.
+  - Accuracy calculation logic (3 tests): occurred + mitigated,
+    zero total, decimal rounding.
+  - Window slicing logic (3 tests): last N values, values <
+    windowSize, empty values.
 
-Total: 2347 tests passing (was 2327, +20 new).
+Total: 2380 tests passing (was 2347, +33 new).
 
 Generated with [Devin](https://devin.ai)
 

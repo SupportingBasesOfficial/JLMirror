@@ -2408,19 +2408,19 @@ export type MarketplaceConfigureInput = z.infer<
 
 // ========== Predictions Schemas ==========
 export const predictionAnalyzeSchema = z.object({
-  device_id: z.string().min(1),
-  metric_name: z.string().min(1),
-  values: z.array(z.number()).min(1),
+  device_id: z.string().min(1).max(200),
+  metric_name: z.string().min(1).max(200),
+  values: z.array(z.number()).min(1).max(10000),
 });
 export type PredictionAnalyzeInput = z.infer<typeof predictionAnalyzeSchema>;
 
 export const predictionConfigSchema = z.object({
-  metric_name: z.string().min(1),
+  metric_name: z.string().min(1).max(200),
   model_type: z.enum(["linear", "exponential", "arima", "lstm"]).optional(),
-  window_size: z.number().int().min(2).optional(),
+  window_size: z.number().int().min(2).max(8760).optional(),
   threshold_value: z.number(),
   threshold_direction: z.enum(["above", "below"]).optional(),
-  prediction_horizon_hours: z.number().int().positive().optional(),
+  prediction_horizon_hours: z.number().int().positive().max(720).optional(),
   warning_probability: z.number().min(0).max(1).optional(),
   critical_probability: z.number().min(0).max(1).optional(),
   is_active: z.boolean().optional(),
