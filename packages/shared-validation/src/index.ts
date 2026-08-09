@@ -868,36 +868,44 @@ export type ExecuteScriptInput = z.infer<typeof executeScriptSchema>;
 
 // ========== Webhook Schemas ==========
 export const createWebhookSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(200),
   url: z.string().url(),
-  events: z.array(z.string()).min(1),
-  secret: z.string().optional(),
+  events: z.array(z.string().min(1).max(100)).min(1).max(50),
+  secret: z.string().max(500).optional(),
   is_active: z.boolean().default(true),
-  description: z.string().optional(),
+  description: z.string().max(2000).optional(),
   method: z.enum(["GET", "POST", "PUT", "PATCH"]).default("POST"),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string().max(500)).optional(),
   max_retries: z.number().int().min(0).max(10).default(3),
-  retry_delay_seconds: z.number().int().min(1).default(60),
+  retry_delay_seconds: z.number().int().min(1).max(3600).default(60),
   timeout_seconds: z.number().int().min(1).max(300).default(30),
   expected_status_code: z.number().int().min(100).max(599).default(200),
 });
 export type CreateWebhookInput = z.infer<typeof createWebhookSchema>;
 
 export const updateWebhookSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
   url: z.string().url().optional(),
-  events: z.array(z.string()).optional(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH"]).optional(),
+  secret: z.string().max(500).optional(),
+  events: z.array(z.string().min(1).max(100)).max(50).optional(),
   is_active: z.boolean().optional(),
-  headers: z.record(z.string()).optional(),
+  is_verified: z.boolean().optional(),
+  headers: z.record(z.string().max(500)).optional(),
+  max_retries: z.number().int().min(0).max(10).optional(),
+  retry_delay_seconds: z.number().int().min(1).max(3600).optional(),
+  timeout_seconds: z.number().int().min(1).max(300).optional(),
+  expected_status_code: z.number().int().min(100).max(599).optional(),
 });
 export type UpdateWebhookInput = z.infer<typeof updateWebhookSchema>;
 
 export const triggerWebhookSchema = z.object({
-  event: z.string().min(1),
+  event: z.string().min(1).max(100),
   payload: z.record(z.unknown()),
-  event_name: z.string().optional(),
-  source_type: z.string().optional(),
-  source_id: z.string().optional(),
+  event_name: z.string().min(1).max(100).optional(),
+  source_type: z.string().max(100).optional(),
+  source_id: z.string().max(200).optional(),
 });
 export type TriggerWebhookInput = z.infer<typeof triggerWebhookSchema>;
 

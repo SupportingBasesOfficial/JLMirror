@@ -1,57 +1,73 @@
-feat(api-keys): fix user?.sub, safeJsonBody, try/catch, enhance schemas, 404s
+feat(webhooks): fix SSRF, user?.sub, safeJsonBody, try/catch, enhance schemas
 
-Security:
-- api-keys.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 4+ occurrences (POST /, PUT /:id, DELETE /:id,
-  POST /:id/rotate).
-- api-keys.ts: Added rateLimitWrite on 4 write endpoints (POST /,
-  PUT /:id, DELETE /:id, POST /:id/rotate).
-- api-keys.ts: Replaced c.req.json() with safeJsonBody() in 2 endpoints
-  (POST /, PUT /:id).
-- shared-validation: Enhanced createApiKeySchema — name max 200,
-  description max 2000, scopes max 50 items max 100 chars each,
-  allowed_ips now uses ipAddressSchema (IPv4/CIDR format validation,
-  rejects hostnames and IPv6), rate_limit max values enforced.
-- shared-validation: Enhanced updateApiKeySchema — was missing 5
-  fields (description, rate_limit_per_min/hour/day, expires_at).
-  Now supports all fields with same validation as create.
-- shared-validation: Added ipAddressSchema with IPv4/CIDR regex.
+Security (CRITICAL):
+- webhooks.ts: Fixed SSRF in POST /:id/test — fetch(wh.url) was hitting
+  any URL including localhost, 127.0.0.1, 169.254.169.254 (AWS metadata).
+  Added isSafeWebhookUrl() that rejects: IPs (10.x, 172.16-31.x,
+  192.168.x, 127.x, 169.254.x, 0.x), IPv6 (::1, fe80), localhost,
+  metadata.google.internal, non-http protocols.
+- webhooks.ts: Fixed SSRF in POST /:id/deliveries/:deliveryId/retry —
+  same fetch(wh.url) vulnerability, same isSafeWebhookUrl() check added.
+- webhooks.ts: Added SSRF validation on POST / (create) and PUT /:id
+  (update) — validates URL before saving to DB.
+- webhooks.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 3+ occurrences.
+- webhooks.ts: Added rateLimitWrite on 6 write endpoints (POST /,
+  PUT /:id, DELETE /:id, POST /:id/test, POST /trigger,
+  POST /:id/deliveries/:deliveryId/retry, POST /verify/:id).
+- webhooks.ts: Replaced c.req.json() with safeJsonBody() in 4 endpoints
+  (POST /, PUT /:id, POST /trigger, POST /verify/:id).
+- shared-validation: Enhanced createWebhookSchema — name max 200,
+  description max 2000, events max 50 max 100 chars, secret max 500,
+  headers values max 500, retry_delay_seconds max 3600.
+- shared-validation: Enhanced updateWebhookSchema — was missing 8
+  fields (description, method, secret, is_verified, max_retries,
+  retry_delay_seconds, timeout_seconds, expected_status_code). Now
+  supports all fields with same validation as create.
+- shared-validation: Enhanced triggerWebhookSchema — event max 100,
+  event_name max 100, source_type max 100, source_id max 200.
 
 Bug fixes:
-- api-keys.ts: DELETE /:id now returns 404 if not found.
-- api-keys.ts: PUT /:id now returns 404 if not found, and 400 if
+- webhooks.ts: DELETE /:id now returns 404 if not found.
+- webhooks.ts: PUT /:id now returns 404 if not found, and 400 if
   no fields to update.
-- api-keys.ts: All validation errors now return parsed.error.flatten().
-- api-keys.ts: All audit logs migrated to writeAuditLog helper.
-- api-keys.ts: allowed_ips now stored as null when undefined (was
-  storing "undefined" string via JSON.stringify).
+- webhooks.ts: All validation errors now return parsed.error.flatten().
+- webhooks.ts: All audit logs migrated to writeAuditLog helper.
+- webhooks.ts: headers now stored as null when undefined (was storing
+  "undefined" string via JSON.stringify).
 
 Performance:
-- api-keys.ts: Parallelized 3 queries in GET /stats (overview,
-  top_keys, recent_usage) using Promise.all.
-- api-keys.ts: Added httpCache(15) on GET /, GET /stats,
-  GET /:id/usage (3 endpoints).
+- webhooks.ts: Parallelized 2 queries in GET / (count + data).
+- webhooks.ts: Parallelized 2 queries in POST /trigger (event insert
+  + webhooks search).
+- webhooks.ts: Parallelized 4 queries in GET /stats (overview,
+  recent_deliveries, pending_retries, top_webhooks).
+- webhooks.ts: Replaced serial loop in POST /trigger with multi-value
+  INSERT for webhook_deliveries.
+- webhooks.ts: Added httpCache(15) on GET /, GET /:id/deliveries,
+  GET /stats (3 endpoints).
 
 Code quality:
-- api-keys.ts: Added try/catch on all 7 endpoints with structured
-  logging.
-- api-keys.ts: Added logger with keyId, tenantId context.
+- webhooks.ts: Added try/catch on all 9 endpoints with structured logging.
+- webhooks.ts: Added logger with webhookId, tenantId, eventName context.
 
 Tests:
-- api-keys.test.ts (NEW): 45 tests covering:
-  - createApiKeySchema (21 tests): name, scopes limits, description,
-    expires_at, allowed_ips IPv4/CIDR validation (rejects hostnames,
-    IPv6, invalid), rate_limit ranges.
-  - updateApiKeySchema (10 tests): partial updates, all new fields,
-    allowed_ips validation.
-  - Key generation logic (8 tests): jl_ prefix, 67 char key, 12 char
-    prefix, 64 char sha256 hash, hex validation, uniqueness,
-    determinism.
-  - Limit pagination (3 tests): default 50, max 200.
-  - Rotation logic (3 tests): creates new + deactivates old,
-    rotated_from linkage.
+- webhooks.test.ts (NEW): 55 tests covering:
+  - isSafeWebhookUrl SSRF prevention (16 tests): accepts valid HTTPS,
+    rejects localhost, 127.0.0.1, 10.x, 192.168.x, 172.16.x,
+    169.254.169.254, 169.254.170.2, metadata.google.internal, 0.0.0.0,
+    non-http protocols, invalid URLs; accepts public IPs and subdomains.
+  - createWebhookSchema (15 tests): name, url, events, method enum,
+    max_retries, timeout_seconds, secret, headers, events limits.
+  - updateWebhookSchema (11 tests): partial updates, all 8 new fields,
+    url validation.
+  - triggerWebhookSchema (5 tests): event required, payload required,
+    event_name, source_type/source_id.
+  - HMAC signature logic (5 tests): deterministic, different secrets,
+    different payloads, 64 char hex.
+  - Limit pagination (2 tests).
 
-Total: 1739 tests passing (was 1694, +45 new).
+Total: 1794 tests passing (was 1739, +55 new).
 
 Generated with [Devin](https://devin.ai)
 
