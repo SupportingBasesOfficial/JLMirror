@@ -1,62 +1,73 @@
-feat(settings): fix 40+ missing schema fields, user?.sub, try/catch, parallelize
+feat(feature-flags): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
 
-Security (CRITICAL):
-- shared-validation: Fixed updateTenantSettingsSchema — was only
-  defining 4 fields (settings, smtp_password_encrypted,
-  telegram_bot_token, ip_whitelist) but the route's fieldMap had 40+
-  fields (company_name, logo_url, smtp_host, smtp_port, etc.). Since
-  Zod strips unknown fields, ALL 40+ fields were silently ignored —
-  users could not update company_name, smtp_host, max_users, or any
-  other setting. Now includes all 40+ fields with proper validation
-  (max length, hex color regex, port range, int min/max).
-- shared-validation: Enhanced testSmtpSchema — removed duplicate
-  fields (smtp_user/smtp_username, smtp_pass/smtp_password_encrypted,
-  smtp_from/smtp_from_email, smtp_to/test_email), added max length,
-  test_email is now required (was optional).
-- shared-validation: Added toggleModuleSchema and
-  toggleModuleVisibilitySchema for module endpoints (was inline
-  validation).
-- settings.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 6+ occurrences.
-- settings.ts: Added rateLimitWrite on 6 write endpoints (PUT /,
-  POST /test-smtp, PUT /modules/:key, PUT /modules/:key/visibility,
-  PUT /modules/:key/client).
-- settings.ts: Replaced c.req.json() with safeJsonBody() in 5
-  endpoints.
+Security:
+- feature-flags.ts: Fixed user.sub crash risk — replaced with
+  user?.sub ?? null in all 4+ occurrences.
+- feature-flags.ts: Added rateLimitWrite on 6 write endpoints
+  (POST /, PUT /:id, DELETE /:id, POST /evaluate, POST /overrides,
+  DELETE /overrides/:id).
+- feature-flags.ts: Replaced c.req.json() with safeJsonBody() in 4
+  endpoints (POST /, PUT /:id, POST /evaluate, POST /overrides).
+- shared-validation: Fixed createFeatureFlagSchema — removed
+  duplicate `type` field (was duplicating `flag_type`), added
+  kill_switch to flag_type enum, key regex /^[\w.-]+$/ + max 100,
+  name max 200, description max 2000, starts_at/ends_at datetime
+  validation, target_segments max 100, excluded_tenant_ids max 1000.
+- shared-validation: Fixed updateFeatureFlagSchema — was missing 4
+  fields (flag_type, rollout_percentage, starts_at, ends_at) that
+  were in the route's fieldMap. Now includes all fields with same
+  validation as create.
+- shared-validation: Enhanced evaluateFlagSchema — key max 100,
+  user_id max 200.
+- shared-validation: Enhanced createOverrideSchema — target_id max
+  200, reason max 500.
 
 Bug fixes:
-- settings.ts: All validation errors now return parsed.error.flatten().
-- settings.ts: All module audit logs migrated to writeAuditLog helper.
-- settings.ts: Module endpoints now use toggleModuleSchema and
-  toggleModuleVisibilitySchema instead of inline validation.
+- feature-flags.ts: All validation errors now return
+  parsed.error.flatten().
+- feature-flags.ts: DELETE /:id and DELETE /overrides/:id now
+  return 404 if not found.
+- feature-flags.ts: PUT /:id now returns 400 if no fields to
+  update (was returning { id } with no update).
+- feature-flags.ts: All audit logs migrated to writeAuditLog helper.
+- feature-flags.ts: Moved overview endpoint to /overview to avoid
+  conflict with list endpoint / (both were GET /).
 
 Performance:
-- settings.ts: Parallelized 5 queries in GET /usage (devices, users,
-  api_keys, webhooks, scheduled_tasks) using Promise.all — was 6
-  sequential queries.
-- settings.ts: Added httpCache(15) on GET /, GET /modules;
-  httpCache(30) on GET /usage (3 endpoints).
+- feature-flags.ts: Parallelized 4 queries in GET /stats (overview
+  + topFlags + recentEvents + overrideCount) using Promise.all —
+  was 4 sequential queries.
+- feature-flags.ts: Parallelized 2 queries in POST /evaluate
+  (update counters + insert event) using Promise.all — was 2
+  sequential queries, done twice (override path + normal path).
+- feature-flags.ts: Added httpCache(15) on GET /, GET /:id/overrides,
+  GET /:id/events; httpCache(30) on GET /stats; httpCache(60) on
+  GET /overview (5 endpoints).
 
 Code quality:
-- settings.ts: Added try/catch on all 8 endpoints with structured
-  logging.
-- settings.ts: Added logger with tenantId, moduleKey, host context.
+- feature-flags.ts: Added try/catch on all 11 endpoints with
+  structured logging.
+- feature-flags.ts: Added logger with flagId, key, tenantId,
+  overrideId context.
 
 Tests:
-- settings.test.ts (NEW): 43 tests covering:
-  - updateTenantSettingsSchema (20 tests): company_name max 200,
-    logo_url URL, primary_color hex regex, smtp_port range 1-65535,
-    max_devices non-negative, password_min_length 4-128,
-    session_timeout_minutes, require_mfa, ip_whitelist, multi-field.
-  - testSmtpSchema (8 tests): smtp_host required, smtp_port required
-    + range, test_email required + email validation, SSL/TLS.
-  - toggleModuleSchema (4 tests): enabled boolean required.
-  - toggleModuleVisibilitySchema (4 tests): client_visible boolean.
-  - Module key validation logic (3 tests): module_ prefix.
-  - SMTP port/protocol matching logic (4 tests): 465+SSL, 587+TLS,
-    SSL+TLS exclusivity, no warning when correct.
+- feature-flags.test.ts (NEW): 46 tests covering:
+  - createFeatureFlagSchema (17 tests): key regex + max 100, name
+    max 200, flag_type enum (boolean/percentage/variant/kill_switch),
+    rollout_percentage 0-100, default_value union, excluded_tenant_ids
+    UUID validation.
+  - updateFeatureFlagSchema (8 tests): partial updates, flag_type,
+    rollout_percentage, starts_at datetime validation, complete
+    update.
+  - evaluateFlagSchema (5 tests): key required, context, user_id.
+  - createOverrideSchema (9 tests): flag_id UUID, target_type enum
+    (user/tenant/device), target_id required, reason max 500.
+  - Percentage rollout logic (4 tests): 0% always false, 100%
+    always true, deterministic for same user+flag, different users.
+  - Variant picking logic (3 tests): weight 0 returns default,
+    single variant, deterministic.
 
-Total: 2026 tests passing (was 1983, +43 new).
+Total: 2072 tests passing (was 2026, +46 new).
 
 Generated with [Devin](https://devin.ai)
 

@@ -1180,46 +1180,55 @@ export type ReportDeliveryConfigInput = z.infer<
 
 // ========== Feature Flag Schemas ==========
 export const createFeatureFlagSchema = z.object({
-  key: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string().optional(),
-  type: z.enum(["boolean", "percentage", "variant"]),
+  key: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[\w.-]+$/, "Chave inválida"),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  flag_type: z.enum(["boolean", "percentage", "variant", "kill_switch"]),
   default_value: z.union([z.boolean(), z.number(), z.string()]),
-  flag_type: z.string().optional(),
   is_active: z.boolean().default(true),
   rollout_percentage: z.number().int().min(0).max(100).optional(),
   variants: z.record(z.unknown()).optional(),
-  target_segments: z.array(z.string()).optional(),
-  excluded_tenant_ids: z.array(z.string().uuid()).optional(),
-  starts_at: z.string().optional(),
-  ends_at: z.string().optional(),
+  target_segments: z.array(z.string().max(100)).max(100).optional(),
+  excluded_tenant_ids: z.array(z.string().uuid()).max(1000).optional(),
+  starts_at: z.string().datetime().optional(),
+  ends_at: z.string().datetime().optional(),
 });
 export type CreateFeatureFlagInput = z.infer<typeof createFeatureFlagSchema>;
 
 export const updateFeatureFlagSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  default_value: z.union([z.boolean(), z.number(), z.string()]).optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  flag_type: z
+    .enum(["boolean", "percentage", "variant", "kill_switch"])
+    .optional(),
   is_active: z.boolean().optional(),
+  default_value: z.union([z.boolean(), z.number(), z.string()]).optional(),
+  rollout_percentage: z.number().int().min(0).max(100).optional(),
   variants: z.record(z.unknown()).optional(),
-  target_segments: z.array(z.string()).optional(),
-  excluded_tenant_ids: z.array(z.string().uuid()).optional(),
+  target_segments: z.array(z.string().max(100)).max(100).optional(),
+  excluded_tenant_ids: z.array(z.string().uuid()).max(1000).optional(),
+  starts_at: z.string().datetime().optional(),
+  ends_at: z.string().datetime().optional(),
 });
 export type UpdateFeatureFlagInput = z.infer<typeof updateFeatureFlagSchema>;
 
 export const evaluateFlagSchema = z.object({
-  key: z.string().min(1),
+  key: z.string().min(1).max(100),
   context: z.record(z.unknown()).optional(),
-  user_id: z.string().optional(),
+  user_id: z.string().max(200).optional(),
 });
 export type EvaluateFlagInput = z.infer<typeof evaluateFlagSchema>;
 
 export const createOverrideSchema = z.object({
   flag_id: z.string().uuid(),
   target_type: z.enum(["user", "tenant", "device"]),
-  target_id: z.string().min(1),
+  target_id: z.string().min(1).max(200),
   value: z.union([z.boolean(), z.number(), z.string()]),
-  reason: z.string().optional(),
+  reason: z.string().max(500).optional(),
 });
 export type CreateOverrideInput = z.infer<typeof createOverrideSchema>;
 
