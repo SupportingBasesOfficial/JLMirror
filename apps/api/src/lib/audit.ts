@@ -5,7 +5,7 @@
 import { query } from "@repo/db";
 
 interface AuditLogParams {
-  userId: string;
+  userId: string | null;
   tenantId?: string | null;
   action: string;
   entityType: string;

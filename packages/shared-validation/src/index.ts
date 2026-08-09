@@ -33,6 +33,18 @@ export const resetPasswordSchema = z.object({
 });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
+export const oauthCallbackSchema = z.object({
+  code: z.string().min(1),
+  provider: z.enum(["google"]),
+});
+export type OauthCallbackInput = z.infer<typeof oauthCallbackSchema>;
+
+export const ldapBindSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+export type LdapBindInput = z.infer<typeof ldapBindSchema>;
+
 // ========== MFA Schemas ==========
 export const mfaSetupVerifySchema = z.object({
   secret: z.string().min(1),
