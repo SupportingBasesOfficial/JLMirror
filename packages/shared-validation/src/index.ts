@@ -950,7 +950,9 @@ export type CreateReportTemplateInput = z.infer<
 export const createScheduledReportSchema = z.object({
   template_id: z.string().uuid(),
   cron: z.string().min(1),
-  recipients: z.array(z.string().email()),
+  recipients: z
+    .array(z.string().email())
+    .min(1, "Pelo menos um destinatário é obrigatório"),
   format: z.enum(["pdf", "csv", "json"]).default("pdf"),
   name: z.string().optional(),
   description: z.string().optional(),
@@ -964,13 +966,67 @@ export type CreateScheduledReportInput = z.infer<
 >;
 
 export const updateScheduledReportSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional(),
   cron: z.string().optional(),
+  schedule_cron: z.string().optional(),
+  schedule_description: z.string().max(200).optional(),
   recipients: z.array(z.string().email()).optional(),
+  delivery_method: z.enum(["email", "webhook", "storage"]).optional(),
   format: z.enum(["pdf", "csv", "json"]).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateScheduledReportInput = z.infer<
   typeof updateScheduledReportSchema
+>;
+
+export const reportBrandingSchema = z.object({
+  company_name: z.string().min(1).max(200),
+  logo_url: z.string().url().optional(),
+  logo_width: z.number().int().min(1).max(500).optional(),
+  primary_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  secondary_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  accent_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  footer_text: z.string().max(500).optional(),
+  footer_url: z.string().url().optional(),
+  header_bg_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  header_text_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  font_family: z.string().max(100).optional(),
+  is_active: z.boolean().optional(),
+});
+export type ReportBrandingInput = z.infer<typeof reportBrandingSchema>;
+
+export const reportDeliveryConfigSchema = z.object({
+  auto_reports_enabled: z.boolean().optional(),
+  allowed_delivery_methods: z
+    .array(z.enum(["email", "webhook", "storage"]))
+    .optional(),
+  default_delivery_method: z.enum(["email", "webhook", "storage"]).optional(),
+  email_from: z.string().email().optional(),
+  email_subject_prefix: z.string().max(100).optional(),
+  slack_webhook_url: z.string().url().optional(),
+  teams_webhook_url: z.string().url().optional(),
+  webhook_url: z.string().url().optional(),
+  webhook_headers: z.record(z.string()).optional(),
+  monthly_report_limit: z.number().int().min(0).max(10000).optional(),
+});
+export type ReportDeliveryConfigInput = z.infer<
+  typeof reportDeliveryConfigSchema
 >;
 
 // ========== Feature Flag Schemas ==========
