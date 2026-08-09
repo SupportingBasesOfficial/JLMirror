@@ -889,40 +889,73 @@ export type TriggerWebhookInput = z.infer<typeof triggerWebhookSchema>;
 
 // ========== Scheduled Task Schemas ==========
 export const createScheduledTaskSchema = z.object({
-  name: z.string().min(1),
-  cron: z.string().min(1),
-  script_id: z.string().uuid().optional(),
-  command: z.string().optional(),
-  is_active: z.boolean().default(true),
-  description: z.string().optional(),
-  task_type: z.string().default("script"),
-  cron_expression: z.string().optional(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  task_type: z
+    .enum([
+      "http_request",
+      "database_query",
+      "cleanup",
+      "script",
+      "shell_command",
+      "report",
+      "custom",
+    ])
+    .default("script"),
+  cron_expression: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[\d*,\-\/\s]+$/,
+      "Expressao cron deve conter apenas digitos, *, -, /, e espacos",
+    ),
   config: z.record(z.unknown()).optional(),
-  timezone: z.string().default("UTC"),
-  max_execution_seconds: z.number().int().min(1).default(300),
+  is_active: z.boolean().default(true),
+  timezone: z.string().max(50).default("UTC"),
+  max_execution_seconds: z.number().int().min(1).max(3600).default(300),
   retry_on_failure: z.boolean().default(false),
   max_retries: z.number().int().min(0).max(10).default(3),
-  retry_delay_seconds: z.number().int().min(1).default(60),
+  retry_delay_seconds: z.number().int().min(1).max(86400).default(60),
   notify_on_failure: z.boolean().default(false),
-  notify_emails: z.array(z.string().email()).optional(),
+  notify_emails: z.array(z.string().email()).max(20).optional(),
 });
 export type CreateScheduledTaskInput = z.infer<
   typeof createScheduledTaskSchema
 >;
 
 export const updateScheduledTaskSchema = z.object({
-  name: z.string().optional(),
-  cron: z.string().optional(),
-  is_active: z.boolean().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  task_type: z
+    .enum([
+      "http_request",
+      "database_query",
+      "cleanup",
+      "script",
+      "shell_command",
+      "report",
+      "custom",
+    ])
+    .optional(),
+  cron_expression: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[\d*,\-\/\s]+$/,
+      "Expressao cron deve conter apenas digitos, *, -, /, e espacos",
+    )
+    .optional(),
   config: z.record(z.unknown()).optional(),
-  notify_emails: z.array(z.string().email()).optional(),
-  cron_expression: z.string().optional(),
-  timezone: z.string().optional(),
-  max_execution_seconds: z.number().int().min(1).optional(),
+  is_active: z.boolean().optional(),
+  timezone: z.string().max(50).optional(),
+  max_execution_seconds: z.number().int().min(1).max(3600).optional(),
   retry_on_failure: z.boolean().optional(),
   max_retries: z.number().int().min(0).max(10).optional(),
-  retry_delay_seconds: z.number().int().min(1).optional(),
+  retry_delay_seconds: z.number().int().min(1).max(86400).optional(),
   notify_on_failure: z.boolean().optional(),
+  notify_emails: z.array(z.string().email()).max(20).optional(),
 });
 export type UpdateScheduledTaskInput = z.infer<
   typeof updateScheduledTaskSchema
