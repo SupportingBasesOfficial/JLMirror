@@ -1,62 +1,38 @@
-feat(scripts): fix user?.sub, safeJsonBody, try/catch, enhance 3 schemas, 404s
+feat(apm): fix try/catch, parallelize 6 queries, minutes validation, httpCache
 
-Security (CRITICAL):
-- scripts.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
-  in all 5+ occurrences (POST /, PUT /:id, DELETE /:id, POST /:id/execute).
-- scripts.ts: Added rateLimitWrite on 4 write endpoints (POST /,
-  PUT /:id, DELETE /:id, POST /:id/execute).
-- scripts.ts: Replaced c.req.json() with safeJsonBody() in 3 endpoints
-  (POST /, PUT /:id, POST /:id/execute) — was crashing on invalid JSON.
-- shared-validation: Enhanced createScriptSchema — content max 100KB
-  (was unbounded, DoS risk), allowed_hosts now uses hostnameSchema
-  with IP/localhost rejection (was accepting any string including
-  192.168.1.1, 169.254.169.254), max_concurrent_executions max 100,
-  tags max 20 items max 50 chars, removed deprecated timeout field.
-- shared-validation: Enhanced updateScriptSchema — same constraints
-  as create, allowed_hosts with hostname validation.
-- shared-validation: Enhanced executeScriptSchema — target_host now
-  uses hostnameSchema (rejects IPs and localhost, SSRF prevention),
-  target_device_id now UUID validated, args values max 500 chars.
-- shared-validation: Added hostnameSchema with regex + refine that
-  rejects IPv4 (N.N.N.N pattern), IPv6 (contains :), and localhost.
-
-Bug fixes:
-- scripts.ts: DELETE /:id now returns 404 if not found (was returning
-  { deactivated: true } even when nothing was updated).
-- scripts.ts: PUT /:id now checks rowCount for 404 after update.
-- scripts.ts: All validation errors now return parsed.error.flatten()
-  details (was generic "Dados inválidos").
-- scripts.ts: All audit logs migrated to writeAuditLog helper.
+Security:
+- apm.ts: Added minutes validation in GET /throughput — parseInt can
+  return NaN or negative values. Now validates: NaN -> default 15,
+  < 1 -> default 15, > 60 -> capped at 60. Before: NaN would crash
+  make_interval() in PostgreSQL.
 
 Performance:
-- scripts.ts: Parallelized 2 queries in GET / (count + data) using
-  Promise.all (was 2 sequential queries).
-- scripts.ts: Parallelized 2 queries in GET /:id (script + versions)
-  using Promise.all (was 2 sequential queries).
-- scripts.ts: Added httpCache(15) on GET /, GET /:id, GET /:id/executions
-  (3 endpoints).
+- apm.ts: Parallelized 6 queries in GET /overview using Promise.all
+  (was 6 sequential queries: traceStats, topServices, slowOperations,
+  recentErrors, throughput, taskStats). All 6 are independent and
+  can run concurrently.
+- apm.ts: Added httpCache(60) on GET /, httpCache(15) on GET /overview
+  and GET /throughput (3 endpoints). APM data from 15min window doesn't
+  change every request.
 
 Code quality:
-- scripts.ts: Added try/catch on all 7 endpoints with structured logging.
-  Before: zero try/catch. Now: all 7 endpoints protected.
-- scripts.ts: Added logger with scriptId, tenantId, executionId context.
+- apm.ts: Added try/catch on all 3 endpoints with structured logging.
+  Before: zero try/catch. Now: all 3 endpoints protected.
+- apm.ts: Added logger with tenantId, minutes context.
+- apm.ts: GET /throughput now returns minutes in response for client
+  transparency.
 
 Tests:
-- scripts.test.ts (NEW): 49 tests covering:
-  - createScriptSchema (21 tests): name, content max 100KB, language
-    enum (3 values), timeout_seconds range, max_concurrent_executions
-    max 100, allowed_hosts with hostname validation (rejects IPs,
-    localhost), tags limits.
-  - updateScriptSchema (10 tests): partial updates, content max,
-    language enum, allowed_hosts validation, all fields.
-  - executeScriptSchema (12 tests): script_id UUID, target_host
-    hostname validation (rejects IPs, localhost), target_device_id
-    UUID, args value max 500.
-  - Limit pagination (4 tests): default 50, max 200, offset.
-  - Version bump logic (3 tests): increment on content change,
-    maintain on no change, first version.
+- apm.test.ts (NEW): 24 tests covering:
+  - Minutes validation (10 tests): default 15, NaN, negative, zero,
+    valid values, max 60 cap, boundary conditions.
+  - Window calculation (3 tests): 1/15/60 min in milliseconds.
+  - Throughput data structure (2 tests): populated and empty.
+  - Overview response structure (2 tests): complete and null/empty.
+  - Error rate calculation (4 tests): normal, 0%, 100%, no spans.
+  - Percentile interpretation (3 tests): p99 >= p95, avg <= p95.
 
-Total: 1541 tests passing (was 1492, +49 new).
+Total: 1565 tests passing (was 1541, +24 new).
 
 Generated with [Devin](https://devin.ai)
 
