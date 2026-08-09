@@ -1,43 +1,58 @@
-feat(status-page): fix user?.tenant_id, try/catch, schema, parallelize
+feat(rbac): add requirePermission to GET endpoints, fix user?.sub, schemas
 
-Security:
-- status-page.ts: Fixed user.tenant_id and user.sub crash risk —
-  replaced with user?.tenant_id ?? null and user?.sub ?? null in
-  all 3+ occurrences.
-- status-page.ts: Added rateLimitWrite on PUT /admin/config.
-- shared-validation: Enhanced statusPageConfigSchema — slug max 100
-  + regex message, page_title max 200, company_name max 200,
-  logo_url URL validation + max 2000, primary_color hex regex
-  + max 20, days_of_history max 365, support_email email validation
-  + max 255, support_url URL validation + max 2000.
+Security (CRITICAL):
+- rbac.ts: Added requirePermission("tenant:settings:read") on 4
+  GET endpoints (GET /, GET /permissions, GET /roles,
+  GET /roles/:id/permissions) — were completely unprotected, any
+  authenticated user could list all permissions and roles.
+- rbac.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 3+ occurrences.
+- rbac.ts: Added rateLimitWrite on 2 write endpoints (POST /roles,
+  PUT /roles/:id/permissions).
+- rbac.ts: Replaced c.req.json() with safeJsonBody() in 2
+  endpoints.
+- rbac.ts: POST /roles now checks for duplicate key before insert
+  — returns 409 CONFLICT if key already exists (was returning
+  generic 500).
+- rbac.ts: PUT /roles/:id/permissions now validates role exists
+  and is not a system role — returns 404 if not found, 403 if
+  system role (was silently updating non-existent or system roles).
+- shared-validation: Enhanced createRoleSchema — name max 200,
+  description max 2000, key regex /^[\w-]+$/ + max 100,
+  permissions UUID validation + max 500.
+- shared-validation: Fixed assignRolePermissionsSchema — removed
+  duplicate `permissions` field (was duplicating `permission_ids`),
+  permission_ids now UUID validation + max 500.
 
 Bug fixes:
-- status-page.ts: All audit logs migrated to writeAuditLog helper.
+- rbac.ts: All validation errors now return parsed.error.flatten().
+- rbac.ts: All audit logs migrated to writeAuditLog helper.
+- rbac.ts: GET /me/permissions now uses user?.sub ?? null and
+  user.roles ?? [].
 
 Performance:
-- status-page.ts: Parallelized 4 queries in GET /:slug (services +
-  activeIncidents + history + maintenance) using Promise.all — was
-  4 sequential queries.
-- status-page.ts: Added httpCache(60) on GET /:slug (public, rarely
-  changes); httpCache(15) on GET /admin/config (2 endpoints).
+- rbac.ts: Added httpCache(60) on GET /, GET /permissions,
+  GET /roles, GET /me/permissions; httpCache(30) on
+  GET /roles/:id/permissions (5 endpoints).
 
 Code quality:
-- status-page.ts: Added try/catch on all 3 endpoints with structured
+- rbac.ts: Added try/catch on all 6 endpoints with structured
   logging.
-- status-page.ts: Added logger with slug, tenantId, pageId context.
+- rbac.ts: Added logger with roleId, tenantId, userId context.
 
 Tests:
-- status-page.test.ts (NEW): 31 tests covering:
-  - statusPageConfigSchema (26 tests): slug regex (lowercase,
-    numbers, hifens only) + max 100, company_name required + max
-    200, page_title max 200, logo_url URL validation, primary_color
-    hex regex (#fff, #0d9488, invalid "teal"), days_of_history 1-365,
-    support_email email validation, support_url URL validation,
-    is_published boolean, complete config.
-  - Overall status logic (5 tests): all operational, one degraded,
-    down takes priority over degraded, empty list, all down.
+- rbac.test.ts (NEW): 19 tests covering:
+  - createRoleSchema (11 tests): name required + max 200,
+    description max 2000, key regex + max 100, permissions UUID
+    validation + default empty, multiple UUIDs.
+  - assignRolePermissionsSchema (4 tests): permission_ids UUID
+    validation, default empty, multiple UUIDs.
+  - Role key generation logic (2 tests): uses key if provided,
+    falls back to name.
+  - System role protection logic (2 tests): system role cannot
+    be modified, custom role can.
 
-Total: 2093 tests passing (was 2072, +21 net new).
+Total: 2103 tests passing (was 2093, +10 net new).
 
 Generated with [Devin](https://devin.ai)
 

@@ -76,10 +76,15 @@ export type MfaDisableInput = z.infer<typeof mfaDisableSchema>;
 
 // ========== RBAC Schemas ==========
 export const createRoleSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  permissions: z.array(z.string()).default([]),
-  key: z.string().min(1).optional(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  permissions: z.array(z.string().uuid()).max(500).default([]),
+  key: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(/^[\w-]+$/, "Chave inválida")
+    .optional(),
 });
 export type CreateRoleInput = z.infer<typeof createRoleSchema>;
 
@@ -132,9 +137,7 @@ export const updateUserDetailsSchema = z.object({
 export type UpdateUserDetailsInput = z.infer<typeof updateUserDetailsSchema>;
 
 export const assignRolePermissionsSchema = z.object({
-  role_id: z.string().uuid(),
-  permissions: z.array(z.string()),
-  permission_ids: z.array(z.string()).default([]),
+  permission_ids: z.array(z.string().uuid()).max(500).default([]),
 });
 export type AssignRolePermissionsInput = z.infer<
   typeof assignRolePermissionsSchema
