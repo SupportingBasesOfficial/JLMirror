@@ -1587,27 +1587,46 @@ export type RecordMetricInput = z.infer<typeof recordMetricSchema>;
 
 // ========== Compliance Schemas ==========
 export const createPolicySchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  framework: z.string().min(1),
-  requirements: z.record(z.unknown()),
-  policy_category: z.string().optional(),
-  severity: z.string().optional(),
-  rule_type: z.string().optional(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(5000).optional(),
+  framework: z.string().min(1).max(100),
+  policy_category: z.string().max(100).optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+  rule_type: z.enum(["manual", "automated", "scheduled"]).default("manual"),
   rule_config: z.record(z.unknown()).optional(),
-  check_interval_hours: z.number().int().min(1).default(24),
+  check_interval_hours: z.number().int().min(1).max(720).default(24),
   is_active: z.boolean().default(true),
 });
 export type CreatePolicyInput = z.infer<typeof createPolicySchema>;
 
 export const updatePolicySchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  requirements: z.record(z.unknown()).optional(),
-  is_active: z.boolean().optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).optional(),
+  framework: z.string().min(1).max(100).optional(),
+  policy_category: z.string().max(100).optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
+  rule_type: z.enum(["manual", "automated", "scheduled"]).optional(),
   rule_config: z.record(z.unknown()).optional(),
+  check_interval_hours: z.number().int().min(1).max(720).optional(),
+  is_active: z.boolean().optional(),
 });
 export type UpdatePolicyInput = z.infer<typeof updatePolicySchema>;
+
+export const createScanSchema = z.object({
+  policy_id: z.string().uuid(),
+});
+export type CreateScanInput = z.infer<typeof createScanSchema>;
+
+export const updateViolationSchema = z.object({
+  status: z.enum([
+    "open",
+    "acknowledged",
+    "remediated",
+    "false_positive",
+    "wont_fix",
+  ]),
+});
+export type UpdateViolationInput = z.infer<typeof updateViolationSchema>;
 
 // ========== Change Management Schemas ==========
 export const createChangeRequestSchema = z.object({

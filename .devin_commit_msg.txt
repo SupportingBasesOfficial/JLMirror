@@ -1,30 +1,71 @@
-feat(branding): add try/catch, httpCache, rate limit, logger
+feat(compliance): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
 
 Security:
-- branding.ts: Added rateLimitApi on GET /:tenantSlug (public
-  endpoint, was unprotected from abuse).
+- compliance.ts: Fixed user.sub crash risk — replaced with
+  user?.sub ?? null in all 8+ occurrences.
+- compliance.ts: Added rateLimitWrite on 5 write endpoints (POST
+  /policies, PUT /policies/:id, DELETE /policies/:id, POST /scans,
+  PUT /violations/:id).
+- compliance.ts: Replaced c.req.json() with safeJsonBody() in 4
+  endpoints.
+- shared-validation: Fixed createPolicySchema — removed phantom
+  `requirements` field (was in schema but never used in INSERT),
+  added severity enum (low/medium/high/critical), rule_type enum
+  (manual/automated/scheduled), name max 200, description max
+  5000, framework max 100, policy_category max 100,
+  check_interval_hours max 720.
+- shared-validation: Fixed updatePolicySchema — was missing 5
+  fields (framework, policy_category, severity, rule_type,
+  check_interval_hours) that were in the route's fieldMap. Now
+  includes all fields with same validation as create.
+- shared-validation: Added createScanSchema (policy_id UUID).
+- shared-validation: Added updateViolationSchema (status enum:
+  open/acknowledged/remediated/false_positive/wont_fix).
+
+Bug fixes:
+- compliance.ts: All validation errors now return
+  parsed.error.flatten().
+- compliance.ts: PUT /policies/:id and DELETE /policies/:id now
+  return 404 if not found.
+- compliance.ts: PUT /violations/:id now returns 404 if not found.
+- compliance.ts: All audit logs migrated to writeAuditLog helper.
+- compliance.ts: POST /scans now uses createScanSchema instead of
+  inline validation.
+- compliance.ts: PUT /violations/:id now uses updateViolationSchema
+  instead of inline validation.
 
 Performance:
-- branding.ts: Added httpCache(300) on GET /:tenantSlug (5 min,
-  public endpoint called on every login page load); httpCache(600)
-  on GET / (10 min, static defaults).
+- compliance.ts: Parallelized 4 queries in GET /stats (overview +
+  violations + framework + scans) using Promise.all — was 4
+  sequential queries.
+- compliance.ts: Parallelized all compliance checks in POST /scans
+  (MFA + SSL + firewall + backup + audit) using Promise.all — was
+  5 sequential queries.
+- compliance.ts: Parallelized 2 queries in POST /scans (update
+  scan + update policy last_scanned) using Promise.all.
+- compliance.ts: Added httpCache(30) on GET /, GET /policies, GET
+  /scans, GET /violations; httpCache(60) on GET /stats (5
+  endpoints).
 
 Code quality:
-- branding.ts: Added try/catch on GET /:tenantSlug with structured
-  logging — returns default branding on error instead of crashing
-  (public endpoint must not break the login page).
-- branding.ts: Added logger with tenantSlug context.
+- compliance.ts: Added try/catch on all 10 endpoints with
+  structured logging.
+- compliance.ts: Added logger with policyId, scanId, violationId,
+  tenantId, score context.
 
 Tests:
-- branding.test.ts (NEW): 13 tests covering:
-  - Default branding values (6 tests): primary_color hex, secondary
-    color hex, null fields.
-  - Tenant slug normalization logic (5 tests): spaces to hifens,
-    multiple spaces, uppercase, no spaces, empty.
-  - Branding response logic (2 tests): defaults when not found,
-    tenant branding when found.
+- compliance.test.ts (NEW): 37 tests covering:
+  - createPolicySchema (16 tests): name required + max 200,
+    framework required, severity enum, rule_type enum,
+    check_interval_hours 1-720, is_active default, rule_config.
+  - updatePolicySchema (7 tests): partial updates, severity enum
+    validation, framework, check_interval_hours.
+  - createScanSchema (3 tests): policy_id UUID required.
+  - updateViolationSchema (7 tests): all 5 status values, invalid
+    status rejected, missing status rejected.
+  - Compliance score logic (4 tests): 100%, 0%, 50%, total 0.
 
-Total: 2116 tests passing (was 2103, +13 new).
+Total: 2153 tests passing (was 2116, +37 new).
 
 Generated with [Devin](https://devin.ai)
 
