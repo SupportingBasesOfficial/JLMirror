@@ -1,73 +1,43 @@
-feat(feature-flags): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
+feat(status-page): fix user?.tenant_id, try/catch, schema, parallelize
 
 Security:
-- feature-flags.ts: Fixed user.sub crash risk — replaced with
-  user?.sub ?? null in all 4+ occurrences.
-- feature-flags.ts: Added rateLimitWrite on 6 write endpoints
-  (POST /, PUT /:id, DELETE /:id, POST /evaluate, POST /overrides,
-  DELETE /overrides/:id).
-- feature-flags.ts: Replaced c.req.json() with safeJsonBody() in 4
-  endpoints (POST /, PUT /:id, POST /evaluate, POST /overrides).
-- shared-validation: Fixed createFeatureFlagSchema — removed
-  duplicate `type` field (was duplicating `flag_type`), added
-  kill_switch to flag_type enum, key regex /^[\w.-]+$/ + max 100,
-  name max 200, description max 2000, starts_at/ends_at datetime
-  validation, target_segments max 100, excluded_tenant_ids max 1000.
-- shared-validation: Fixed updateFeatureFlagSchema — was missing 4
-  fields (flag_type, rollout_percentage, starts_at, ends_at) that
-  were in the route's fieldMap. Now includes all fields with same
-  validation as create.
-- shared-validation: Enhanced evaluateFlagSchema — key max 100,
-  user_id max 200.
-- shared-validation: Enhanced createOverrideSchema — target_id max
-  200, reason max 500.
+- status-page.ts: Fixed user.tenant_id and user.sub crash risk —
+  replaced with user?.tenant_id ?? null and user?.sub ?? null in
+  all 3+ occurrences.
+- status-page.ts: Added rateLimitWrite on PUT /admin/config.
+- shared-validation: Enhanced statusPageConfigSchema — slug max 100
+  + regex message, page_title max 200, company_name max 200,
+  logo_url URL validation + max 2000, primary_color hex regex
+  + max 20, days_of_history max 365, support_email email validation
+  + max 255, support_url URL validation + max 2000.
 
 Bug fixes:
-- feature-flags.ts: All validation errors now return
-  parsed.error.flatten().
-- feature-flags.ts: DELETE /:id and DELETE /overrides/:id now
-  return 404 if not found.
-- feature-flags.ts: PUT /:id now returns 400 if no fields to
-  update (was returning { id } with no update).
-- feature-flags.ts: All audit logs migrated to writeAuditLog helper.
-- feature-flags.ts: Moved overview endpoint to /overview to avoid
-  conflict with list endpoint / (both were GET /).
+- status-page.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- feature-flags.ts: Parallelized 4 queries in GET /stats (overview
-  + topFlags + recentEvents + overrideCount) using Promise.all —
-  was 4 sequential queries.
-- feature-flags.ts: Parallelized 2 queries in POST /evaluate
-  (update counters + insert event) using Promise.all — was 2
-  sequential queries, done twice (override path + normal path).
-- feature-flags.ts: Added httpCache(15) on GET /, GET /:id/overrides,
-  GET /:id/events; httpCache(30) on GET /stats; httpCache(60) on
-  GET /overview (5 endpoints).
+- status-page.ts: Parallelized 4 queries in GET /:slug (services +
+  activeIncidents + history + maintenance) using Promise.all — was
+  4 sequential queries.
+- status-page.ts: Added httpCache(60) on GET /:slug (public, rarely
+  changes); httpCache(15) on GET /admin/config (2 endpoints).
 
 Code quality:
-- feature-flags.ts: Added try/catch on all 11 endpoints with
-  structured logging.
-- feature-flags.ts: Added logger with flagId, key, tenantId,
-  overrideId context.
+- status-page.ts: Added try/catch on all 3 endpoints with structured
+  logging.
+- status-page.ts: Added logger with slug, tenantId, pageId context.
 
 Tests:
-- feature-flags.test.ts (NEW): 46 tests covering:
-  - createFeatureFlagSchema (17 tests): key regex + max 100, name
-    max 200, flag_type enum (boolean/percentage/variant/kill_switch),
-    rollout_percentage 0-100, default_value union, excluded_tenant_ids
-    UUID validation.
-  - updateFeatureFlagSchema (8 tests): partial updates, flag_type,
-    rollout_percentage, starts_at datetime validation, complete
-    update.
-  - evaluateFlagSchema (5 tests): key required, context, user_id.
-  - createOverrideSchema (9 tests): flag_id UUID, target_type enum
-    (user/tenant/device), target_id required, reason max 500.
-  - Percentage rollout logic (4 tests): 0% always false, 100%
-    always true, deterministic for same user+flag, different users.
-  - Variant picking logic (3 tests): weight 0 returns default,
-    single variant, deterministic.
+- status-page.test.ts (NEW): 31 tests covering:
+  - statusPageConfigSchema (26 tests): slug regex (lowercase,
+    numbers, hifens only) + max 100, company_name required + max
+    200, page_title max 200, logo_url URL validation, primary_color
+    hex regex (#fff, #0d9488, invalid "teal"), days_of_history 1-365,
+    support_email email validation, support_url URL validation,
+    is_published boolean, complete config.
+  - Overall status logic (5 tests): all operational, one degraded,
+    down takes priority over degraded, empty list, all down.
 
-Total: 2072 tests passing (was 2026, +46 new).
+Total: 2093 tests passing (was 2072, +21 net new).
 
 Generated with [Devin](https://devin.ai)
 

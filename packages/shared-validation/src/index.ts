@@ -2379,17 +2379,28 @@ export type PredictionConfigInput = z.infer<typeof predictionConfigSchema>;
 
 // ========== Status Page Schemas ==========
 export const statusPageConfigSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9-]+$/),
-  page_title: z.string().optional(),
-  company_name: z.string().min(1),
-  logo_url: z.string().optional(),
-  primary_color: z.string().optional(),
+  slug: z
+    .string()
+    .min(1)
+    .max(100)
+    .regex(
+      /^[a-z0-9-]+$/,
+      "Slug deve conter apenas letras minúsculas, números e hífens",
+    ),
+  page_title: z.string().max(200).optional(),
+  company_name: z.string().min(1).max(200),
+  logo_url: z.string().url().max(2000).optional(),
+  primary_color: z
+    .string()
+    .max(20)
+    .regex(/^#[0-9a-fA-F]{3,8}$/, "Cor hex inválida")
+    .optional(),
   show_uptime: z.boolean().optional(),
   show_incident_history: z.boolean().optional(),
   show_sla_percentage: z.boolean().optional(),
-  days_of_history: z.number().int().min(1).optional(),
-  support_email: z.string().optional(),
-  support_url: z.string().optional(),
+  days_of_history: z.number().int().min(1).max(365).optional(),
+  support_email: z.string().email().max(255).optional(),
+  support_url: z.string().url().max(2000).optional(),
   is_published: z.boolean().optional(),
 });
 export type StatusPageConfigInput = z.infer<typeof statusPageConfigSchema>;
