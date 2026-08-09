@@ -1,61 +1,62 @@
-feat(profile): fix user?.sub, safeJsonBody, try/catch, enhance schemas
+feat(settings): fix 40+ missing schema fields, user?.sub, try/catch, parallelize
 
-Security:
-- profile.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 10+ occurrences.
-- profile.ts: Fixed user.roles[0] crash — replaced with
-  user?.roles?.length ? user.roles[0] : null.
-- profile.ts: Added rateLimitWrite on 5 write endpoints (PUT /,
-  PUT /avatar, PUT /preferences, DELETE /sessions/:id,
-  DELETE /sessions).
-- profile.ts: Replaced c.req.json() with safeJsonBody() in 3
-  endpoints (PUT /, PUT /avatar, PUT /preferences).
-- shared-validation: Enhanced updateProfileSchema — display_name
-  max 200, bio max 2000, phone max 50, location max 200, timezone
-  max 100, locale max 20, job_title max 200, department max 200,
-  skills items max 100 + array max 50, social_links values max 500,
-  email max 255, full_name max 255.
-- shared-validation: Enhanced updatePreferencesSchema —
-  quiet_hours_start/end regex /^([01]\d|2[0-3]):[0-5]\d$/ (HH:MM).
-- shared-validation: Enhanced updateAvatarSchema — avatar_url max
-  2000, avatar_initials max 10, avatar_color regex
-  /^#[0-9a-fA-F]{3,8}$/ (hex color).
+Security (CRITICAL):
+- shared-validation: Fixed updateTenantSettingsSchema — was only
+  defining 4 fields (settings, smtp_password_encrypted,
+  telegram_bot_token, ip_whitelist) but the route's fieldMap had 40+
+  fields (company_name, logo_url, smtp_host, smtp_port, etc.). Since
+  Zod strips unknown fields, ALL 40+ fields were silently ignored —
+  users could not update company_name, smtp_host, max_users, or any
+  other setting. Now includes all 40+ fields with proper validation
+  (max length, hex color regex, port range, int min/max).
+- shared-validation: Enhanced testSmtpSchema — removed duplicate
+  fields (smtp_user/smtp_username, smtp_pass/smtp_password_encrypted,
+  smtp_from/smtp_from_email, smtp_to/test_email), added max length,
+  test_email is now required (was optional).
+- shared-validation: Added toggleModuleSchema and
+  toggleModuleVisibilitySchema for module endpoints (was inline
+  validation).
+- settings.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 6+ occurrences.
+- settings.ts: Added rateLimitWrite on 6 write endpoints (PUT /,
+  POST /test-smtp, PUT /modules/:key, PUT /modules/:key/visibility,
+  PUT /modules/:key/client).
+- settings.ts: Replaced c.req.json() with safeJsonBody() in 5
+  endpoints.
 
 Bug fixes:
-- profile.ts: All validation errors now return parsed.error.flatten().
-- profile.ts: DELETE /sessions/:sessionId now returns 404 if not
-  found.
-- profile.ts: Security log inserts now wrapped in try/catch (was
-  crashing silently if log table unavailable).
+- settings.ts: All validation errors now return parsed.error.flatten().
+- settings.ts: All module audit logs migrated to writeAuditLog helper.
+- settings.ts: Module endpoints now use toggleModuleSchema and
+  toggleModuleVisibilitySchema instead of inline validation.
 
 Performance:
-- profile.ts: Parallelized 2 queries in GET / (profile + user data)
-  using Promise.all.
-- profile.ts: Added httpCache(15) on GET /, GET /preferences,
-  GET /sessions, GET /security/log (4 endpoints).
+- settings.ts: Parallelized 5 queries in GET /usage (devices, users,
+  api_keys, webhooks, scheduled_tasks) using Promise.all — was 6
+  sequential queries.
+- settings.ts: Added httpCache(15) on GET /, GET /modules;
+  httpCache(30) on GET /usage (3 endpoints).
 
 Code quality:
-- profile.ts: Added try/catch on all 8 endpoints with structured
+- settings.ts: Added try/catch on all 8 endpoints with structured
   logging.
-- profile.ts: Added logger with userId, tenantId, sessionId context.
+- settings.ts: Added logger with tenantId, moduleKey, host context.
 
 Tests:
-- profile.test.ts (NEW): 56 tests covering:
-  - updateProfileSchema (21 tests): display_name/bio/phone/location/
-    timezone/locale/job_title/department max length, skills array
-    max 50 + item max 100, social_links value max 500, email
-    validation.
-  - updatePreferencesSchema (18 tests): notification booleans,
-    digest_frequency enum, quiet_hours HH:MM regex, theme/density
-    enums, sidebar_collapsed, dashboard_layout.
-  - updateAvatarSchema (10 tests): avatar_url URL + max 2000,
-    avatar_initials max 10, avatar_color hex regex (#FFF, #FF5733,
-    invalid "red", missing #).
-  - Initials generation logic (4 tests): name, 1-char, email,
-    fallback.
-  - Limit pagination logic (3 tests).
+- settings.test.ts (NEW): 43 tests covering:
+  - updateTenantSettingsSchema (20 tests): company_name max 200,
+    logo_url URL, primary_color hex regex, smtp_port range 1-65535,
+    max_devices non-negative, password_min_length 4-128,
+    session_timeout_minutes, require_mfa, ip_whitelist, multi-field.
+  - testSmtpSchema (8 tests): smtp_host required, smtp_port required
+    + range, test_email required + email validation, SSL/TLS.
+  - toggleModuleSchema (4 tests): enabled boolean required.
+  - toggleModuleVisibilitySchema (4 tests): client_visible boolean.
+  - Module key validation logic (3 tests): module_ prefix.
+  - SMTP port/protocol matching logic (4 tests): 465+SSL, 587+TLS,
+    SSL+TLS exclusivity, no warning when correct.
 
-Total: 1983 tests passing (was 1927, +56 new).
+Total: 2026 tests passing (was 1983, +43 new).
 
 Generated with [Devin](https://devin.ai)
 

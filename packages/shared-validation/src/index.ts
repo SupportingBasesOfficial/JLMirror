@@ -192,30 +192,98 @@ export type UpdateAvatarInput = z.infer<typeof updateAvatarSchema>;
 
 // ========== Settings Schemas ==========
 export const updateTenantSettingsSchema = z.object({
-  settings: z.record(z.unknown()),
-  smtp_password_encrypted: z.string().optional(),
-  telegram_bot_token: z.string().optional(),
-  ip_whitelist: z.array(z.string()).optional(),
+  // Branding
+  company_name: z.string().max(200).optional(),
+  logo_url: z.string().url().max(2000).optional(),
+  primary_color: z
+    .string()
+    .max(20)
+    .regex(/^#[0-9a-fA-F]{3,8}$/, "Cor hex inválida")
+    .optional(),
+  secondary_color: z
+    .string()
+    .max(20)
+    .regex(/^#[0-9a-fA-F]{3,8}$/, "Cor hex inválida")
+    .optional(),
+  custom_css: z.string().max(50000).optional(),
+  login_message: z.string().max(1000).optional(),
+  // SMTP
+  smtp_enabled: z.boolean().optional(),
+  smtp_host: z.string().max(255).optional(),
+  smtp_port: z.number().int().min(1).max(65535).optional(),
+  smtp_username: z.string().max(255).optional(),
+  smtp_from_email: z.string().email().max(255).optional(),
+  smtp_from_name: z.string().max(200).optional(),
+  smtp_use_tls: z.boolean().optional(),
+  smtp_use_ssl: z.boolean().optional(),
+  smtp_password_encrypted: z.string().max(500).optional(),
+  // Slack
+  slack_webhook_url: z.string().url().max(2000).optional(),
+  slack_enabled: z.boolean().optional(),
+  // Discord
+  discord_webhook_url: z.string().url().max(2000).optional(),
+  discord_enabled: z.boolean().optional(),
+  // Telegram
+  telegram_chat_id: z.string().max(100).optional(),
+  telegram_enabled: z.boolean().optional(),
+  telegram_bot_token: z.string().max(500).optional(),
+  // Limits
+  max_devices: z.number().int().min(0).max(1000000).optional(),
+  max_users: z.number().int().min(0).max(1000000).optional(),
+  max_api_keys: z.number().int().min(0).max(1000000).optional(),
+  max_webhooks: z.number().int().min(0).max(1000000).optional(),
+  max_scheduled_tasks: z.number().int().min(0).max(1000000).optional(),
+  max_storage_mb: z.number().int().min(0).max(10000000).optional(),
+  max_retention_days: z.number().int().min(0).max(36500).optional(),
+  // Module toggles
+  enable_monitoring: z.boolean().optional(),
+  enable_alerts: z.boolean().optional(),
+  enable_tickets: z.boolean().optional(),
+  enable_kb: z.boolean().optional(),
+  enable_reports: z.boolean().optional(),
+  enable_api_access: z.boolean().optional(),
+  // Password policy
+  password_min_length: z.number().int().min(4).max(128).optional(),
+  password_require_uppercase: z.boolean().optional(),
+  password_require_lowercase: z.boolean().optional(),
+  password_require_numbers: z.boolean().optional(),
+  password_require_symbols: z.boolean().optional(),
+  // Session policy
+  session_timeout_minutes: z.number().int().min(1).max(10080).optional(),
+  max_login_attempts: z.number().int().min(1).max(100).optional(),
+  lockout_duration_minutes: z.number().int().min(1).max(10080).optional(),
+  require_mfa: z.boolean().optional(),
+  // Network
+  ip_whitelist: z.array(z.string().max(50)).max(1000).optional(),
 });
 export type UpdateTenantSettingsInput = z.infer<
   typeof updateTenantSettingsSchema
 >;
 
 export const testSmtpSchema = z.object({
-  smtp_host: z.string().min(1),
+  smtp_host: z.string().min(1).max(255),
   smtp_port: z.number().int().min(1).max(65535),
-  smtp_user: z.string().optional(),
-  smtp_pass: z.string().optional(),
-  smtp_from: z.string().email(),
-  smtp_to: z.string().email(),
+  smtp_username: z.string().max(255).optional(),
+  smtp_password_encrypted: z.string().max(500).optional(),
+  smtp_from_email: z.string().email().max(255).optional(),
+  smtp_from_name: z.string().max(200).optional(),
   smtp_use_ssl: z.boolean().optional(),
   smtp_use_tls: z.boolean().optional(),
-  smtp_username: z.string().optional(),
-  smtp_password_encrypted: z.string().optional(),
-  smtp_from_email: z.string().email().optional(),
-  test_email: z.string().email().optional(),
+  test_email: z.string().email().max(255),
 });
 export type TestSmtpInput = z.infer<typeof testSmtpSchema>;
+
+export const toggleModuleSchema = z.object({
+  enabled: z.boolean(),
+});
+export type ToggleModuleInput = z.infer<typeof toggleModuleSchema>;
+
+export const toggleModuleVisibilitySchema = z.object({
+  client_visible: z.boolean(),
+});
+export type ToggleModuleVisibilityInput = z.infer<
+  typeof toggleModuleVisibilitySchema
+>;
 
 // ========== Zabbix Schemas ==========
 export const zabbixAcknowledgeSchema = z.object({
