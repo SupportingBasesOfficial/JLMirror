@@ -1,46 +1,58 @@
-feat(zabbix): fix user-host-groups try/catch, 404, audit, redact tests
+feat(anomaly): fix user?.sub, try/catch, parallelize, 404s, audit
 
 Security:
-- zabbix/admin.ts: Fixed user.tenant_id and user.sub crash risk in
-  4 user-host-groups endpoints — replaced with user?.tenant_id ??
-  null and user?.sub ?? null.
-- zabbix/admin.ts: DELETE /user-host-groups/:id now returns 404 if
-  assignment not found.
-- zabbix/admin.ts: Added writeAuditLog on POST /user-host-groups
-  (assign) and DELETE /user-host-groups/:id (unassign) — was zero
-  audit logs for DB-direct operations.
+- anomaly.ts: Fixed user.tenant_id and user.sub crash risk —
+  replaced with user?.tenant_id ?? null and user?.sub ?? null in
+  all 7+ occurrences.
+- anomaly.ts: Added rateLimitWrite on POST /analyze, PUT
+  /detections/:id/acknowledge, PUT /detections/:id/resolve, PUT
+  /detections/:id/false-positive, PUT /config (5 endpoints).
+- shared-validation: Enhanced anomalyAnalyzeSchema — device_id
+  max 200, metric_name max 200, values max 10000.
+- shared-validation: Enhanced anomalyConfigSchema — metric_name
+  max 200, window_size max 8760, zscore_threshold max 100,
+  iqr_multiplier max 100, warning_threshold max 1000,
+  critical_threshold max 1000.
 
 Bug fixes:
-- zabbix/admin.ts: Added try/catch on GET /user-host-groups (was
-  missing — unhandled DB error would crash).
-- zabbix/admin.ts: Added try/catch on DELETE /user-host-groups/:id
-  (was missing).
-- zabbix/admin.ts: Added try/catch on GET /user-host-groups/by-
-  group/:groupId (was missing).
+- anomaly.ts: PUT /detections/:id/acknowledge now returns 404 if
+  detection not found.
+- anomaly.ts: PUT /detections/:id/resolve now returns 404.
+- anomaly.ts: PUT /detections/:id/false-positive now returns 404.
+- anomaly.ts: Added writeAuditLog on POST /analyze and PUT
+  /config (was zero audit logs).
+
+Performance:
+- anomaly.ts: Parallelized 6 queries in GET /stats (total + open
+  + critical + false_positive + by_algorithm + recent_24h) using
+  Promise.all — was 6 sequential queries.
+- anomaly.ts: Added httpCache(30) on GET /, GET /detections, GET
+  /config; httpCache(60) on GET /stats (4 endpoints).
 
 Code quality:
-- zabbix/admin.ts: Added logger with assignmentId, tenantId,
-  groupId context on user-host-groups endpoints.
-- zabbix/admin.ts: Imported writeAuditLog from lib/audit.js.
+- anomaly.ts: Added try/catch on all 8 endpoints with structured
+  logging (was zero).
+- anomaly.ts: Added logger with detectionId, device_id,
+  metric_name, severity, configId, tenantId context.
 
 Tests:
-- zabbix-shared.test.ts (NEW): 30 tests covering:
-  - redactSensitiveFields (18 tests): passwd, password, secret,
-    private_key, encryption_key, connection_string, value with
-    type=1 (macro secreta), value with type=0 (not redacted),
-    non-sensitive fields preserved, nested objects, arrays of
-    objects, primitives, null/undefined, empty array/object,
-    case-insensitive (PASSWD, Password).
-  - Response helpers (3 tests): configNotFoundResponse,
-    accessDeniedResponse, validationErrorResponse.
-  - IDOR protection logic (5 tests): global admin always passes,
-    tenant passes when host belongs to group, tenant rejected
-    when host doesn't belong, tenant rejected when host has no
-    groups, global admin passes with no groups.
-  - Batch ownership verification (4 tests): all belong, one
-    doesn't belong, empty list, host not in map.
+- anomaly.test.ts (NEW): 39 tests covering:
+  - anomalyAnalyzeSchema (10 tests): device_id required + max
+    200, metric_name required + max 200, values required + max
+    10000, observed_value required, negative, decimal.
+  - anomalyConfigSchema (15 tests): metric_name required + max
+    200, all 3 algorithm values, invalid algorithm rejected,
+    window_size 2-8760, zscore_threshold positive + max 100,
+    iqr_multiplier positive + max 100, ewma_alpha 0-1,
+    warning_threshold max 1000, critical_threshold max 1000,
+    complete config.
+  - Defaults logic (8 tests): algorithm, window_size,
+    zscore_threshold, iqr_multiplier, ewma_alpha,
+    warning_threshold, critical_threshold, is_active.
+  - Window slicing logic (4 tests): last N values, values <
+    windowSize, empty values, exact windowSize.
 
-Total: 2410 tests passing (was 2380, +30 new).
+Total: 2449 tests passing (was 2410, +39 new).
 
 Generated with [Devin](https://devin.ai)
 

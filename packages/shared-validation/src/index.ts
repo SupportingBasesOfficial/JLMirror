@@ -2201,22 +2201,22 @@ export type PushBroadcastInput = z.infer<typeof pushBroadcastSchema>;
 
 // ========== Anomaly Schemas ==========
 export const anomalyAnalyzeSchema = z.object({
-  device_id: z.string().min(1),
-  metric_name: z.string().min(1),
-  values: z.array(z.number()).min(1),
+  device_id: z.string().min(1).max(200),
+  metric_name: z.string().min(1).max(200),
+  values: z.array(z.number()).min(1).max(10000),
   observed_value: z.number(),
 });
 export type AnomalyAnalyzeInput = z.infer<typeof anomalyAnalyzeSchema>;
 
 export const anomalyConfigSchema = z.object({
-  metric_name: z.string().min(1),
+  metric_name: z.string().min(1).max(200),
   algorithm: z.enum(["zscore", "iqr", "ewma"]).optional(),
-  window_size: z.number().int().min(2).optional(),
-  zscore_threshold: z.number().positive().optional(),
-  iqr_multiplier: z.number().positive().optional(),
+  window_size: z.number().int().min(2).max(8760).optional(),
+  zscore_threshold: z.number().positive().max(100).optional(),
+  iqr_multiplier: z.number().positive().max(100).optional(),
   ewma_alpha: z.number().min(0).max(1).optional(),
-  warning_threshold: z.number().optional(),
-  critical_threshold: z.number().optional(),
+  warning_threshold: z.number().max(1000).optional(),
+  critical_threshold: z.number().max(1000).optional(),
   is_active: z.boolean().optional(),
 });
 export type AnomalyConfigInput = z.infer<typeof anomalyConfigSchema>;
