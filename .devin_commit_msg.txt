@@ -1,75 +1,85 @@
-feat(kb): fix user?.sub, safeJsonBody, try/catch, enhance 2 schemas, 1 new schema, parallelize
+feat(ssl): fix SSRF, user?.sub, safeJsonBody, try/catch, enhance updateSslSchema, parallelize, 404s
 
 Security (CRITICAL):
-- kb.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null in all
-  6+ occurrences in POST /articles and PUT /articles/:id.
-- kb.ts: Added rateLimitWrite on 7 write endpoints (POST /categories,
-  PUT /categories/:id, DELETE /categories/:id, POST /articles,
-  PUT /articles/:id, DELETE /articles/:id, POST /articles/:id/feedback).
-- kb.ts: Replaced c.req.json() with safeJsonBody() in 5 endpoints
-  (POST /categories, PUT /categories/:id, POST /articles,
-  PUT /articles/:id, POST /articles/:id/feedback) — was crashing on
+- ssl.ts: Fixed SSRF vulnerability in checkTlsCertificate — added
+  isSafeHostname() that rejects IP literals (IPv4/IPv6), localhost,
+  AWS metadata (169.254.169.254), GCP metadata (metadata.google.internal),
+  ECS metadata (169.254.170.2), and *.metadata.internal. Before: any
+  hostname from DB was passed to tls.connect() allowing SSRF to internal
+  services. Now: validated before TLS handshake.
+- ssl.ts: Added isSafeHostname() validation in POST /certificates and
+  PUT /certificates/:id — rejects dangerous hostnames at registration
+  time, not just at check time.
+- ssl.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
+  in all 5+ occurrences (POST /certificates, PUT /certificates/:id,
+  DELETE /certificates/:id, POST /check/:id, POST /check-all,
+  POST /alerts/:id/acknowledge).
+- ssl.ts: Added rateLimitWrite on 6 write endpoints (POST /certificates,
+  PUT /certificates/:id, DELETE /certificates/:id, POST /check/:id,
+  POST /check-all, POST /alerts/:id/acknowledge).
+- ssl.ts: Replaced c.req.json() with safeJsonBody() in 2 endpoints
+  (POST /certificates, PUT /certificates/:id) — was crashing on
   invalid JSON.
-- shared-validation/src/index.ts: Added kbArticleFeedbackSchema (Zod) —
-  POST /articles/:id/feedback was using raw c.req.json<{helpful: boolean}>()
-  without validation. Now validates helpful (boolean required).
-- shared-validation/src/index.ts: Enhanced updateKbCategorySchema —
-  was only { name: string.optional() }. Now supports all 6 fields:
-  name, description, slug, parent_id (UUID nullable), sort_order, is_active.
-- shared-validation/src/index.ts: Enhanced updateKbArticleSchema —
-  was missing category_id, content_format, visibility, is_pinned,
-  expires_at. Now supports all 10 fields. Also tightened status to
-  enum ["draft", "published", "archived"] (was string).
-- shared-validation/src/index.ts: Enhanced createKbArticleSchema —
-  status now enum ["draft", "published", "archived"] (was string),
-  title max 300, tags max 20 items max 50 chars each, summary max 500.
+- shared-validation/src/index.ts: Enhanced updateSslCertificateSchema —
+  was only { issuer, cert_pem, key_pem, is_active }. Now supports all
+  7 fields: hostname (with regex validation), port (1-65535), protocol,
+  alert_days_before (1-365), is_auto_renewed, ca_provider, is_active.
+- shared-validation/src/index.ts: Fixed createSslCertificateSchema —
+  hostname was optional, now required with regex validation
+  (^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]...)*$).
+  domain was required but code uses hostname — now domain is optional.
+  Added max lengths (hostname 253, issuer 200, protocol 50, ca_provider
+  100). alert_days_before now max 365 (was unbounded).
 
 Bug fixes:
-- kb.ts: DELETE /categories/:id now returns 404 if not found (was
+- ssl.ts: DELETE /certificates/:id now returns 404 if not found (was
   returning { deleted: true } even when nothing was deleted).
-- kb.ts: DELETE /articles/:id now returns 404 if not found.
-- kb.ts: PUT /categories/:id now returns 404 if not found, and 400 if
-  no fields to update (was returning { id } silently).
-- kb.ts: PUT /articles/:id now returns 404 if not found (both in
-  version check and in update).
-- kb.ts: POST /articles/:id/feedback now returns 404 if article not
-  found (was incrementing counter on non-existent article).
-- kb.ts: All validation errors now return parsed.error.flatten() details
+- ssl.ts: PUT /certificates/:id now returns 404 if not found, and 400
+  if no fields to update (was returning { id } silently).
+- ssl.ts: POST /alerts/:id/acknowledge now returns 404 if alert not
+  found (was returning { acknowledged: true } even when nothing updated).
+- ssl.ts: All validation errors now return parsed.error.flatten() details
   (was generic "Dados inválidos").
-- kb.ts: All audit logs migrated from inline SQL to writeAuditLog helper.
-  Added audit logs for: category.create, category.update, category.delete,
-  article.update, article.delete (was only article.create).
-- kb.ts: GET /articles/:id now checks tenant_id in version query (was
-  querying by article_id only, potential cross-tenant leak).
+- ssl.ts: All audit logs migrated from inline SQL to writeAuditLog helper.
+  Added audit logs for: cert.update, cert.delete, alert.acknowledge
+  (was only cert.register, cert.check, check_all).
+- ssl.ts: POST /check-all now fetches hostname/port/alert_days_before
+  in initial query (was doing N+1: 1 query to list + 1 query per cert
+  to fetch details).
 
 Performance:
-- kb.ts: Parallelized 2 queries in GET / (overview) using Promise.all
-  (was 2 sequential queries).
-- kb.ts: Parallelized 2 queries in GET /articles/:id (article + versions)
-  using Promise.all (was 3 sequential queries — article, view_count,
-  versions). View count update is now fire-and-forget.
-- kb.ts: Parallelized 3 queries in GET /stats using Promise.all
+- ssl.ts: Parallelized 3 queries in GET /certificates/:id (cert +
+  checks + alerts) using Promise.all (was 3 sequential queries).
+- ssl.ts: Parallelized 3 queries in GET /stats using Promise.all
   (was 3 sequential queries).
-- kb.ts: Added httpCache(30) on GET /, GET /categories, GET /stats;
-  httpCache(15) on GET /articles, GET /articles/:id, GET /search
-  (6 endpoints).
+- ssl.ts: POST /check-all now processes certificates in batches of 5
+  using Promise.all (was sequential for-loop). For 100 certs: 20 batches
+  of 5 parallel TLS handshakes instead of 100 sequential.
+- ssl.ts: Added httpCache(30) on GET /, GET /certificates, GET /stats;
+  httpCache(15) on GET /certificates/:id, GET /alerts (5 endpoints).
 
 Code quality:
-- kb.ts: Added try/catch on all 12 endpoints with structured logging.
-  Before: zero try/catch. Now: all 12 endpoints protected.
-- kb.ts: Added logger with categoryId, articleId, tenantId context.
+- ssl.ts: Added try/catch on all 9 endpoints with structured logging.
+  Before: zero try/catch. Now: all 9 endpoints protected.
+- ssl.ts: Added logger with certId, alertId, tenantId, hostname context.
 
 Tests:
-- kb.test.ts (NEW): 72 tests covering all 5 Zod schemas (createKbCategory,
-  updateKbCategory, createKbArticle, updateKbArticle, kbArticleFeedback)
-  with all field validations, enum validations (status, visibility,
-  content_format), UUID validations, max length constraints, tag limits;
-  slug generation logic (special chars, spaces, custom slug);
-  published_at logic (published vs draft vs archived); limit pagination
-  logic (articles 200 max, search 100 max); version bump logic
-  (increment, change_summary).
+- ssl.test.ts (NEW): 60 tests covering:
+  - createSslCertificateSchema (16 tests): hostname regex, port range,
+    alert_days_before range, defaults, optional fields.
+  - updateSslCertificateSchema (10 tests): partial updates, hostname
+    validation, port validation, all fields.
+  - SSRF protection (13 tests): isSafeHostname with valid domains,
+    IPv4/IPv6 rejection, localhost, AWS/GCP/ECS metadata IPs,
+    *.metadata.internal, edge cases.
+  - Status calculation logic (8 tests): error, expired, expiring_soon,
+    valid, boundary conditions (days=0, days=alert_days_before).
+  - Days until expiry calculation (3 tests): future, past, today.
+  - Limit pagination (2 tests): default 50, max 200.
+  - Batch processing logic (6 tests): batch size 5, slice correctness,
+    edge cases (0, 5, 7, 10 certs).
 
-Total: 1349 tests passing (was 1277, +72 new).
+Total: 1409 tests passing (was 1349, +60 new).
 
 Generated with [Devin](https://devin.ai)
 

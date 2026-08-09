@@ -1242,25 +1242,43 @@ export type KbArticleFeedbackInput = z.infer<typeof kbArticleFeedbackSchema>;
 
 // ========== SSL Schemas ==========
 export const createSslCertificateSchema = z.object({
-  domain: z.string().min(1),
-  issuer: z.string().optional(),
+  hostname: z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(
+      /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/,
+      "Hostname deve ser um domínio válido (não IP)",
+    ),
+  domain: z.string().min(1).max(253).optional(),
+  issuer: z.string().max(200).optional(),
   cert_pem: z.string().optional(),
   key_pem: z.string().optional(),
-  hostname: z.string().optional(),
   port: z.number().int().min(1).max(65535).default(443),
-  protocol: z.string().optional(),
-  alert_days_before: z.number().int().min(1).default(30),
+  protocol: z.string().max(50).optional(),
+  alert_days_before: z.number().int().min(1).max(365).default(30),
   is_auto_renewed: z.boolean().default(false),
-  ca_provider: z.string().optional(),
+  ca_provider: z.string().max(100).optional(),
 });
 export type CreateSslCertificateInput = z.infer<
   typeof createSslCertificateSchema
 >;
 
 export const updateSslCertificateSchema = z.object({
-  issuer: z.string().optional(),
-  cert_pem: z.string().optional(),
-  key_pem: z.string().optional(),
+  hostname: z
+    .string()
+    .min(1)
+    .max(253)
+    .regex(
+      /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/,
+      "Hostname deve ser um domínio válido (não IP)",
+    )
+    .optional(),
+  port: z.number().int().min(1).max(65535).optional(),
+  protocol: z.string().max(50).optional(),
+  alert_days_before: z.number().int().min(1).max(365).optional(),
+  is_auto_renewed: z.boolean().optional(),
+  ca_provider: z.string().max(100).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateSslCertificateInput = z.infer<
