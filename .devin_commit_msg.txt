@@ -1,57 +1,58 @@
-feat(discovery): fix N+1 subqueries, try/catch, schema, parallelize
+feat(drift): fix N+1 subquery, batch insert, try/catch, 404s
 
 Security:
-- discovery.ts: Fixed user.tenant_id and user.sub crash risk —
+- drift.ts: Fixed user.tenant_id and user.sub crash risk —
   replaced with user?.tenant_id ?? null and user?.sub ?? null in
   all 7+ occurrences.
-- discovery.ts: Added rateLimitWrite on POST /sessions, POST
-  /sessions/:id/run, DELETE /sessions/:id, POST /devices/:id/import
-  (4 endpoints).
-- shared-validation: Enhanced discoverySessionSchema — name max
-  200, ip_ranges max 100 entries with each max 50 chars,
-  snmp_communities max 20 entries with each max 100 chars,
-  snmp_ports 1-65535 range with max 20 entries, snmp_timeout_ms
-  max 60000, snmp_retries max 10.
+- drift.ts: Added rateLimitWrite on POST /baselines, DELETE
+  /baselines/:id, POST /scan, PUT /events/:id/resolve, PUT
+  /events/:id/acknowledge (5 endpoints).
+- shared-validation: Enhanced driftBaselineSchema and
+  driftScanSchema — device_id max 200, name max 200.
 
 Bug fixes:
-- discovery.ts: DELETE /sessions/:id now returns 404 if session
+- drift.ts: DELETE /baselines/:id now returns 404 if baseline not
+  found.
+- drift.ts: PUT /events/:id/resolve now returns 404 if event not
+  found.
+- drift.ts: PUT /events/:id/acknowledge now returns 404 if event
   not found.
-- discovery.ts: All audit logs migrated to writeAuditLog helper.
+- drift.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- discovery.ts: Fixed N+1 subqueries in GET /sessions — replaced
-  correlated subqueries (device_count + link_count per row) with
-  LEFT JOIN + aggregation (2 subqueries → 2 JOINs in single
-  query).
-- discovery.ts: Parallelized 2 queries in GET /topology (devices
-  + links) using Promise.all — was 2 sequential queries.
-- discovery.ts: Parallelized 2 operations in POST /devices/:id/
-  import (vincula + audit log) using Promise.all.
-- discovery.ts: Added httpCache(30) on GET /, GET /sessions, GET
-  /sessions/:id/devices, GET /sessions/:id/links, GET
-  /sessions/:id/topology (5 endpoints).
+- drift.ts: Fixed N+1 subquery in GET /baselines — replaced
+  correlated subquery (open_drifts per row) with LEFT JOIN +
+  aggregation.
+- drift.ts: Parallelized 2 queries in GET / (baselines + events)
+  using Promise.all.
+- drift.ts: Parallelized 5 queries in GET /stats (total_baselines
+  + open_drifts + critical_drifts + recent_drifts + by_device)
+  using Promise.all — was 5 sequential queries.
+- drift.ts: Replaced serial drift inserts in POST /scan with
+  batch insert (single query with multi-VALUES) — was N queries
+  for N drifts.
+- drift.ts: Added httpCache(30) on GET /, GET /baselines, GET
+  /events; httpCache(60) on GET /stats (4 endpoints).
 
 Code quality:
-- discovery.ts: Added try/catch on all 8 endpoints with structured
-  logging (was only on /run inner block).
-- discovery.ts: Added logger with sessionId, name, devicesFound,
-  linksFound, discoveredId, newDeviceId, ip, tenantId context.
+- drift.ts: Added try/catch on all 8 endpoints with structured
+  logging (was zero).
+- drift.ts: Added logger with baselineId, device_id, name,
+  driftsFound, eventId, tenantId context.
 
 Tests:
-- discovery.test.ts (NEW): 34 tests covering:
-  - discoverySessionSchema (23 tests): name required + max 200,
-    ip_ranges required + max 100 + each max 50 + empty rejected,
-    snmp_communities max 20, snmp_ports 1-65535 + max 20,
-    snmp_timeout_ms max 60000, snmp_retries max 10, all 3 boolean
-    flags, complete session.
-  - Defaults logic (7 tests): snmp_communities, snmp_ports,
-    snmp_timeout_ms, snmp_retries, use_snmp, use_lldp, use_arp.
-  - Topology logic (2 tests): devices → nodes conversion with
-    hostname fallback, links → edges conversion.
-  - Import logic (3 tests): hostname default generation, hostname
-    when provided, device_type default.
+- drift.test.ts (NEW): 20 tests covering:
+  - driftBaselineSchema (7 tests): device_id required + max 200,
+    name required + max 200, config_snapshot empty + nested.
+  - driftScanSchema (4 tests): device_id required + max 200,
+    current_config empty.
+  - Config hash logic (3 tests): SHA-256 consistency, different
+    configs different hashes, 64-char hex format.
+  - Drift detection logic (6 tests): added key, removed key,
+    modified key, identical configs, multiple simultaneous drifts,
+    empty configs.
 
-Total: 2327 tests passing (was 2293, +34 new).
+Total: 2347 tests passing (was 2327, +20 new).
 
 Generated with [Devin](https://devin.ai)
 

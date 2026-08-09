@@ -2223,14 +2223,14 @@ export type AnomalyConfigInput = z.infer<typeof anomalyConfigSchema>;
 
 // ========== Drift Schemas ==========
 export const driftBaselineSchema = z.object({
-  device_id: z.string().min(1),
-  name: z.string().min(1),
+  device_id: z.string().min(1).max(200),
+  name: z.string().min(1).max(200),
   config_snapshot: z.record(z.unknown()),
 });
 export type DriftBaselineInput = z.infer<typeof driftBaselineSchema>;
 
 export const driftScanSchema = z.object({
-  device_id: z.string().min(1),
+  device_id: z.string().min(1).max(200),
   current_config: z.record(z.unknown()),
 });
 export type DriftScanInput = z.infer<typeof driftScanSchema>;
