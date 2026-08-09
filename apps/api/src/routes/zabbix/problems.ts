@@ -22,7 +22,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const hostId = c.req.query("host_id");
     const acknowledged = c.req.query("acknowledged");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -57,7 +57,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const from = c.req.query("from");
     const to = c.req.query("to");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -97,7 +97,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }

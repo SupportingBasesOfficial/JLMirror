@@ -19,6 +19,8 @@ export interface ZabbixTenantConfig {
 export interface ZabbixClientContext {
   client: BlindedZabbixClient;
   hostGroupId: string;
+  // Admin global (scope=global) nao tem filtro de host_group_id — ve todos os hosts
+  isGlobalAdmin: boolean;
 }
 
 // Cache em memoria do token descriptografado (TTL 55s — menor que cache de config de 60s)
@@ -106,8 +108,10 @@ function getDecryptedToken(
 
 // Cria instância do BlindedZabbixClient com config do tenant
 // Retorna contexto com client + hostGroupId para isolamento IDOR
+// isGlobalAdmin=true pula filtro de host_group_id (admin ve todos os hosts)
 export async function createZabbixClient(
   tenantId: string,
+  isGlobalAdmin = false,
 ): Promise<ZabbixClientContext | null> {
   const config = await getTenantZabbixConfig(tenantId);
 
@@ -135,15 +139,20 @@ export async function createZabbixClient(
       apiToken,
     }),
     hostGroupId: config.zabbix_host_group_id,
+    isGlobalAdmin,
   };
 }
 
 // Verifica se um hostId pertence ao host_group_id do tenant (protecao IDOR)
 // Usa cache Redis (60s) para evitar chamada ao Zabbix em toda verificacao
+// Admin global (isGlobalAdmin=true) sempre passa — ve todos os hosts
 export async function verifyHostOwnership(
   ctx: ZabbixClientContext,
   hostId: string,
 ): Promise<boolean> {
+  // Admin global nao tem restricao de host_group_id
+  if (ctx.isGlobalAdmin) return true;
+
   const cacheKey = `zabbix:host_owner:${hostId}`;
   try {
     const cached = await cacheGet(cacheKey);

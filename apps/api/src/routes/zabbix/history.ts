@@ -64,7 +64,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const to = toStr ? Number(toStr) : Math.floor(Date.now() / 1000);
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -149,7 +149,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const to = toStr ? Number(toStr) : Math.floor(Date.now() / 1000);
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -207,7 +207,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const to = toStr ? Number(toStr) : Math.floor(Date.now() / 1000);
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -238,7 +238,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -266,14 +266,17 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const from = c.req.query("from");
     const to = c.req.query("to");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
 
     try {
       // Busca apenas graphs dos hosts do tenant (IDOR protection)
-      const devices = await ctx.client.getDevices(ctx.hostGroupId);
+      // Admin global ve todos os hosts
+      const devices = await ctx.client.getDevices(
+        ctx.isGlobalAdmin ? undefined : ctx.hostGroupId,
+      );
       const tenantHostIds = new Set(devices.map((d) => d.hostid));
 
       const graphs = await ctx.client.getGraphs();
@@ -351,7 +354,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -387,7 +390,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -420,7 +423,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const triggerId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -456,7 +459,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const triggerId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }

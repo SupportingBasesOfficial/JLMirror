@@ -36,7 +36,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -62,7 +62,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -88,7 +88,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -127,7 +127,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const maintenanceId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -152,7 +152,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const parentId = c.req.query("parent_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -170,7 +170,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -188,7 +188,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -207,7 +207,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -237,7 +237,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const targetUserId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -270,7 +270,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const targetUserId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -294,7 +294,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -312,7 +312,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -330,7 +330,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -348,7 +348,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -366,7 +366,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -384,7 +384,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -414,7 +414,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const groupId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -444,7 +444,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const groupId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -480,7 +480,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -498,7 +498,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const userId = user.sub;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -528,7 +528,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const groupId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -561,7 +561,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
     const groupId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -680,7 +680,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -705,7 +705,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -724,7 +724,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const limitStr = c.req.query("limit");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -743,7 +743,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -762,7 +762,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const hostId = c.req.query("host_id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -786,7 +786,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -804,7 +804,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -822,7 +822,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -840,7 +840,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -859,7 +859,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const limitStr = c.req.query("limit");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -878,7 +878,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -896,7 +896,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -918,7 +918,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -982,7 +982,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const connectorId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -1013,7 +1013,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
     const scriptId = c.req.param("id");
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -1049,7 +1049,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
@@ -1072,7 +1072,7 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
     const user = c.get("user");
     const tenantId = user.tenant_id;
 
-    const ctx = await createZabbixClient(tenantId);
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
     if (!ctx) {
       return c.json(configNotFoundResponse(), 503);
     }
