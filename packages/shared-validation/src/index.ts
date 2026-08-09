@@ -815,40 +815,54 @@ export const logSearchSchema = z.object({
 export type LogSearchInput = z.infer<typeof logSearchSchema>;
 
 // ========== Script Schemas ==========
+const hostnameSchema = z
+  .string()
+  .min(1)
+  .max(253)
+  .regex(
+    /^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/,
+    "Hostname deve ser um dominio valido (nao IP)",
+  )
+  .refine(
+    (val) =>
+      !/^\d{1,3}(\.\d{1,3}){3}$/.test(val) &&
+      !val.includes(":") &&
+      val.toLowerCase() !== "localhost",
+    "IPs e localhost nao sao permitidos, use um dominio valido",
+  );
+
 export const createScriptSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
   language: z.enum(["bash", "python", "powershell"]),
-  content: z.string().min(1),
-  timeout: z.number().int().min(1).max(3600).default(30),
-  timeout_seconds: z.number().int().min(1).max(3600).optional(),
+  content: z.string().min(1).max(100000, "Script muito grande (max 100KB)"),
+  timeout_seconds: z.number().int().min(1).max(3600).default(30),
   requires_approval: z.boolean().default(false),
-  max_concurrent_executions: z.number().int().min(1).default(1),
-  allowed_hosts: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
+  max_concurrent_executions: z.number().int().min(1).max(100).default(1),
+  allowed_hosts: z.array(hostnameSchema).max(50).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
 });
 export type CreateScriptInput = z.infer<typeof createScriptSchema>;
 
 export const updateScriptSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  content: z.string().optional(),
-  timeout: z.number().int().min(1).max(3600).optional(),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).optional(),
+  content: z.string().min(1).max(100000).optional(),
   language: z.enum(["bash", "python", "powershell"]).optional(),
   timeout_seconds: z.number().int().min(1).max(3600).optional(),
   requires_approval: z.boolean().optional(),
-  max_concurrent_executions: z.number().int().min(1).optional(),
-  allowed_hosts: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
+  max_concurrent_executions: z.number().int().min(1).max(100).optional(),
+  allowed_hosts: z.array(hostnameSchema).max(50).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateScriptInput = z.infer<typeof updateScriptSchema>;
 
 export const executeScriptSchema = z.object({
   script_id: z.string().uuid(),
-  target_device_id: z.string().optional(),
-  args: z.record(z.string()).optional(),
-  target_host: z.string().optional(),
+  target_device_id: z.string().uuid().optional(),
+  args: z.record(z.string().max(500)).optional(),
+  target_host: hostnameSchema.optional(),
 });
 export type ExecuteScriptInput = z.infer<typeof executeScriptSchema>;
 
