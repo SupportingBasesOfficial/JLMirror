@@ -1,54 +1,54 @@
-feat(chatops): add Teams token verification, mask bot_token, try/catch
+feat(lgpd): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
 
-Security (CRITICAL):
-- chatops.ts: Added Teams webhook token verification — was
-  completely unauthenticated, anyone could send commands as any
-  tenant. Now checks x-teams-token header against
-  teams_app_password if configured.
-- chatops.ts: GET /config now masks slack_bot_token as "***"
-  before returning — was leaking bot token in plaintext.
-- chatops.ts: Fixed user.tenant_id and user.sub crash risk —
-  replaced with user?.tenant_id ?? null and user?.sub ?? null.
-- chatops.ts: Added rateLimitApi on both webhook endpoints (Slack
-  + Teams) to prevent DoS via slash commands.
-- chatops.ts: Added rateLimitWrite on PUT /config.
-- shared-validation: Enhanced chatopsConfigSchema —
-  slack_verification_token max 200, slack_signing_secret max 200,
-  slack_bot_token max 500, teams_app_id max 200,
-  teams_app_password max 500, enabled_commands items max 50 +
-  array max 100.
+Security:
+- lgpd.ts: Fixed user.sub crash risk — replaced with user?.sub ??
+  null in all 4+ occurrences. Self-delete check now uses userId
+  (from user?.sub ?? null) instead of user.sub directly.
+- lgpd.ts: Added rateLimitWrite on POST /requests/export and POST
+  /requests/delete.
+- lgpd.ts: Replaced c.req.json() with safeJsonBody() in 2
+  endpoints.
+- shared-validation: Added lgpdExportSchema (user_id UUID, reason
+  max 1000).
+- shared-validation: Added lgpdDeleteSchema (user_id UUID, reason
+  max 1000, mode enum anonymize/delete default anonymize).
 
 Bug fixes:
-- chatops.ts: All audit logs migrated to writeAuditLog helper.
-- chatops.ts: Command log inserts wrapped in try/catch (was
-  crashing silently if log table unavailable).
+- lgpd.ts: All validation errors now return parsed.error.flatten().
+- lgpd.ts: All audit logs migrated to writeAuditLog helper.
+- lgpd.ts: POST /requests/export and POST /requests/delete now
+  use schemas instead of inline validation.
 
 Performance:
-- chatops.ts: Parallelized 5 queries in GET /stats (total +
-  success + failed + byCommand + bySource) using Promise.all —
-  was 5 sequential queries.
-- chatops.ts: Added httpCache(60) on GET /; httpCache(15) on
-  GET /config, GET /history; httpCache(30) on GET /stats (4
-  endpoints).
+- lgpd.ts: Parallelized 9 queries in POST /requests/export
+  (user + sessions + devices + tenant_users + profiles + audit +
+  security + contacts + company) using Promise.all — was 9
+  sequential queries.
+- lgpd.ts: Parallelized 5 deletes in POST /requests/delete
+  (mode=delete) using Promise.all — was 5 sequential deletes.
+- lgpd.ts: Parallelized 4 operations in POST /requests/delete
+  (mode=anonymize) using Promise.all — was 4 sequential
+  operations.
+- lgpd.ts: Added httpCache(30) on GET /, GET /requests, GET
+  /requests/:id (3 endpoints).
 
 Code quality:
-- chatops.ts: Added try/catch on all 7 endpoints with structured
-  logging.
-- chatops.ts: Added logger with tenantId, platform, configId
+- lgpd.ts: Added try/catch on all 5 endpoints with structured
+  logging (was only on export/delete inner blocks).
+- lgpd.ts: Added logger with requestId, userId, mode, tenantId
   context.
 
 Tests:
-- chatops.test.ts (NEW): 23 tests covering:
-  - chatopsConfigSchema (15 tests): platform enum (slack/teams),
-    required platform, slack_verification_token max 200,
-    slack_bot_token max 500, teams fields, enabled_commands items
-    max 50, is_active boolean, complete config.
-  - Command parsing logic (6 tests): simple command, command with
-    args, empty, extra spaces, slash removal, no slash removal.
-  - Token masking logic (2 tests): masks existing token, does not
-    mask null.
+- lgpd.test.ts (NEW): 20 tests covering:
+  - lgpdExportSchema (5 tests): user_id UUID required, reason max
+    1000.
+  - lgpdDeleteSchema (9 tests): user_id UUID required, mode enum
+    (anonymize/delete), default anonymize, reason max 1000.
+  - Self-delete protection logic (3 tests): blocks self-delete,
+    allows other delete, null userId edge case.
+  - Anonymization logic (3 tests): email generation, name, initials.
 
-Total: 2176 tests passing (was 2153, +23 new).
+Total: 2196 tests passing (was 2176, +20 new).
 
 Generated with [Devin](https://devin.ai)
 

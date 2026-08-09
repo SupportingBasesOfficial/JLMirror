@@ -2350,6 +2350,20 @@ export const chatopsConfigSchema = z.object({
 });
 export type ChatopsConfigInput = z.infer<typeof chatopsConfigSchema>;
 
+// ========== LGPD Schemas ==========
+export const lgpdExportSchema = z.object({
+  user_id: z.string().uuid(),
+  reason: z.string().max(1000).optional(),
+});
+export type LgpdExportInput = z.infer<typeof lgpdExportSchema>;
+
+export const lgpdDeleteSchema = z.object({
+  user_id: z.string().uuid(),
+  reason: z.string().max(1000).optional(),
+  mode: z.enum(["anonymize", "delete"]).default("anonymize"),
+});
+export type LgpdDeleteInput = z.infer<typeof lgpdDeleteSchema>;
+
 // ========== Client Portal Schemas ==========
 export const clientPortalUserSchema = z.object({
   email: z.string().email(),
