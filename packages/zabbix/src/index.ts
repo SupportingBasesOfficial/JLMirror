@@ -781,7 +781,10 @@ export class BlindedZabbixClient {
   }
 
   // Triggers — expandDescription removido (deprecated no Zabbix 7.x, descriptions sempre expandidas)
-  async getTriggers(hostIds?: string[]): Promise<ZabbixTrigger[]> {
+  async getTriggers(
+    hostIds?: string[],
+    options?: { activeOnly?: boolean },
+  ): Promise<ZabbixTrigger[]> {
     const params: Record<string, unknown> = {
       output: [
         "triggerid",
@@ -806,6 +809,9 @@ export class BlindedZabbixClient {
         "clock",
         "severity",
       ],
+      // only_true retorna apenas triggers em estado de problema (value=1)
+      // Sem isso, o limite de 200 pode cortar triggers ativos
+      only_true: options?.activeOnly ?? true,
       limit: 200,
     };
     if (hostIds) params.hostids = hostIds;
