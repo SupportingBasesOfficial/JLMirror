@@ -1,58 +1,57 @@
-feat(marketplace): add requirePermission, try/catch, parallelize, 404s
+feat(discovery): fix N+1 subqueries, try/catch, schema, parallelize
 
 Security:
-- marketplace.ts: Added requirePermission("marketplace:read") on
-  GET /apps and GET /apps/:slug — were completely public, exposing
-  catalog + tenant install status to anyone.
-- marketplace.ts: Fixed user.tenant_id and user.sub crash risk —
+- discovery.ts: Fixed user.tenant_id and user.sub crash risk —
   replaced with user?.tenant_id ?? null and user?.sub ?? null in
-  all 8+ occurrences.
-- marketplace.ts: Added rateLimitWrite on POST /install, PUT
-  /configure, PUT /activate, PUT /disable, DELETE /installs/:id
-  (5 endpoints).
-- marketplace.ts: Replaced c.req.json().catch() with safeJsonBody
-  on POST /install.
+  all 7+ occurrences.
+- discovery.ts: Added rateLimitWrite on POST /sessions, POST
+  /sessions/:id/run, DELETE /sessions/:id, POST /devices/:id/import
+  (4 endpoints).
+- shared-validation: Enhanced discoverySessionSchema — name max
+  200, ip_ranges max 100 entries with each max 50 chars,
+  snmp_communities max 20 entries with each max 100 chars,
+  snmp_ports 1-65535 range with max 20 entries, snmp_timeout_ms
+  max 60000, snmp_retries max 10.
 
 Bug fixes:
-- marketplace.ts: PUT /configure, PUT /activate, PUT /disable now
-  return 404 if install not found (3 endpoints).
-- marketplace.ts: DELETE /installs/:id now returns 404 if install
+- discovery.ts: DELETE /sessions/:id now returns 404 if session
   not found.
-- marketplace.ts: All audit logs migrated to writeAuditLog helper.
+- discovery.ts: All audit logs migrated to writeAuditLog helper.
 
 Performance:
-- marketplace.ts: Parallelized 2 queries in GET /apps (apps list +
-  tenant installs) using Promise.all — was 2 sequential queries.
-- marketplace.ts: Parallelized 4 queries in GET /stats (total_apps
-  + installed + active + by_category) using Promise.all — was 4
-  sequential queries.
-- marketplace.ts: Parallelized 3 operations in POST /install
-  (increment count + audit log) using Promise.all.
-- marketplace.ts: Parallelized 3 operations in DELETE /installs
-  (delete + decrement count + audit log) using Promise.all.
-- marketplace.ts: Added httpCache(60) on GET /, GET /apps, GET
-  /apps/:slug, GET /stats; httpCache(30) on GET /installs (5
-  endpoints).
+- discovery.ts: Fixed N+1 subqueries in GET /sessions — replaced
+  correlated subqueries (device_count + link_count per row) with
+  LEFT JOIN + aggregation (2 subqueries → 2 JOINs in single
+  query).
+- discovery.ts: Parallelized 2 queries in GET /topology (devices
+  + links) using Promise.all — was 2 sequential queries.
+- discovery.ts: Parallelized 2 operations in POST /devices/:id/
+  import (vincula + audit log) using Promise.all.
+- discovery.ts: Added httpCache(30) on GET /, GET /sessions, GET
+  /sessions/:id/devices, GET /sessions/:id/links, GET
+  /sessions/:id/topology (5 endpoints).
 
 Code quality:
-- marketplace.ts: Added try/catch on all 9 endpoints with
-  structured logging (was zero).
-- marketplace.ts: Added logger with installId, appId, appSlug,
-  tenantId context.
+- discovery.ts: Added try/catch on all 8 endpoints with structured
+  logging (was only on /run inner block).
+- discovery.ts: Added logger with sessionId, name, devicesFound,
+  linksFound, discoveredId, newDeviceId, ip, tenantId context.
 
 Tests:
-- marketplace.test.ts (NEW): 17 tests covering:
-  - marketplaceConfigureSchema (4 tests): empty config, with
-    config, nested objects, null values.
-  - Installed map logic (3 tests): map creation, installed check,
-    install_status retrieval.
-  - Install status logic (4 tests): all 4 valid statuses.
-  - Default config logic (3 tests): body config, app default,
-    empty fallback.
-  - Installs count logic (3 tests): increment, decrement,
-    GREATEST(0) non-negative.
+- discovery.test.ts (NEW): 34 tests covering:
+  - discoverySessionSchema (23 tests): name required + max 200,
+    ip_ranges required + max 100 + each max 50 + empty rejected,
+    snmp_communities max 20, snmp_ports 1-65535 + max 20,
+    snmp_timeout_ms max 60000, snmp_retries max 10, all 3 boolean
+    flags, complete session.
+  - Defaults logic (7 tests): snmp_communities, snmp_ports,
+    snmp_timeout_ms, snmp_retries, use_snmp, use_lldp, use_arp.
+  - Topology logic (2 tests): devices → nodes conversion with
+    hostname fallback, links → edges conversion.
+  - Import logic (3 tests): hostname default generation, hostname
+    when provided, device_type default.
 
-Total: 2293 tests passing (was 2276, +17 new).
+Total: 2327 tests passing (was 2293, +34 new).
 
 Generated with [Devin](https://devin.ai)
 

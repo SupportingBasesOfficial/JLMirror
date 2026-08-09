@@ -2237,12 +2237,12 @@ export type DriftScanInput = z.infer<typeof driftScanSchema>;
 
 // ========== Discovery Schemas ==========
 export const discoverySessionSchema = z.object({
-  name: z.string().min(1),
-  ip_ranges: z.array(z.string()).min(1),
-  snmp_communities: z.array(z.string()).optional(),
-  snmp_ports: z.array(z.number().int()).optional(),
-  snmp_timeout_ms: z.number().int().positive().optional(),
-  snmp_retries: z.number().int().min(0).optional(),
+  name: z.string().min(1).max(200),
+  ip_ranges: z.array(z.string().min(1).max(50)).min(1).max(100),
+  snmp_communities: z.array(z.string().max(100)).max(20).optional(),
+  snmp_ports: z.array(z.number().int().min(1).max(65535)).max(20).optional(),
+  snmp_timeout_ms: z.number().int().positive().max(60000).optional(),
+  snmp_retries: z.number().int().min(0).max(10).optional(),
   use_snmp: z.boolean().optional(),
   use_lldp: z.boolean().optional(),
   use_arp: z.boolean().optional(),
