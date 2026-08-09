@@ -2251,27 +2251,27 @@ export type DiscoverySessionInput = z.infer<typeof discoverySessionSchema>;
 
 // ========== Finops Schemas ==========
 export const finopsCostSchema = z.object({
-  period_start: z.string().min(1),
-  period_end: z.string().min(1),
-  category: z.string().min(1),
-  resource_name: z.string().optional(),
-  resource_type: z.string().optional(),
+  period_start: z.string().min(1).max(50),
+  period_end: z.string().min(1).max(50),
+  category: z.string().min(1).max(100),
+  resource_name: z.string().max(200).optional(),
+  resource_type: z.string().max(100).optional(),
   cost_amount: z.number(),
-  currency: z.string().optional(),
+  currency: z.string().max(10).optional(),
   usage_quantity: z.number().optional(),
-  usage_unit: z.string().optional(),
-  source: z.string().optional(),
+  usage_unit: z.string().max(50).optional(),
+  source: z.string().max(100).optional(),
 });
 export type FinopsCostInput = z.infer<typeof finopsCostSchema>;
 
 export const finopsOptimizationSchema = z.object({
-  category: z.string().min(1),
-  resource_name: z.string().optional(),
-  title: z.string().min(1),
-  description: z.string().optional(),
+  category: z.string().min(1).max(100),
+  resource_name: z.string().max(200).optional(),
+  title: z.string().min(1).max(500),
+  description: z.string().max(10000).optional(),
   estimated_savings_monthly: z.number(),
   estimated_savings_annual: z.number().optional(),
-  currency: z.string().optional(),
+  currency: z.string().max(10).optional(),
   effort: z.enum(["low", "medium", "high"]).optional(),
 });
 export type FinopsOptimizationInput = z.infer<typeof finopsOptimizationSchema>;
@@ -2293,10 +2293,10 @@ export type FinopsOptimizationStatusInput = z.infer<
 export const finopsBudgetSchema = z.object({
   month: z.number().int().min(1).max(12),
   year: z.number().int().min(2000),
-  category: z.string().optional(),
+  category: z.string().max(100).optional(),
   budget_amount: z.number(),
-  currency: z.string().optional(),
-  alert_threshold_pct: z.number().optional(),
+  currency: z.string().max(10).optional(),
+  alert_threshold_pct: z.number().min(0).max(100).optional(),
 });
 export type FinopsBudgetInput = z.infer<typeof finopsBudgetSchema>;
 

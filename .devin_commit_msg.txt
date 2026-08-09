@@ -1,55 +1,61 @@
-feat(itsm): fix user?.sub, try/catch, URL validation, auth_type enum
+feat(finops): fix user?.sub, try/catch, schemas, parallelize, 404
 
 Security:
-- itsm.ts: Fixed user.tenant_id and user.sub crash risk —
+- finops.ts: Fixed user.tenant_id and user.sub crash risk —
   replaced with user?.tenant_id ?? null and user?.sub ?? null in
   all 8+ occurrences.
-- itsm.ts: Added rateLimitWrite on POST /connectors, DELETE
-  /connectors/:id, POST /connectors/:id/test, POST
-  /connectors/:id/create-ticket (4 endpoints).
-- shared-validation: Enhanced itsmConnectorSchema — base_url now
-  requires valid URL with HTTP/HTTPS protocol (SSRF prevention),
-  auth_type changed from string to enum (api_key/basic/bearer/
-  oauth2), sync_direction changed to enum (inbound/outbound/
-  bidirectional), oauth_token_url requires valid URL, all string
-  fields have max length (name 200, base_url 2000, api_key 500,
-  username 200, password 500, bearer_token 2000, oauth_client_id
-  200, oauth_client_secret 500).
-- shared-validation: Enhanced itsmCreateTicketSchema — title max
-  500, description max 10000, source_id max 200, source_type max
-  100.
+- finops.ts: Added rateLimitWrite on POST /costs, POST
+  /optimizations, PUT /optimizations/:id/status, PUT /budgets (4
+  endpoints).
+- shared-validation: Enhanced all 4 finops schemas with max
+  length: finopsCostSchema (period_start/end max 50, category max
+  100, resource_name max 200, resource_type max 100, currency max
+  10, usage_unit max 50, source max 100), finopsOptimizationSchema
+  (category max 100, resource_name max 200, title max 500,
+  description max 10000, currency max 10), finopsBudgetSchema
+  (category max 100, currency max 10, alert_threshold_pct 0-100
+  range validation).
 
 Bug fixes:
-- itsm.ts: DELETE /connectors/:id now returns 404 if connector
-  not found.
-- itsm.ts: All audit logs migrated to writeAuditLog helper.
+- finops.ts: PUT /optimizations/:id/status now returns 404 if
+  optimization not found.
+- finops.ts: All audit logs migrated to writeAuditLog helper (was
+  only 1 inline audit log, now 3 endpoints with audit logs).
 
 Performance:
-- itsm.ts: Parallelized 5 queries in GET /stats (connectors +
-  syncs + success + failed + byType) using Promise.all — was 5
-  sequential queries.
-- itsm.ts: Parallelized 2 queries in POST /create-ticket (log
-  insert + connector status update) using Promise.all.
-- itsm.ts: Added httpCache(30) on GET /, GET /connectors, GET
-  /sync-log; httpCache(60) on GET /stats (4 endpoints).
+- finops.ts: Parallelized 3 queries in GET /summary (by_month +
+  by_category + total) using Promise.all — was 3 sequential
+  queries.
+- finops.ts: Parallelized 5 queries in GET /stats (total_cost +
+  total_savings + implemented_savings + pending_optimizations +
+  budget) using Promise.all — was 5 sequential queries.
+- finops.ts: Added httpCache(60) on GET /, GET /summary, GET
+  /budgets, GET /stats; httpCache(30) on GET /costs, GET
+  /optimizations (6 endpoints).
 
 Code quality:
-- itsm.ts: Added try/catch on all 8 endpoints with structured
+- finops.ts: Added try/catch on all 9 endpoints with structured
   logging (was zero).
-- itsm.ts: Added logger with connectorId, name, connector_type,
-  success, externalId, tenantId context.
+- finops.ts: Added logger with costId, optId, budgetId, category,
+  title, status, month, year, tenantId context.
 
 Tests:
-- itsm.test.ts (NEW): 32 tests covering:
-  - itsmConnectorSchema (21 tests): name required + max 200, all
-    5 connector_type values, base_url URL validation + HTTP/HTTPS
-    + reject FTP, all 4 auth_type values, all 3 sync_direction
-    values, oauth_token_url validation, complete connector.
-  - itsmCreateTicketSchema (11 tests): title required + max 500,
-    description max 10000, all 3 severity values, invalid
-    severity rejected, extra_fields.
+- finops.test.ts (NEW): 33 tests covering:
+  - finopsCostSchema (9 tests): period_start/end required,
+    category required + max 100, resource_name max 200, currency
+    max 10, complete cost.
+  - finopsOptimizationSchema (7 tests): title required + max 500,
+    effort enum (low/medium/high), invalid effort rejected,
+    estimated_savings_annual.
+  - finopsOptimizationStatusSchema (7 tests): all 5 status values,
+    invalid status rejected, actual_savings_monthly.
+  - finopsBudgetSchema (8 tests): month 1-12, year >= 2000,
+    category, alert_threshold_pct 0-100 range, invalid values
+    rejected.
+  - Savings calculation logic (2 tests): annual = monthly * 12,
+    default annual calculation.
 
-Total: 2243 tests passing (was 2211, +32 new).
+Total: 2276 tests passing (was 2243, +33 new).
 
 Generated with [Devin](https://devin.ai)
 
