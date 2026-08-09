@@ -18,6 +18,13 @@ interface ZabbixTriggersResponse {
   data: ZabbixTrigger[];
 }
 
+// Valida formato de hostId — Zabbix usa IDs numericos como strings
+// Rejeita caracteres nao-numericos para evitar injecao na URL
+function isValidHostId(id: string): boolean {
+  if (!id || id.length === 0 || id.length > 50) return false;
+  return /^\d+$/.test(id);
+}
+
 export default async function DeviceDetailPage({
   params,
 }: {
@@ -34,6 +41,17 @@ export default async function DeviceDetailPage({
         variant="warning"
         title="Não autenticado"
         message="Faça login para continuar."
+      />
+    );
+  }
+
+  // Validacao de hostId — evita 500 com IDs invalidos
+  if (!isValidHostId(hostId)) {
+    return (
+      <StateDisplay
+        variant="warning"
+        title="ID inválido"
+        message="O ID do dispositivo deve ser numérico."
       />
     );
   }
@@ -56,18 +74,58 @@ export default async function DeviceDetailPage({
     ),
   ]);
 
-  if (hostResult.error || itemsResult.error) {
+  // Trata erros especificos
+  if (hostResult.error) {
+    const errorCode = hostResult.error.code;
+    if (errorCode === "ACCESS_DENIED") {
+      return (
+        <StateDisplay
+          variant="error"
+          title="Acesso negado"
+          message="Você não tem permissão para acessar este dispositivo."
+        />
+      );
+    }
+    if (errorCode === "DEVICE_NOT_FOUND") {
+      return (
+        <StateDisplay
+          variant="warning"
+          title="Dispositivo não encontrado"
+          message={`Host ID ${hostId} não encontrado no Zabbix.`}
+        />
+      );
+    }
+    if (errorCode === "ZABBIX_API_ERROR") {
+      return (
+        <StateDisplay
+          variant="error"
+          title="Zabbix indisponível"
+          message="Não foi possível conectar ao servidor Zabbix."
+        />
+      );
+    }
     return (
       <StateDisplay
         variant="error"
         title="Erro ao carregar dispositivo"
-        message={hostResult.error?.message ?? itemsResult.error?.message}
+        message={hostResult.error.message}
       />
     );
   }
 
-  const host = hostResult.data.host;
-  const items = itemsResult.data.items;
+  if (itemsResult.error) {
+    // Host carregou mas items falharam — mostra host com aviso
+    return (
+      <StateDisplay
+        variant="warning"
+        title="Métricas indisponíveis"
+        message="O dispositivo foi encontrado, mas não foi possível carregar suas métricas. Tente novamente."
+      />
+    );
+  }
+
+  const host = hostResult.data?.host;
+  const items = itemsResult.data?.items ?? [];
   const triggers = triggersResult.data?.data ?? [];
 
   if (!host) {

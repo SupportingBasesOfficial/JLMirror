@@ -4,6 +4,7 @@
 
 import type { Hono } from "hono";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { zabbixDashboardPrefsSchema } from "@repo/shared-validation";
 import type { ZabbixItem } from "@repo/zabbix";
 import { syncTenantDevices } from "../../lib/device-sync.js";
@@ -198,6 +199,87 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       const items = await ctx.client.getItems(hostId);
       return c.json({ items });
     } catch (error) {
+      return c.json(
+        {
+          error: {
+            code: "ZABBIX_API_ERROR",
+            message:
+              error instanceof Error ? error.message : "Erro na API Zabbix",
+          },
+        },
+        502,
+      );
+    }
+  });
+
+  // GET /api/v1/zabbix/devices-items-batch?host_ids=1,2,3
+  // Busca items de multiplos hosts em uma unica chamada (evita N+1 do frontend)
+  // Filtra apenas items uteis para metricas de dashboard (CPU, rede, memoria, disco)
+  zabbixRoute.get("/devices-items-batch", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const hostIdsParam = c.req.query("host_ids");
+
+    if (!hostIdsParam) {
+      return c.json(
+        {
+          error: {
+            code: "MISSING_HOST_IDS",
+            message: "Parametro host_ids e obrigatorio",
+          },
+        },
+        400,
+      );
+    }
+
+    const hostIds = hostIdsParam.split(",").filter(Boolean);
+    if (hostIds.length === 0) {
+      return c.json({ items: [] });
+    }
+
+    // Limite de 500 hosts por request (evita sobrecarga)
+    if (hostIds.length > 500) {
+      return c.json(
+        {
+          error: {
+            code: "TOO_MANY_HOSTS",
+            message: "Maximo de 500 hosts por request",
+          },
+        },
+        400,
+      );
+    }
+
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
+    if (!ctx) {
+      return c.json(configNotFoundResponse(), 503);
+    }
+
+    try {
+      const startedAt = Date.now();
+      const items = await ctx.client.getItemsForHosts(hostIds);
+
+      logger.info("Batch items fetch concluido", {
+        tenantId,
+        hostCount: hostIds.length,
+        itemCount: items.length,
+        durationMs: Date.now() - startedAt,
+      });
+
+      // Agrupa items por hostid para facilitar consumo no frontend
+      const itemsByHost: Record<string, ZabbixItem[]> = {};
+      for (const item of items) {
+        if (!itemsByHost[item.hostid]) itemsByHost[item.hostid] = [];
+        itemsByHost[item.hostid].push(item);
+      }
+
+      return c.json({ items, itemsByHost });
+    } catch (error) {
+      logger.error("Erro no batch items fetch", {
+        tenantId,
+        hostCount: hostIds.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
         {
           error: {

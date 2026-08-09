@@ -6,7 +6,7 @@ import { DeviceGrid } from "@/components/device-grid";
 import { DeviceSearch } from "@/components/device-search";
 import { StateDisplay } from "@/components/ui/state-display";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Folder } from "lucide-react";
+import { Folder, AlertTriangle } from "lucide-react";
 import type { ZabbixHost, ZabbixItem, ZabbixTrigger } from "@repo/zabbix";
 
 async function getZabbixDevices(accessToken: string, refreshToken?: string) {
@@ -27,17 +27,38 @@ async function getZabbixTriggers(accessToken: string, refreshToken?: string) {
   return result;
 }
 
-async function getDeviceItems(
+// Busca items de todos os hosts em uma unica chamada API (evita N+1)
+// Retorna items agrupados por hostid
+async function getBatchItems(
   accessToken: string,
   refreshToken: string | undefined,
-  hostId: string,
-) {
-  const result = await serverApiGetWithToken<{ items: ZabbixItem[] }>(
-    `/api/v1/zabbix/devices/${hostId}/items`,
+  hostIds: string[],
+): Promise<{
+  data: {
+    items: ZabbixItem[];
+    itemsByHost: Record<string, ZabbixItem[]>;
+  } | null;
+  error: { code: string; message: string } | null;
+}> {
+  if (hostIds.length === 0) {
+    return { data: { items: [], itemsByHost: {} }, error: null };
+  }
+  const hostIdsParam = hostIds.join(",");
+  return serverApiGetWithToken<{
+    items: ZabbixItem[];
+    itemsByHost: Record<string, ZabbixItem[]>;
+  }>(
+    `/api/v1/zabbix/devices-items-batch?host_ids=${hostIdsParam}`,
     accessToken,
     refreshToken,
   );
-  return result;
+}
+
+// Parse seguro de lastvalue — retorna 0 se valor for invalido/vazio
+function safeParseFloat(value: string | undefined | null): number {
+  if (!value || value === "") return 0;
+  const parsed = parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 export default async function DevicesPage() {
@@ -55,13 +76,70 @@ export default async function DevicesPage() {
     );
   }
 
-  const devicesResult = await getZabbixDevices(accessToken, refreshToken);
-  const devices = devicesResult.data?.devices ?? [];
-
-  const [triggersResult, ...itemsResults] = await Promise.all([
+  // Busca devices e triggers em paralelo
+  const [devicesResult, triggersResult] = await Promise.all([
+    getZabbixDevices(accessToken, refreshToken),
     getZabbixTriggers(accessToken, refreshToken),
-    ...devices.map((d) => getDeviceItems(accessToken, refreshToken, d.hostid)),
   ]);
+
+  // Fallback graceful: se Zabbix offline, mostra erro em vez de quebrar a pagina
+  if (devicesResult.error || !devicesResult.data) {
+    const errorCode = devicesResult.error?.code ?? "UNKNOWN";
+    const errorMsg = devicesResult.error?.message ?? "Erro desconhecido";
+    const isZabbixOffline = errorCode === "ZABBIX_API_ERROR";
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h1
+            className="text-xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Dispositivos
+          </h1>
+        </div>
+        <StateDisplay
+          variant="error"
+          title={isZabbixOffline ? "Zabbix indisponível" : "Erro ao carregar"}
+          message={
+            isZabbixOffline
+              ? "Não foi possível conectar ao servidor Zabbix. Verifique a conexão e tente novamente."
+              : errorMsg
+          }
+        />
+      </div>
+    );
+  }
+
+  const devices = devicesResult.data.devices ?? [];
+
+  // Empty state: sem devices
+  if (devices.length === 0) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h1
+            className="text-xl font-bold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            Dispositivos
+          </h1>
+        </div>
+        <StateDisplay
+          variant="empty"
+          title="Nenhum dispositivo monitorado"
+          message="Verifique a conexão com o Zabbix ou cadastre hosts no servidor."
+        />
+      </div>
+    );
+  }
+
+  // Busca items de todos os hosts em UMA chamada (batch) — evita N+1
+  const hostIds = devices.map((d) => d.hostid);
+  const batchItemsResult = await getBatchItems(
+    accessToken,
+    refreshToken,
+    hostIds,
+  );
 
   const triggers = (triggersResult.data?.data ?? []).filter(
     (t) => t.value === "1",
@@ -78,39 +156,31 @@ export default async function DevicesPage() {
     }
   }
 
-  // Mapeia CPU e rede por hostid
+  // Mapeia CPU e rede por hostid usando items do batch
+  // Trata NaN com safeParseFloat — items sem lastvalue retornam 0
   const cpuByHost = new Map<string, number>();
   const netInByHost = new Map<string, number>();
   const netOutByHost = new Map<string, number>();
   const netSpeedByHost = new Map<string, number>();
-  const deviceItems = devices.map((d) => ({
-    hostid: d.hostid,
-    items: [] as ZabbixItem[],
-  }));
-  for (const result of itemsResults) {
-    const items = result?.data?.items ?? [];
-    for (const item of items) {
-      const match = deviceItems.find((d) => d.hostid === item.hostid);
-      if (match) match.items.push(item);
-    }
-  }
-  for (const { hostid, items } of deviceItems) {
+
+  const itemsByHost = batchItemsResult.data?.itemsByHost ?? {};
+  for (const [hostid, items] of Object.entries(itemsByHost)) {
     for (const item of items) {
       if (item.key_.includes("system.cpu.util")) {
-        cpuByHost.set(hostid, parseFloat(item.lastvalue));
+        cpuByHost.set(hostid, safeParseFloat(item.lastvalue));
       }
       if (item.key_.includes("net.if.in") && item.units === "bps") {
-        const val = parseFloat(item.lastvalue);
+        const val = safeParseFloat(item.lastvalue);
         const current = netInByHost.get(hostid) ?? 0;
         if (val > current) netInByHost.set(hostid, val);
       }
       if (item.key_.includes("net.if.out") && item.units === "bps") {
-        const val = parseFloat(item.lastvalue);
+        const val = safeParseFloat(item.lastvalue);
         const current = netOutByHost.get(hostid) ?? 0;
         if (val > current) netOutByHost.set(hostid, val);
       }
       if (item.key_.includes("net.if.speed")) {
-        const val = parseFloat(item.lastvalue);
+        const val = safeParseFloat(item.lastvalue);
         const current = netSpeedByHost.get(hostid) ?? 0;
         if (val > current) netSpeedByHost.set(hostid, val);
       }
@@ -142,6 +212,9 @@ export default async function DevicesPage() {
     a[1].groupName.localeCompare(b[1].groupName),
   );
 
+  // Aviso se items do batch falharam (mas devices carregaram)
+  const itemsFailed = !!batchItemsResult.error;
+
   return (
     <div className="space-y-5" style={{ animation: "fadeIn 0.3s ease-out" }}>
       {/* Header */}
@@ -164,6 +237,29 @@ export default async function DevicesPage() {
           </StatusBadge>
         </div>
       </div>
+
+      {/* Aviso de metricas indisponiveis (items falharam mas devices OK) */}
+      {itemsFailed && (
+        <div
+          className="flex items-center gap-2 rounded-lg p-3"
+          style={{
+            background: "var(--status-warning-bg)",
+            border: "1px solid var(--status-warning-border)",
+          }}
+        >
+          <AlertTriangle
+            size={16}
+            style={{ color: "var(--status-warning-text)" }}
+          />
+          <span
+            className="text-sm"
+            style={{ color: "var(--status-warning-text)" }}
+          >
+            Métricas de CPU/rede indisponíveis. Dispositivos carregados, mas
+            items não puderam ser buscados.
+          </span>
+        </div>
+      )}
 
       {/* Busca rapida */}
       <DeviceSearch
@@ -223,15 +319,6 @@ export default async function DevicesPage() {
             },
           )}
         </div>
-      )}
-
-      {/* Empty state */}
-      {devices.length === 0 && (
-        <StateDisplay
-          variant="empty"
-          title="Nenhum dispositivo monitorado"
-          message="Verifique a conexão com o Zabbix ou cadastre hosts no servidor."
-        />
       )}
     </div>
   );

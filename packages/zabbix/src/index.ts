@@ -726,6 +726,32 @@ export class BlindedZabbixClient {
     });
   }
 
+  // Busca items de multiplos hosts em uma unica chamada API (evita N+1)
+  // Retorna todos os items agrupados por hostid no campo hostid de cada item
+  async getItemsForHosts(hostIds: string[]): Promise<ZabbixItem[]> {
+    if (hostIds.length === 0) return [];
+    return this.rpc<ZabbixItem[]>("item.get", {
+      hostids: hostIds,
+      output: [
+        "itemid",
+        "hostid",
+        "name",
+        "key_",
+        "value_type",
+        "type",
+        "units",
+        "history",
+        "trends",
+        "lastvalue",
+        "lastclock",
+        "delay",
+        "state",
+        "status",
+      ],
+      sortfield: "name",
+    });
+  }
+
   async getKeyItems(
     hostIds: string[],
     keySearch?: string,
