@@ -1,56 +1,39 @@
-feat(contracts): fix IDOR, N+1 queries, add rate limiting, try/catch, logger
+feat(docs): add CSP, rate limiting, logger, Cache-Control, fix escapeHtml
 
-Security (CRITICAL):
-- contracts.ts: Fixed IDOR in /hour-bank, /hour-bank/periods,
-  /hour-bank/close — added verifyContractOwnership() check before
-  accessing hour bank data. Was allowing any tenant to access other
-  tenants' contract hour bank summaries and close periods.
-- contracts.ts: Fixed IDOR in POST /work-logs and POST /work-logs/start
-  — added verifyTicketOwnership() check ensuring ticket_id belongs to
-  tenant before creating work log. Also added verifyContractOwnership()
-  when contract_id is explicitly provided.
-- contracts.ts: Fixed IDOR in GET /:id/work-logs — added tenant_id
-  filter via JOIN with tenant_contracts.
-- contracts.ts: Fixed IDOR in GET /tickets/:ticketId/work-logs — added
-  tenant_id filter via JOIN with tickets.
-- contracts.ts: Fixed IDOR in GET /work-logs/active — added tenant_id
-  filter to query.
-- contracts.ts: Fixed info disclosure in /hour-bank/close —
-  result.error?.message was leaked to client. Replaced with generic
-  Portuguese message.
-- contracts.ts: Added rateLimitWrite on POST /, PUT /:id, DELETE /:id,
-  POST /work-logs, PUT /work-logs/:logId, DELETE /work-logs/:logId,
-  POST /work-logs/start, POST /work-logs/:logId/pause,
-  POST /work-logs/:logId/resume, POST /work-logs/:logId/finish,
-  POST /:id/hour-bank/close (11 endpoints).
+Security:
+- docs.ts: Added Content-Security-Policy header on /ui endpoint to
+  prevent XSS. Allows inline scripts/styles (required for interactive
+  UI) but restricts connect-src to 'self' (no external fetch).
+- docs.ts: Added X-Content-Type-Options: nosniff and Referrer-Policy
+  headers on /ui endpoint.
+- docs.ts: Added rate limiting (30 req/min) on GET / and GET /ui to
+  protect against brute force of DOCS_PASSWORD.
+- docs.ts: Fixed escapeHtml in Swagger UI — was not escaping single
+  quotes ('), which could allow XSS in onclick attributes. Added
+  replacement of ' with &#39;.
+- docs.ts: Added logger.warn for failed auth attempts with IP and path
+  context for security auditing.
 
 Performance:
-- contracts.ts: Fixed N+1 query in GET / — replaced 2 correlated
-  subqueries per row with a single LATERAL JOIN. Reduces O(N*2)
-  subquery executions to O(1) join.
-- contracts.ts: Added httpCache(30) on GET / for list caching.
-- contracts.ts: Parallelized audit log write with rate recalculation
-  in POST /work-logs/:logId/finish using Promise.
+- docs.ts: Added Cache-Control: private, max-age=300 on GET / (spec
+  JSON) to avoid re-serialization on every request.
 
 Code quality:
-- contracts.ts: Added try/catch on all 15 endpoints with graceful error
-  responses and structured logging via @repo/logger.
-- contracts.ts: Added logger with tenantId, contractId, ticketId,
-  logId, workLogId context.
-- contracts.ts: Added verifyContractOwnership() and
-  verifyTicketOwnership() helper functions for reusable IDOR checks.
-- contracts.ts: Added validation error details (parsed.error.flatten())
-  to PUT /:id and PUT /work-logs/:logId error responses (was missing).
+- docs.ts: Specified explicit "utf8" encoding on Buffer.from() calls
+  in checkDocsAuth to avoid encoding ambiguity.
+- docs.ts: Added charset=utf-8 to Content-Type on /ui endpoint.
 
 Tests:
-- contracts.test.ts (NEW): 87 tests covering all Zod schemas
-  (createContract, updateContract, createWorkLog, updateWorkLog,
-  startWorkLog, finishWorkLog), amount calculation, rate map by
-  work_type, carry-over rules, minutes-to-hours conversion, edge cases
-  (open-ended contract, on_demand with 0 hours, non-billable work log),
-  and IDOR protection logic.
+- docs.test.ts (NEW): 35 tests covering checkDocsAuth logic (correct
+  credentials, wrong password, missing header, non-Basic scheme,
+  missing DOCS_PASSWORD, empty user, timing-safe length difference,
+  invalid base64, special characters, unicode), escapeHtml (all
+  special chars including single quote, XSS payloads, type coercion),
+  OpenAPI spec structure, security headers (CSP, Cache-Control), rate
+  limiting config, and edge cases (logout without auth, logout-clear
+  401, long password rejection).
 
-Total: 534 tests passing (was 447, +87 new).
+Total: 569 tests passing (was 534, +35 new).
 
 Generated with [Devin](https://devin.ai)
 

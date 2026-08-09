@@ -7,17 +7,28 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { timingSafeEqual } from "node:crypto";
+import { logger } from "@repo/logger";
+import { rateLimit } from "../middleware/rate-limit.js";
 
-function checkDocsAuth(c: { req: { header: (name: string) => string | undefined } }): boolean {
+// Rate limit para tentativas de acesso aos docs (protege contra brute force de DOCS_PASSWORD)
+const docsRateLimit = rateLimit({
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "docs-auth",
+});
+
+function checkDocsAuth(c: {
+  req: { header: (name: string) => string | undefined };
+}): boolean {
   const expectedPassword = process.env.DOCS_PASSWORD;
   if (!expectedPassword) return false;
   const authHeader = c.req.header("authorization") ?? "";
   if (!authHeader.startsWith("Basic ")) return false;
-  const decoded = Buffer.from(authHeader.slice(6), "base64").toString();
+  const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf8");
   const [, password] = decoded.split(":");
   if (!password) return false;
-  const expectedBuf = Buffer.from(expectedPassword);
-  const providedBuf = Buffer.from(password);
+  const expectedBuf = Buffer.from(expectedPassword, "utf8");
+  const providedBuf = Buffer.from(password, "utf8");
   if (expectedBuf.length !== providedBuf.length) return false;
   return timingSafeEqual(expectedBuf, providedBuf);
 }
@@ -27,8 +38,18 @@ const docsAuthMiddleware = createMiddleware(async (c, next) => {
     await next();
     return;
   }
+  // Loga tentativas falhadas para auditoria de seguranca
+  const ip =
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  logger.warn("Tentativa de acesso negada aos docs", {
+    ip,
+    path: c.req.path,
+  });
   c.header("WWW-Authenticate", 'Basic realm="JLMIRROR API Docs"');
-  return c.json({ error: { code: "UNAUTHORIZED", message: "Acesso negado" } }, 401);
+  return c.json(
+    { error: { code: "UNAUTHORIZED", message: "Acesso negado" } },
+    401,
+  );
 });
 
 export const docsRoute = new Hono();
@@ -37,7 +58,8 @@ const openApiSpec = {
   openapi: "3.0.3",
   info: {
     title: "JLMIRROR API",
-    description: "API multi-tenant para gestão de infraestrutura IT — monitoramento Zabbix, scripts, tickets, firewall, K8s, SSL, backups, compliance e mais.",
+    description:
+      "API multi-tenant para gestão de infraestrutura IT — monitoramento Zabbix, scripts, tickets, firewall, K8s, SSL, backups, compliance e mais.",
     version: "1.0.0",
     contact: {
       name: "JL Informática",
@@ -85,7 +107,14 @@ const openApiSpec = {
               hasNext: { type: "boolean" },
               hasPrev: { type: "boolean" },
             },
-            required: ["page", "limit", "total", "totalPages", "hasNext", "hasPrev"],
+            required: [
+              "page",
+              "limit",
+              "total",
+              "totalPages",
+              "hasNext",
+              "hasPrev",
+            ],
           },
         },
         required: ["data", "pagination"],
@@ -93,7 +122,10 @@ const openApiSpec = {
       HealthStatus: {
         type: "object",
         properties: {
-          status: { type: "string", enum: ["healthy", "degraded", "unhealthy"] },
+          status: {
+            type: "string",
+            enum: ["healthy", "degraded", "unhealthy"],
+          },
           checks: {
             type: "object",
             properties: {
@@ -175,8 +207,22 @@ const openApiSpec = {
         description: "Verifica status do banco, Redis e Zabbix",
         security: [],
         responses: {
-          "200": { description: "Sistema saudável ou degradado", content: { "application/json": { schema: { $ref: "#/components/schemas/HealthStatus" } } } },
-          "503": { description: "Sistema indisponível", content: { "application/json": { schema: { $ref: "#/components/schemas/HealthStatus" } } } },
+          "200": {
+            description: "Sistema saudável ou degradado",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/HealthStatus" },
+              },
+            },
+          },
+          "503": {
+            description: "Sistema indisponível",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/HealthStatus" },
+              },
+            },
+          },
         },
       },
     },
@@ -204,7 +250,12 @@ const openApiSpec = {
         tags: ["Health"],
         summary: "Métricas Prometheus",
         security: [],
-        responses: { "200": { description: "Métricas no formato Prometheus text", content: { "text/plain": {} } } },
+        responses: {
+          "200": {
+            description: "Métricas no formato Prometheus text",
+            content: { "text/plain": {} },
+          },
+        },
       },
     },
     "/api/v1/auth/login": {
@@ -214,11 +265,43 @@ const openApiSpec = {
         security: [],
         requestBody: {
           required: true,
-          content: { "application/json": { schema: { type: "object", properties: { email: { type: "string", format: "email" }, password: { type: "string", minLength: 8 } }, required: ["email", "password"] } } },
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  email: { type: "string", format: "email" },
+                  password: { type: "string", minLength: 8 },
+                },
+                required: ["email", "password"],
+              },
+            },
+          },
         },
         responses: {
-          "200": { description: "Tokens de acesso e refresh", content: { "application/json": { schema: { type: "object", properties: { access_token: { type: "string" }, refresh_token: { type: "string" }, expires_in: { type: "integer" } } } } } },
-          "401": { description: "Credenciais inválidas", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+          "200": {
+            description: "Tokens de acesso e refresh",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    access_token: { type: "string" },
+                    refresh_token: { type: "string" },
+                    expires_in: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          "401": {
+            description: "Credenciais inválidas",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+              },
+            },
+          },
         },
       },
     },
@@ -227,7 +310,18 @@ const openApiSpec = {
         tags: ["Auth"],
         summary: "Renovar access token",
         security: [],
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", properties: { refresh_token: { type: "string" } }, required: ["refresh_token"] } } } },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { refresh_token: { type: "string" } },
+                required: ["refresh_token"],
+              },
+            },
+          },
+        },
         responses: {
           "200": { description: "Novo access token" },
           "401": { description: "Refresh token inválido" },
@@ -246,7 +340,14 @@ const openApiSpec = {
           { name: "active", in: "query", schema: { type: "boolean" } },
         ],
         responses: {
-          "200": { description: "Lista paginada de scripts", content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedResponse" } } } },
+          "200": {
+            description: "Lista paginada de scripts",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PaginatedResponse" },
+              },
+            },
+          },
           "401": { description: "Não autorizado" },
         },
       },
@@ -264,7 +365,14 @@ const openApiSpec = {
           { name: "script_id", in: "query", schema: { type: "string" } },
         ],
         responses: {
-          "200": { description: "Lista paginada de execuções", content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedResponse" } } } },
+          "200": {
+            description: "Lista paginada de execuções",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PaginatedResponse" },
+              },
+            },
+          },
         },
       },
     },
@@ -283,7 +391,14 @@ const openApiSpec = {
           { name: "overdue", in: "query", schema: { type: "boolean" } },
         ],
         responses: {
-          "200": { description: "Lista paginada de tickets", content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedResponse" } } } },
+          "200": {
+            description: "Lista paginada de tickets",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PaginatedResponse" },
+              },
+            },
+          },
         },
       },
     },
@@ -298,7 +413,14 @@ const openApiSpec = {
           { name: "type", in: "query", schema: { type: "string" } },
         ],
         responses: {
-          "200": { description: "Lista paginada de tarefas", content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedResponse" } } } },
+          "200": {
+            description: "Lista paginada de tarefas",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PaginatedResponse" },
+              },
+            },
+          },
         },
       },
     },
@@ -312,121 +434,314 @@ const openApiSpec = {
           { name: "active", in: "query", schema: { type: "boolean" } },
         ],
         responses: {
-          "200": { description: "Lista paginada de webhooks", content: { "application/json": { schema: { $ref: "#/components/schemas/PaginatedResponse" } } } },
+          "200": {
+            description: "Lista paginada de webhooks",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/PaginatedResponse" },
+              },
+            },
+          },
         },
       },
     },
     "/api/v1/zabbix/devices": {
-      get: { tags: ["Monitoring"], summary: "Listar dispositivos Zabbix", responses: { "200": { description: "Lista de dispositivos" }, "404": { description: "Configuração Zabbix não encontrada" } } },
+      get: {
+        tags: ["Monitoring"],
+        summary: "Listar dispositivos Zabbix",
+        responses: {
+          "200": { description: "Lista de dispositivos" },
+          "404": { description: "Configuração Zabbix não encontrada" },
+        },
+      },
     },
     "/api/v1/zabbix/triggers": {
-      get: { tags: ["Monitoring"], summary: "Listar triggers Zabbix", parameters: [{ name: "host_id", in: "query", schema: { type: "string" } }], responses: { "200": { description: "Lista de triggers" } } },
+      get: {
+        tags: ["Monitoring"],
+        summary: "Listar triggers Zabbix",
+        parameters: [
+          { name: "host_id", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "200": { description: "Lista de triggers" } },
+      },
     },
     "/api/v1/devices": {
-      get: { tags: ["Devices"], summary: "Listar dispositivos de rede", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de dispositivos" } } },
+      get: {
+        tags: ["Devices"],
+        summary: "Listar dispositivos de rede",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de dispositivos" } },
+      },
     },
     "/api/v1/firewall/rules": {
-      get: { tags: ["Firewall"], summary: "Listar regras de firewall", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de regras" } } },
+      get: {
+        tags: ["Firewall"],
+        summary: "Listar regras de firewall",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de regras" } },
+      },
     },
     "/api/v1/k8s/clusters": {
-      get: { tags: ["K8s"], summary: "Listar clusters Kubernetes", responses: { "200": { description: "Lista de clusters" } } },
+      get: {
+        tags: ["K8s"],
+        summary: "Listar clusters Kubernetes",
+        responses: { "200": { description: "Lista de clusters" } },
+      },
     },
     "/api/v1/ssl/certificates": {
-      get: { tags: ["SSL"], summary: "Listar certificados SSL", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de certificados" } } },
+      get: {
+        tags: ["SSL"],
+        summary: "Listar certificados SSL",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de certificados" } },
+      },
     },
     "/api/v1/backup": {
-      get: { tags: ["Backup"], summary: "Listar backups", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de backups" } } },
+      get: {
+        tags: ["Backup"],
+        summary: "Listar backups",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de backups" } },
+      },
     },
     "/api/v1/assets": {
-      get: { tags: ["Assets"], summary: "Listar ativos", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de ativos" } } },
+      get: {
+        tags: ["Assets"],
+        summary: "Listar ativos",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de ativos" } },
+      },
     },
     "/api/v1/capacity": {
-      get: { tags: ["Capacity"], summary: "Listar dados de capacidade", responses: { "200": { description: "Dados de capacidade" } } },
+      get: {
+        tags: ["Capacity"],
+        summary: "Listar dados de capacidade",
+        responses: { "200": { description: "Dados de capacidade" } },
+      },
     },
     "/api/v1/compliance": {
-      get: { tags: ["Compliance"], summary: "Listar compliance", responses: { "200": { description: "Dados de compliance" } } },
+      get: {
+        tags: ["Compliance"],
+        summary: "Listar compliance",
+        responses: { "200": { description: "Dados de compliance" } },
+      },
     },
     "/api/v1/reports": {
-      get: { tags: ["Reports"], summary: "Listar relatórios", responses: { "200": { description: "Lista de relatórios" } } },
+      get: {
+        tags: ["Reports"],
+        summary: "Listar relatórios",
+        responses: { "200": { description: "Lista de relatórios" } },
+      },
     },
     "/api/v1/changes": {
-      get: { tags: ["Changes"], summary: "Listar mudanças", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de mudanças" } } },
+      get: {
+        tags: ["Changes"],
+        summary: "Listar mudanças",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de mudanças" } },
+      },
     },
     "/api/v1/admin/tenants": {
-      get: { tags: ["Admin"], summary: "Listar tenants (global admin)", responses: { "200": { description: "Lista de tenants" } } },
+      get: {
+        tags: ["Admin"],
+        summary: "Listar tenants (global admin)",
+        responses: { "200": { description: "Lista de tenants" } },
+      },
     },
     "/api/v1/dashboard/overview": {
-      get: { tags: ["Dashboard"], summary: "Dashboard consolidado", responses: { "200": { description: "KPIs e alertas consolidados" } } },
+      get: {
+        tags: ["Dashboard"],
+        summary: "Dashboard consolidado",
+        responses: { "200": { description: "KPIs e alertas consolidados" } },
+      },
     },
     "/api/v1/dashboard/executive": {
-      get: { tags: ["Dashboard"], summary: "Dashboard executivo", responses: { "200": { description: "Métricas executivas" } } },
+      get: {
+        tags: ["Dashboard"],
+        summary: "Dashboard executivo",
+        responses: { "200": { description: "Métricas executivas" } },
+      },
     },
     "/api/v1/notifications": {
-      get: { tags: ["Notifications"], summary: "Listar notificações", responses: { "200": { description: "Lista de notificações" } } },
+      get: {
+        tags: ["Notifications"],
+        summary: "Listar notificações",
+        responses: { "200": { description: "Lista de notificações" } },
+      },
     },
     "/api/v1/rbac/roles": {
-      get: { tags: ["RBAC"], summary: "Listar roles", responses: { "200": { description: "Lista de roles" } } },
+      get: {
+        tags: ["RBAC"],
+        summary: "Listar roles",
+        responses: { "200": { description: "Lista de roles" } },
+      },
     },
     "/api/v1/rbac/permissions": {
-      get: { tags: ["RBAC"], summary: "Listar permissões", responses: { "200": { description: "Lista de permissões" } } },
+      get: {
+        tags: ["RBAC"],
+        summary: "Listar permissões",
+        responses: { "200": { description: "Lista de permissões" } },
+      },
     },
     "/api/v1/audit": {
-      get: { tags: ["Audit"], summary: "Listar logs de auditoria", parameters: [{ $ref: "#/components/parameters/PageParam" }, { $ref: "#/components/parameters/LimitParam" }], responses: { "200": { description: "Lista paginada de logs" } } },
+      get: {
+        tags: ["Audit"],
+        summary: "Listar logs de auditoria",
+        parameters: [
+          { $ref: "#/components/parameters/PageParam" },
+          { $ref: "#/components/parameters/LimitParam" },
+        ],
+        responses: { "200": { description: "Lista paginada de logs" } },
+      },
     },
     "/api/v1/api-keys": {
-      get: { tags: ["API Keys"], summary: "Listar chaves de API", responses: { "200": { description: "Lista de chaves" } } },
+      get: {
+        tags: ["API Keys"],
+        summary: "Listar chaves de API",
+        responses: { "200": { description: "Lista de chaves" } },
+      },
     },
     "/api/v1/feature-flags": {
-      get: { tags: ["Feature Flags"], summary: "Listar feature flags", responses: { "200": { description: "Lista de flags" } } },
+      get: {
+        tags: ["Feature Flags"],
+        summary: "Listar feature flags",
+        responses: { "200": { description: "Lista de flags" } },
+      },
     },
     "/api/v1/settings": {
-      get: { tags: ["Settings"], summary: "Listar configurações", responses: { "200": { description: "Configurações do tenant" } } },
+      get: {
+        tags: ["Settings"],
+        summary: "Listar configurações",
+        responses: { "200": { description: "Configurações do tenant" } },
+      },
     },
     "/api/v1/profile": {
-      get: { tags: ["Profile"], summary: "Perfil do usuário", responses: { "200": { description: "Dados do perfil" } } },
+      get: {
+        tags: ["Profile"],
+        summary: "Perfil do usuário",
+        responses: { "200": { description: "Dados do perfil" } },
+      },
     },
     "/api/v1/sla/services": {
-      get: { tags: ["SLA"], summary: "Lista serviços de negócio", responses: { "200": { description: "Lista de serviços" } } },
-      post: { tags: ["SLA"], summary: "Cria serviço", responses: { "201": { description: "Serviço criado" } } },
+      get: {
+        tags: ["SLA"],
+        summary: "Lista serviços de negócio",
+        responses: { "200": { description: "Lista de serviços" } },
+      },
+      post: {
+        tags: ["SLA"],
+        summary: "Cria serviço",
+        responses: { "201": { description: "Serviço criado" } },
+      },
     },
     "/api/v1/sla/services/{id}": {
-      get: { tags: ["SLA"], summary: "Detalhe de serviço", responses: { "200": { description: "Serviço" } } },
-      put: { tags: ["SLA"], summary: "Atualiza serviço", responses: { "200": { description: "Serviço atualizado" } } },
-      delete: { tags: ["SLA"], summary: "Remove serviço", responses: { "200": { description: "Serviço removido" } } },
+      get: {
+        tags: ["SLA"],
+        summary: "Detalhe de serviço",
+        responses: { "200": { description: "Serviço" } },
+      },
+      put: {
+        tags: ["SLA"],
+        summary: "Atualiza serviço",
+        responses: { "200": { description: "Serviço atualizado" } },
+      },
+      delete: {
+        tags: ["SLA"],
+        summary: "Remove serviço",
+        responses: { "200": { description: "Serviço removido" } },
+      },
     },
     "/api/v1/sla/incidents": {
-      get: { tags: ["SLA"], summary: "Lista incidentes", responses: { "200": { description: "Lista de incidentes" } } },
-      post: { tags: ["SLA"], summary: "Cria incidente", responses: { "201": { description: "Incidente criado" } } },
+      get: {
+        tags: ["SLA"],
+        summary: "Lista incidentes",
+        responses: { "200": { description: "Lista de incidentes" } },
+      },
+      post: {
+        tags: ["SLA"],
+        summary: "Cria incidente",
+        responses: { "201": { description: "Incidente criado" } },
+      },
     },
     "/api/v1/sla/incidents/{id}": {
-      put: { tags: ["SLA"], summary: "Atualiza incidente", responses: { "200": { description: "Incidente atualizado" } } },
+      put: {
+        tags: ["SLA"],
+        summary: "Atualiza incidente",
+        responses: { "200": { description: "Incidente atualizado" } },
+      },
     },
     "/api/v1/sla/maintenance": {
-      get: { tags: ["SLA"], summary: "Lista janelas de manutenção", responses: { "200": { description: "Lista de manutenções" } } },
-      post: { tags: ["SLA"], summary: "Cria janela de manutenção", responses: { "201": { description: "Manutenção criada" } } },
+      get: {
+        tags: ["SLA"],
+        summary: "Lista janelas de manutenção",
+        responses: { "200": { description: "Lista de manutenções" } },
+      },
+      post: {
+        tags: ["SLA"],
+        summary: "Cria janela de manutenção",
+        responses: { "201": { description: "Manutenção criada" } },
+      },
     },
     "/api/v1/sla/maintenance/{id}": {
-      delete: { tags: ["SLA"], summary: "Remove manutenção", responses: { "200": { description: "Manutenção removida" } } },
+      delete: {
+        tags: ["SLA"],
+        summary: "Remove manutenção",
+        responses: { "200": { description: "Manutenção removida" } },
+      },
     },
     "/api/v1/sla/report": {
-      get: { tags: ["SLA"], summary: "Relatório de SLA por serviço", responses: { "200": { description: "Relatório SLA" } } },
+      get: {
+        tags: ["SLA"],
+        summary: "Relatório de SLA por serviço",
+        responses: { "200": { description: "Relatório SLA" } },
+      },
     },
     "/api/v1/apm/overview": {
-      get: { tags: ["APM"], summary: "Dashboard de observabilidade runtime (traces, throughput, erros, tasks)", responses: { "200": { description: "Overview APM" } } },
+      get: {
+        tags: ["APM"],
+        summary:
+          "Dashboard de observabilidade runtime (traces, throughput, erros, tasks)",
+        responses: { "200": { description: "Overview APM" } },
+      },
     },
     "/api/v1/apm/throughput": {
-      get: { tags: ["APM"], summary: "Throughput por minuto em tempo real", responses: { "200": { description: "Throughput data" } } },
+      get: {
+        tags: ["APM"],
+        summary: "Throughput por minuto em tempo real",
+        responses: { "200": { description: "Throughput data" } },
+      },
     },
   },
 };
 
-docsRoute.get("/", docsAuthMiddleware, (c) => {
+docsRoute.get("/", docsRateLimit, docsAuthMiddleware, (c) => {
+  // Cache de 5 min para spec JSON (imutavel entre deploys)
+  c.header("Cache-Control", "private, max-age=300");
   return c.json(openApiSpec);
 });
 
 docsRoute.get("/logout", (c) => {
   c.header("Content-Type", "text/html");
-  return c.body(`<!DOCTYPE html>
+  return c.body(
+    `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -448,15 +763,24 @@ docsRoute.get("/logout", (c) => {
     window.location.href = '/api/v1/docs/ui';
   </script>
 </body>
-</html>`, 200);
+</html>`,
+    200,
+  );
 });
 
 docsRoute.get("/logout-clear", (c) => {
   return c.json({ status: "cleared" }, 401);
 });
 
-docsRoute.get("/ui", docsAuthMiddleware, (c) => {
-  c.header("Content-Type", "text/html");
+docsRoute.get("/ui", docsRateLimit, docsAuthMiddleware, (c) => {
+  c.header("Content-Type", "text/html; charset=utf-8");
+  // CSP: permite inline scripts/styles e fetch para mesma origem (necessario para a UI interativa)
+  c.header(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; font-src 'self' data:",
+  );
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   return c.body(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -588,7 +912,7 @@ docsRoute.get("/ui", docsAuthMiddleware, (c) => {
     }
 
     function escapeHtml(s) {
-      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
     function renderEndpoints() {
