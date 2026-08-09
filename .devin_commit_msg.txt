@@ -1,39 +1,43 @@
-feat(tickets): fix IDOR, add rate limiting, parallelize stats, harden validation
+feat(assets): fix IDOR, schema mismatch, parallelize queries, add rate limiting
 
 Security (CRITICAL):
-- tickets.ts: Fixed IDOR vulnerability in GET /:id/comments — query now
-  filters by tenant_id (was only filtering by ticket_id, allowing
-  cross-tenant comment access).
-- tickets.ts: Added rateLimitWrite middleware on POST /, PUT /:id,
-  DELETE /:id, POST /:id/comments, POST /categories (prevents spam/abuse).
-- shared-validation: Fixed createCommentSchema — removed duplicate
-  required field 'content' (was requiring both 'content' and 'body',
-  causing validation failures). Added max(10000) to body to prevent
-  oversized comments.
+- assets.ts: Fixed IDOR in GET /:id — asset_changes query now filters
+  by tenant_id via INNER JOIN with assets table (was only filtering by
+  asset_id, allowing cross-tenant change history access).
+- assets.ts: Added ownership verification in POST /:id/licenses —
+  checks asset belongs to tenant before adding license (was missing,
+  allowing license creation on other tenants' assets).
+- assets.ts: Added rateLimitWrite on POST /, PUT /:id, DELETE /:id,
+  POST /:id/licenses, PUT /:id/licenses/:licenseId,
+  DELETE /:id/licenses/:licenseId.
+- assets.ts: DELETE /:id now verifies asset exists and belongs to
+  tenant before deleting (was returning deleted:true even if nothing
+  was deleted).
+- shared-validation: Fixed createAssetSchema — removed dead field
+  'type' (was required but never used in INSERT). Made asset_tag and
+  asset_type required (was optional but used in INSERT). Added enum
+  validation for status and criticality. Added max length constraints.
+  Aligned updateAssetSchema with fieldMap (added asset_tag, asset_type,
+  category, and all missing fields).
 
 Performance:
-- tickets.ts: Parallelized 5 sequential queries in GET /stats with
-  Promise.all (latency reduction ~80%). Added httpCache(30) on /stats
-  and httpCache(60) on /categories.
+- assets.ts: Parallelized 6 sequential queries in GET /stats with
+  Promise.all. Added httpCache(30).
+- assets.ts: Parallelized 3 sequential queries in GET /:id (licenses,
+  changes, children) with Promise.all.
 
 Code quality:
-- tickets.ts: Added structured logging with @repo/logger on /stats.
-- tickets.ts: Fixed fieldMap in PUT /:id — aligned 'assignee_id' (schema)
-  with 'assigned_to' (DB column), removed 'assigned_name' (not in schema).
-- tickets.ts: Added import for rateLimitWrite and httpCache middleware.
-
-Frontend:
-- tickets/page.tsx: Replaced silent console.error with user-facing
-  setError() in handleSelectTicket, handleUpdateStatus, handleAddComment,
-  handleDeleteCategory. Users now see error messages when operations fail.
+- assets.ts: Added try/catch on all endpoints with graceful error
+  responses and structured logging via @repo/logger.
+- assets.ts: Added logger with tenantId, assetId, and error context.
 
 Tests:
-- tickets.test.ts (NEW): 42 tests covering all Zod schemas (createTicket,
-  updateTicket, createComment, createCategory, updateCategory), SLA
-  breach calculation, priority sorting, status logic, and edge cases
-  (empty tenant, internal comments filtering, null category).
+- assets.test.ts (NEW): 48 tests covering all Zod schemas (createAsset,
+  updateAsset, createLicense, updateLicense), filter logic, warranty
+  classification, and edge cases (empty tenant, limit validation,
+  null fields).
 
-Total: 335 tests passing (was 293, +42 new).
+Total: 383 tests passing (was 335, +48 new).
 
 Generated with [Devin](https://devin.ai)
 
