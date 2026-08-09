@@ -1,39 +1,65 @@
-feat(docs): add CSP, rate limiting, logger, Cache-Control, fix escapeHtml
+feat(system-health): fix schemas, SSRF, try/catch, parallelize queries, rate limit
 
-Security:
-- docs.ts: Added Content-Security-Policy header on /ui endpoint to
-  prevent XSS. Allows inline scripts/styles (required for interactive
-  UI) but restricts connect-src to 'self' (no external fetch).
-- docs.ts: Added X-Content-Type-Options: nosniff and Referrer-Policy
-  headers on /ui endpoint.
-- docs.ts: Added rate limiting (30 req/min) on GET / and GET /ui to
-  protect against brute force of DOCS_PASSWORD.
-- docs.ts: Fixed escapeHtml in Swagger UI — was not escaping single
-  quotes ('), which could allow XSS in onclick attributes. Added
-  replacement of ' with &#39;.
-- docs.ts: Added logger.warn for failed auth attempts with IP and path
-  context for security auditing.
+Security (CRITICAL):
+- shared-validation/src/index.ts: Fixed all 5 system-health schemas to match
+  DB migration. createHealthCheckSchema had fields (type, target, interval)
+  that don't exist in DB; was missing required service_type enum.
+  createIncidentSchema had severity as number(0-5) but DB expects string
+  enum (info/warning/major/critical/maintenance). recordMetricSchema
+  required health_check_id which doesn't exist in system_metric_snapshots
+  table; was missing required metric_name, metric_type, unit fields.
+  updateHealthCheckSchema was missing service_type, endpoint,
+  check_interval_seconds, timeout_seconds, expected_status_code fields.
+  updateIncidentSchema was missing root_cause, resolution_notes, impact
+  fields; had severity as number instead of string enum.
+- system-health.ts: Fixed SSRF vulnerability in POST /checks/:id/run.
+  fetch(check.endpoint) was calling arbitrary URLs including internal IPs
+  (e.g., 169.254.169.254 AWS metadata). Added isSafeUrl() helper that
+  blocks localhost, private IP ranges (10.x, 172.16-31.x, 192.168.x,
+  169.254.x), IPv6 loopback (::1), .internal/.local domains, and
+  non-HTTP protocols. Applied on both POST /checks (creation) and
+  POST /checks/:id/run (execution).
+- system-health.ts: Fixed user.sub crash risk — replaced with user?.sub
+  ?? null in POST /incidents and POST /checks/:id/run (was accessing
+  user.sub without optional chaining, would crash if user is null).
+- system-health.ts: Added rateLimitWrite on POST /checks, PUT /checks/:id,
+  DELETE /checks/:id, POST /checks/:id/run, POST /incidents,
+  PUT /incidents/:id, POST /metrics (7 endpoints).
 
 Performance:
-- docs.ts: Added Cache-Control: private, max-age=300 on GET / (spec
-  JSON) to avoid re-serialization on every request.
+- system-health.ts: Parallelized 7 queries in GET /diagnostics using
+  Promise.all (was 7 sequential queries).
+- system-health.ts: Parallelized 4 queries in GET /stats using
+  Promise.all (was 4 sequential queries).
+- system-health.ts: Added httpCache(30) on GET /checks, GET /incidents,
+  GET /metrics, GET /stats. Already had httpCache(60) on GET /score.
 
 Code quality:
-- docs.ts: Specified explicit "utf8" encoding on Buffer.from() calls
-  in checkDocsAuth to avoid encoding ambiguity.
-- docs.ts: Added charset=utf-8 to Content-Type on /ui endpoint.
+- system-health.ts: Added try/catch on all 12 endpoints with generic
+  Portuguese error messages and structured logging.
+- system-health.ts: Added logger with tenantId, checkId, incidentId
+  context. Logs incident auto-creation with severity.
+- system-health.ts: Added safeJsonBody() for safe request body parsing
+  (was using c.req.json directly which can throw on invalid JSON).
+- system-health.ts: Added validation error details (parsed.error.flatten())
+  to all error responses.
+- system-health.ts: Fixed JSON.stringify(data.metadata) / data.labels /
+  data.affected_services — added ?? {} / ?? [] fallbacks to prevent
+  "undefined" string being stored in JSONB columns.
+- system-health.ts: Fixed PUT /checks/:id and DELETE /checks/:id to
+  return 404 when check not found (was returning success regardless).
 
 Tests:
-- docs.test.ts (NEW): 35 tests covering checkDocsAuth logic (correct
-  credentials, wrong password, missing header, non-Basic scheme,
-  missing DOCS_PASSWORD, empty user, timing-safe length difference,
-  invalid base64, special characters, unicode), escapeHtml (all
-  special chars including single quote, XSS payloads, type coercion),
-  OpenAPI spec structure, security headers (CSP, Cache-Control), rate
-  limiting config, and edge cases (logout without auth, logout-clear
-  401, long password rejection).
+- system-health.test.ts (NEW): 84 tests covering all 5 Zod schemas
+  (createHealthCheck, updateHealthCheck, createIncident, updateIncident,
+  recordMetric) with all enum values, defaults, and edge cases; metric
+  status calculation logic (healthy/warning/critical thresholds);
+  isSafeUrl SSRF protection (17 URL tests covering public, localhost,
+  private IPs, AWS metadata, IPv6, .internal/.local, non-HTTP protocols);
+  automatic incident creation logic (3-failure threshold, severity
+  escalation at 5+ failures, consecutive counters reset).
 
-Total: 569 tests passing (was 534, +35 new).
+Total: 653 tests passing (was 569, +84 new).
 
 Generated with [Devin](https://devin.ai)
 

@@ -1042,36 +1042,73 @@ export type UpdateSslCertificateInput = z.infer<
 
 // ========== System Health Schemas ==========
 export const createHealthCheckSchema = z.object({
-  name: z.string().min(1),
-  type: z.string().min(1),
-  target: z.string().min(1),
-  interval: z.number().int().min(10).default(60),
-  service_type: z.string().optional(),
-  endpoint: z.string().optional(),
-  check_interval_seconds: z.number().int().min(10).optional(),
-  timeout_seconds: z.number().int().min(1).default(10),
+  name: z.string().min(1).max(255),
+  service_type: z.enum([
+    "database",
+    "redis",
+    "api",
+    "zabbix",
+    "smtp",
+    "dns",
+    "webhook",
+    "external_api",
+    "filesystem",
+    "queue",
+    "custom",
+  ]),
+  endpoint: z.string().url().optional(),
+  check_interval_seconds: z.number().int().min(10).max(86400).default(60),
+  timeout_seconds: z.number().int().min(1).max(300).default(10),
   expected_status_code: z.number().int().min(100).max(599).optional(),
   is_active: z.boolean().default(true),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).default({}),
 });
 export type CreateHealthCheckInput = z.infer<typeof createHealthCheckSchema>;
 
 export const updateHealthCheckSchema = z.object({
-  name: z.string().optional(),
-  interval: z.number().int().min(10).optional(),
+  name: z.string().min(1).max(255).optional(),
+  service_type: z
+    .enum([
+      "database",
+      "redis",
+      "api",
+      "zabbix",
+      "smtp",
+      "dns",
+      "webhook",
+      "external_api",
+      "filesystem",
+      "queue",
+      "custom",
+    ])
+    .optional(),
+  endpoint: z.string().url().optional(),
+  check_interval_seconds: z.number().int().min(10).max(86400).optional(),
+  timeout_seconds: z.number().int().min(1).max(300).optional(),
+  expected_status_code: z.number().int().min(100).max(599).optional(),
   is_active: z.boolean().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 export type UpdateHealthCheckInput = z.infer<typeof updateHealthCheckSchema>;
 
 export const createIncidentSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  severity: z.number().int().min(0).max(5),
+  title: z.string().min(1).max(500),
+  description: z.string().max(5000).optional(),
+  severity: z.enum(["info", "warning", "major", "critical", "maintenance"]),
   health_check_id: z.string().uuid().optional(),
-  status: z.string().default("open"),
-  affected_services: z.array(z.string()).optional(),
-  impact: z.string().optional(),
+  status: z
+    .enum([
+      "investigating",
+      "identified",
+      "monitoring",
+      "resolved",
+      "scheduled",
+    ])
+    .default("investigating"),
+  affected_services: z.array(z.string()).default([]),
+  impact: z
+    .enum(["none", "minor", "moderate", "significant", "severe"])
+    .optional(),
   is_scheduled: z.boolean().default(false),
   scheduled_start: z.string().optional(),
   scheduled_end: z.string().optional(),
@@ -1079,24 +1116,47 @@ export const createIncidentSchema = z.object({
 export type CreateIncidentInput = z.infer<typeof createIncidentSchema>;
 
 export const updateIncidentSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional(),
-  severity: z.number().int().min(0).max(5).optional(),
-  status: z.string().optional(),
-  resolved_at: z.string().optional(),
+  title: z.string().min(1).max(500).optional(),
+  description: z.string().max(5000).optional(),
+  severity: z
+    .enum(["info", "warning", "major", "critical", "maintenance"])
+    .optional(),
+  status: z
+    .enum([
+      "investigating",
+      "identified",
+      "monitoring",
+      "resolved",
+      "scheduled",
+    ])
+    .optional(),
+  root_cause: z.string().max(5000).optional(),
+  resolution_notes: z.string().max(5000).optional(),
+  impact: z
+    .enum(["none", "minor", "moderate", "significant", "severe"])
+    .optional(),
   affected_services: z.array(z.string()).optional(),
 });
 export type UpdateIncidentInput = z.infer<typeof updateIncidentSchema>;
 
 export const recordMetricSchema = z.object({
-  health_check_id: z.string().uuid(),
+  metric_name: z.string().min(1).max(255),
+  metric_type: z.enum([
+    "cpu",
+    "memory",
+    "disk",
+    "network",
+    "database",
+    "redis",
+    "api",
+    "queue",
+    "custom",
+  ]),
   value: z.number(),
-  unit: z.string().optional(),
-  threshold_critical: z.number().optional(),
+  unit: z.string().min(1).max(50).default("percent"),
+  labels: z.record(z.unknown()).default({}),
   threshold_warning: z.number().optional(),
-  metric_name: z.string().optional(),
-  metric_type: z.string().optional(),
-  labels: z.record(z.unknown()).optional(),
+  threshold_critical: z.number().optional(),
 });
 export type RecordMetricInput = z.infer<typeof recordMetricSchema>;
 
