@@ -1,64 +1,63 @@
-feat(backup): fix command injection, schemas, try/catch, parallelize, rate limit
+feat(notifications): fix 5 schemas, N+1 query, try/catch, rate limit, parallelize
 
 Security (CRITICAL):
-- backup.ts: Fixed command injection vulnerability in POST /jobs/:id/run and
-  POST /restore. tar/ssh commands were using unsanitized user input
-  (source_path, destination_path, target_host) directly in shell commands.
-  Added isSafePath() and isSafeHostname() helpers that block shell
-  metacharacters (;, |, `, $, &, etc.), path traversal (..), and command
-  substitution ($(), ``). Applied on POST /jobs (creation), PUT /jobs
-  (update), POST /jobs/:id/run (execution), and POST /restore.
-- backup.ts: Fixed calculateFileChecksum to use Node.js crypto.createHash
-  with streaming (createReadStream) instead of execSync(`sha256sum ...`)
-  which was vulnerable to command injection via filePath.
-- backup.ts: Revalidates paths from DB before using in shell commands
-  (defense in depth — even if DB data was tampered).
-- shared-validation/src/index.ts: Fixed createBackupJobSchema — compression
-  was boolean but DB expects string enum (none/gzip/zstd/bzip2/lz4).
-  backup_type was missing 'snapshot'. destination_type was missing
-  'azure_blob' and 'gcs'. createRestoreSchema required job_id but endpoint
-  uses snapshot_id; was missing required target_host and target_path.
-- backup.ts: Fixed user.sub crash risk — replaced with user?.sub ?? null
-  in all 8 occurrences (POST /jobs, PUT /jobs, DELETE /jobs, POST /jobs/:id/run,
-  POST /snapshots/:id/verify, POST /restore).
-- backup.ts: Added rateLimitWrite on POST /jobs, PUT /jobs/:id,
-  DELETE /jobs/:id, POST /jobs/:id/run, POST /snapshots/:id/verify,
-  POST /restore (6 endpoints).
+- shared-validation/src/index.ts: Fixed all 5 notification schemas to match
+  DB migration. createChannelSchema had `type` field instead of
+  `channel_type`; was missing `discord`, `pagerduty`, `web_push` in enum;
+  had `whatsapp` which doesn't exist in DB. createRuleSchema had
+  `channel_id` (singular) instead of `channel_ids` (array); had
+  `conditions` field that doesn't exist in DB; had `severity_filter` as
+  array instead of string enum; `event_source` and `event_category` were
+  optional but DB is NOT NULL. updateRuleSchema only allowed updating
+  `name`, `conditions`, `is_active` — was missing `description`,
+  `event_source`, `event_category`, `severity_filter`, `channel_ids`,
+  `template_subject`, `template_body`, `cooldown_minutes`.
+  sendNotificationSchema had `event_source`, `event_category`, `severity`
+  as optional but DB is NOT NULL; `severity` was free string instead of
+  enum; had `channel_id` and `to` fields that don't map to DB columns.
+- notifications.ts: Fixed user.sub crash risk — replaced with user?.sub
+  ?? null in all 8 occurrences.
+- notifications.ts: Added rateLimitWrite on POST /channels, PUT
+  /channels/:id, DELETE /channels/:id, POST /channels/:id/test,
+  POST /rules, PUT /rules/:id, DELETE /rules/:id, POST /send
+  (8 endpoints).
 
 Performance:
-- backup.ts: Parallelized 2 queries in GET / using Promise.all.
-- backup.ts: Parallelized 2 queries in GET /jobs/:id using Promise.all
-  (snapshots + restores were sequential).
-- backup.ts: Parallelized 3 queries in GET /stats using Promise.all
-  (jobs + snapshots + recent were sequential).
-- backup.ts: Added httpCache(30) on GET /jobs, GET /snapshots,
-  GET /restores, GET /stats.
+- notifications.ts: Parallelized 2 queries in GET / using Promise.all.
+- notifications.ts: Parallelized 4 queries in GET /stats using Promise.all
+  (channels + rules + log + byCategory were sequential).
+- notifications.ts: Eliminated N+1 query in POST /send — was querying
+  each channel individually inside nested loop. Now fetches all channels
+  in a single query using `WHERE id = ANY($1::uuid[])` and builds a Map
+  for O(1) lookup.
+- notifications.ts: Added httpCache(30) on GET /channels, GET /rules,
+  GET /log, GET /stats.
 
 Code quality:
-- backup.ts: Added try/catch on all 12 endpoints with generic Portuguese
-  error messages and structured logging.
-- backup.ts: Added logger with tenantId, jobId, snapshotId, restoreId
-  context. Logs backup failures, successes, and restore outcomes.
-- backup.ts: Added safeJsonBody() for safe request body parsing.
-- backup.ts: Added validation error details (parsed.error.flatten()) to
-  all error responses.
-- backup.ts: Fixed error_message not being stored on backup_snapshots
-  and backup_restores when operations fail (now truncates to 5000 chars).
-- backup.ts: Fixed DELETE /jobs/:id and PUT /jobs/:id to return 404 when
-  job not found (was returning success regardless).
-- backup.ts: Removed unused imports (execSync, type imports).
+- notifications.ts: Added try/catch on all 12 endpoints with generic
+  Portuguese error messages and structured logging.
+- notifications.ts: Added logger with tenantId, channelId, ruleId
+  context. Logs channel creation, rule creation, notification sends,
+  and channel tests.
+- notifications.ts: Added safeJsonBody() for safe request body parsing.
+- notifications.ts: Added validation error details (parsed.error.flatten())
+  to all error responses.
+- notifications.ts: Fixed DELETE /channels/:id, DELETE /rules/:id,
+  PUT /channels/:id, PUT /rules/:id to return 404 when not found
+  (was returning success regardless).
+- notifications.ts: Removed information disclosure — error message in
+  /channels/:id/test was leaking deliveryResult.error to client;
+  replaced with generic "Falha no teste do canal".
 
 Tests:
-- backup.test.ts (NEW): 79 tests covering all 3 Zod schemas
-  (createBackupJob, updateBackupJob, createRestore) with all enum values,
-  defaults, and edge cases; isSafePath SSRF/command injection protection
-  (17 path tests covering traversal, semicolons, pipes, backticks, command
-  substitution, globs, newlines); isSafeHostname protection (12 host tests);
-  compression flag logic (gzip vs none vs zstd); restore logic (file
-  extension detection, overwrite flag, remote vs localhost, checksum
-  verification conditions).
+- notifications.test.ts (REWRITTEN): 70 tests covering all 5 Zod schemas
+  (createChannel, updateChannel, createRule, updateRule, sendNotification)
+  with all enum values, defaults, and edge cases; cooldown logic;
+  template fallback logic (template_subject vs data.subject); severity
+  filter matching logic (all/info/warning/critical). Removed 7 obsolete
+  tests that used removed `type` field and `whatsapp` channel type.
 
-Total: 732 tests passing (was 653, +79 new).
+Total: 795 tests passing (was 732, +63 net new).
 
 Generated with [Devin](https://devin.ai)
 

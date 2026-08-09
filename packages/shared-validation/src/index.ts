@@ -571,16 +571,36 @@ export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 
 // ========== Notification Schemas ==========
 export const createChannelSchema = z.object({
-  name: z.string().min(1),
-  type: z.enum(["email", "slack", "teams", "webhook", "telegram", "whatsapp"]),
-  config: z.record(z.unknown()),
-  channel_type: z.string().optional(),
+  name: z.string().min(1).max(255),
+  channel_type: z.enum([
+    "slack",
+    "email",
+    "webhook",
+    "teams",
+    "telegram",
+    "discord",
+    "pagerduty",
+    "web_push",
+  ]),
+  config: z.record(z.unknown()).default({}),
   is_active: z.boolean().default(true),
 });
 export type CreateChannelInput = z.infer<typeof createChannelSchema>;
 
 export const updateChannelSchema = z.object({
-  name: z.string().optional(),
+  name: z.string().min(1).max(255).optional(),
+  channel_type: z
+    .enum([
+      "slack",
+      "email",
+      "webhook",
+      "teams",
+      "telegram",
+      "discord",
+      "pagerduty",
+      "web_push",
+    ])
+    .optional(),
   config: z.record(z.unknown()).optional(),
   is_active: z.boolean().optional(),
   is_verified: z.boolean().optional(),
@@ -588,37 +608,130 @@ export const updateChannelSchema = z.object({
 export type UpdateChannelInput = z.infer<typeof updateChannelSchema>;
 
 export const createRuleSchema = z.object({
-  name: z.string().min(1),
-  channel_id: z.string().uuid(),
-  conditions: z.record(z.unknown()),
+  name: z.string().min(1).max(255),
+  description: z.string().max(5000).optional(),
+  event_source: z.enum([
+    "ssl.expiring_soon",
+    "ssl.expired",
+    "ssl.revoked",
+    "backup.completed",
+    "backup.failed",
+    "backup.corrupted",
+    "k8s.pod_crash",
+    "k8s.node_down",
+    "k8s.event_warning",
+    "firewall.applied",
+    "firewall.failed",
+    "script.executed",
+    "script.failed",
+    "script.approval_needed",
+    "monitoring.cpu_high",
+    "monitoring.disk_high",
+    "monitoring.memory_high",
+    "monitoring.service_down",
+    "custom",
+  ]),
+  event_category: z.enum([
+    "security",
+    "backup",
+    "k8s",
+    "firewall",
+    "script",
+    "monitoring",
+    "custom",
+  ]),
+  severity_filter: z
+    .enum(["all", "info", "warning", "critical"])
+    .default("all"),
+  channel_ids: z.array(z.string().uuid()).default([]),
+  template_subject: z.string().max(500).optional(),
+  template_body: z.string().max(10000).optional(),
+  cooldown_minutes: z.number().int().min(0).max(10080).default(60),
   is_active: z.boolean().default(true),
-  description: z.string().optional(),
-  event_source: z.string().optional(),
-  event_category: z.string().optional(),
-  severity_filter: z.array(z.string()).optional(),
-  channel_ids: z.array(z.string().uuid()).optional(),
-  template_subject: z.string().optional(),
-  template_body: z.string().optional(),
-  cooldown_minutes: z.number().int().min(0).optional(),
 });
 export type CreateRuleInput = z.infer<typeof createRuleSchema>;
 
 export const updateRuleSchema = z.object({
-  name: z.string().optional(),
-  conditions: z.record(z.unknown()).optional(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(5000).optional(),
+  event_source: z
+    .enum([
+      "ssl.expiring_soon",
+      "ssl.expired",
+      "ssl.revoked",
+      "backup.completed",
+      "backup.failed",
+      "backup.corrupted",
+      "k8s.pod_crash",
+      "k8s.node_down",
+      "k8s.event_warning",
+      "firewall.applied",
+      "firewall.failed",
+      "script.executed",
+      "script.failed",
+      "script.approval_needed",
+      "monitoring.cpu_high",
+      "monitoring.disk_high",
+      "monitoring.memory_high",
+      "monitoring.service_down",
+      "custom",
+    ])
+    .optional(),
+  event_category: z
+    .enum([
+      "security",
+      "backup",
+      "k8s",
+      "firewall",
+      "script",
+      "monitoring",
+      "custom",
+    ])
+    .optional(),
+  severity_filter: z.enum(["all", "info", "warning", "critical"]).optional(),
+  channel_ids: z.array(z.string().uuid()).optional(),
+  template_subject: z.string().max(500).optional(),
+  template_body: z.string().max(10000).optional(),
+  cooldown_minutes: z.number().int().min(0).max(10080).optional(),
   is_active: z.boolean().optional(),
 });
 export type UpdateRuleInput = z.infer<typeof updateRuleSchema>;
 
 export const sendNotificationSchema = z.object({
-  channel_id: z.string().uuid().optional(),
-  to: z.string().optional(),
-  subject: z.string().min(1),
-  body: z.string().min(1),
-  event_source: z.string().optional(),
-  event_category: z.string().optional(),
-  severity: z.string().optional(),
-  payload: z.record(z.unknown()).optional(),
+  subject: z.string().min(1).max(500),
+  body: z.string().min(1).max(10000),
+  event_source: z.enum([
+    "ssl.expiring_soon",
+    "ssl.expired",
+    "ssl.revoked",
+    "backup.completed",
+    "backup.failed",
+    "backup.corrupted",
+    "k8s.pod_crash",
+    "k8s.node_down",
+    "k8s.event_warning",
+    "firewall.applied",
+    "firewall.failed",
+    "script.executed",
+    "script.failed",
+    "script.approval_needed",
+    "monitoring.cpu_high",
+    "monitoring.disk_high",
+    "monitoring.memory_high",
+    "monitoring.service_down",
+    "custom",
+  ]),
+  event_category: z.enum([
+    "security",
+    "backup",
+    "k8s",
+    "firewall",
+    "script",
+    "monitoring",
+    "custom",
+  ]),
+  severity: z.enum(["info", "warning", "critical"]),
+  payload: z.record(z.unknown()).default({}),
 });
 export type SendNotificationInput = z.infer<typeof sendNotificationSchema>;
 
