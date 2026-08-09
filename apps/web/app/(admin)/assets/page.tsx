@@ -219,6 +219,33 @@ export default function AssetsPage() {
   } = useApi<{ devices: ZabbixHost[] }>("/api/zabbix/devices");
   const zDevices = useMemo(() => zData?.devices ?? [], [zData]);
 
+  // Stats efetivos — soma devices do Zabbix ao total do CMDB
+  const effectiveStats: AssetStats = useMemo(() => {
+    const base = stats ?? {
+      total: "0",
+      by_status: [],
+      by_type: [],
+      by_criticality: [],
+      warranty: {
+        expired: "0",
+        expiring_soon: "0",
+        valid: "0",
+        no_warranty: "0",
+      },
+      licenses: {
+        total: "0",
+        expired: "0",
+        expiring_soon: "0",
+        total_cost: "0",
+      },
+    };
+    const cmdbTotal = parseInt(base.total, 10) || 0;
+    return {
+      ...base,
+      total: String(cmdbTotal + zDevices.length),
+    };
+  }, [stats, zDevices.length]);
+
   // Converte dispositivos Zabbix em assets virtuais para exibir na tabela unificada
   const zabbixAsAssets = useMemo(() => {
     return zDevices.map((d) => {
@@ -543,7 +570,7 @@ export default function AssetsPage() {
       )}
 
       {/* Stats */}
-      {stats && (
+      {effectiveStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div
             className="p-4 rounded-xl"
@@ -559,7 +586,7 @@ export default function AssetsPage() {
               Total Ativos
             </div>
             <div className="text-2xl font-bold" style={{ color: COLORS.teal }}>
-              {stats.total}
+              {effectiveStats.total}
             </div>
           </div>
           <div
@@ -576,10 +603,10 @@ export default function AssetsPage() {
               Garantia Expirada
             </div>
             <div className="text-2xl font-bold" style={{ color: COLORS.amber }}>
-              {stats.warranty.expired}
+              {effectiveStats.warranty.expired}
             </div>
             <div className="text-[10px]" style={{ color: COLORS.muted }}>
-              {stats.warranty.expiring_soon} expirando
+              {effectiveStats.warranty.expiring_soon} expirando
             </div>
           </div>
           <div
@@ -596,10 +623,10 @@ export default function AssetsPage() {
               Licenças Expiradas
             </div>
             <div className="text-2xl font-bold" style={{ color: COLORS.red }}>
-              {stats.licenses.expired}
+              {effectiveStats.licenses.expired}
             </div>
             <div className="text-[10px]" style={{ color: COLORS.muted }}>
-              {stats.licenses.expiring_soon} expirando
+              {effectiveStats.licenses.expiring_soon} expirando
             </div>
           </div>
           <div
@@ -617,10 +644,9 @@ export default function AssetsPage() {
             </div>
             <div className="text-2xl font-bold" style={{ color: COLORS.blue }}>
               R${" "}
-              {parseFloat(stats.licenses.total_cost || "0").toLocaleString(
-                "pt-BR",
-                { minimumFractionDigits: 0 },
-              )}
+              {parseFloat(
+                effectiveStats.licenses.total_cost || "0",
+              ).toLocaleString("pt-BR", { minimumFractionDigits: 0 })}
             </div>
           </div>
         </div>
