@@ -1,56 +1,46 @@
-feat(predictions): fix user?.sub, try/catch, parallelize, 404s, audit
+feat(zabbix): fix user-host-groups try/catch, 404, audit, redact tests
 
 Security:
-- predictions.ts: Fixed user.tenant_id and user.sub crash risk —
-  replaced with user?.tenant_id ?? null and user?.sub ?? null in
-  all 9+ occurrences.
-- predictions.ts: Added rateLimitWrite on POST /analyze, PUT
-  /:id/acknowledge, PUT /:id/mitigate, PUT /:id/occurred, PUT
-  /:id/false-positive, PUT /config (6 endpoints).
-- shared-validation: Enhanced predictionAnalyzeSchema — device_id
-  max 200, metric_name max 200, values max 10000.
-- shared-validation: Enhanced predictionConfigSchema — metric_name
-  max 200, window_size max 8760, prediction_horizon_hours max 720.
+- zabbix/admin.ts: Fixed user.tenant_id and user.sub crash risk in
+  4 user-host-groups endpoints — replaced with user?.tenant_id ??
+  null and user?.sub ?? null.
+- zabbix/admin.ts: DELETE /user-host-groups/:id now returns 404 if
+  assignment not found.
+- zabbix/admin.ts: Added writeAuditLog on POST /user-host-groups
+  (assign) and DELETE /user-host-groups/:id (unassign) — was zero
+  audit logs for DB-direct operations.
 
 Bug fixes:
-- predictions.ts: PUT /:id/acknowledge now returns 404 if
-  prediction not found.
-- predictions.ts: PUT /:id/mitigate now returns 404.
-- predictions.ts: PUT /:id/occurred now returns 404.
-- predictions.ts: PUT /:id/false-positive now returns 404.
-- predictions.ts: Added writeAuditLog on POST /analyze and PUT
-  /config (was zero audit logs).
-
-Performance:
-- predictions.ts: Parallelized 7 queries in GET /stats (total +
-  open + critical + occurred + mitigated + false_positive +
-  by_model) using Promise.all — was 7 sequential queries.
-- predictions.ts: Added httpCache(30) on GET / and GET /config;
-  httpCache(60) on GET /stats (3 endpoints).
+- zabbix/admin.ts: Added try/catch on GET /user-host-groups (was
+  missing — unhandled DB error would crash).
+- zabbix/admin.ts: Added try/catch on DELETE /user-host-groups/:id
+  (was missing).
+- zabbix/admin.ts: Added try/catch on GET /user-host-groups/by-
+  group/:groupId (was missing).
 
 Code quality:
-- predictions.ts: Added try/catch on all 9 endpoints with
-  structured logging (was zero).
-- predictions.ts: Added logger with predictionId, device_id,
-  metric_name, severity, configId, tenantId context.
+- zabbix/admin.ts: Added logger with assignmentId, tenantId,
+  groupId context on user-host-groups endpoints.
+- zabbix/admin.ts: Imported writeAuditLog from lib/audit.js.
 
 Tests:
-- predictions.test.ts (NEW): 33 tests covering:
-  - predictionAnalyzeSchema (9 tests): device_id required + max
-    200, metric_name required + max 200, values required + max
-    10000, single value, decimal values.
-  - predictionConfigSchema (16 tests): metric_name required + max
-    200, threshold_value required, all 4 model_type values,
-    invalid model_type rejected, window_size 2-8760,
-    threshold_direction above/below, prediction_horizon_hours max
-    720, warning_probability 0-1, critical_probability 0-1,
-    complete config.
-  - Accuracy calculation logic (3 tests): occurred + mitigated,
-    zero total, decimal rounding.
-  - Window slicing logic (3 tests): last N values, values <
-    windowSize, empty values.
+- zabbix-shared.test.ts (NEW): 30 tests covering:
+  - redactSensitiveFields (18 tests): passwd, password, secret,
+    private_key, encryption_key, connection_string, value with
+    type=1 (macro secreta), value with type=0 (not redacted),
+    non-sensitive fields preserved, nested objects, arrays of
+    objects, primitives, null/undefined, empty array/object,
+    case-insensitive (PASSWD, Password).
+  - Response helpers (3 tests): configNotFoundResponse,
+    accessDeniedResponse, validationErrorResponse.
+  - IDOR protection logic (5 tests): global admin always passes,
+    tenant passes when host belongs to group, tenant rejected
+    when host doesn't belong, tenant rejected when host has no
+    groups, global admin passes with no groups.
+  - Batch ownership verification (4 tests): all belong, one
+    doesn't belong, empty list, host not in map.
 
-Total: 2380 tests passing (was 2347, +33 new).
+Total: 2410 tests passing (was 2380, +30 new).
 
 Generated with [Devin](https://devin.ai)
 

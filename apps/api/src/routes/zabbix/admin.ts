@@ -8,6 +8,7 @@
 
 import type { Hono } from "hono";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import {
   zabbixCreateMaintenanceSchema,
   zabbixCreateHostGroupSchema,
@@ -28,6 +29,7 @@ import {
   redactSensitiveFields,
   enqueueWriteJob,
 } from "./shared.js";
+import { writeAuditLog } from "../../lib/audit.js";
 
 export function registerAdminRoutes(zabbixRoute: Hono) {
   // ==================== TEMPLATES ====================
@@ -583,25 +585,37 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
   // ==================== USER HOST GROUP ASSIGNMENT ====================
   zabbixRoute.get("/user-host-groups", async (c) => {
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const tenantId = user?.tenant_id ?? null;
     const userId = c.req.query("user_id");
 
-    let sql = `SELECT id, user_id, zabbix_host_group_id, zabbix_host_group_name, created_at
-               FROM public.user_host_groups WHERE tenant_id = $1`;
-    const params: unknown[] = [tenantId];
-    if (userId) {
-      sql += ` AND user_id = $2`;
-      params.push(userId);
-    }
-    sql += ` ORDER BY created_at DESC`;
+    try {
+      let sql = `SELECT id, user_id, zabbix_host_group_id, zabbix_host_group_name, created_at
+                 FROM public.user_host_groups WHERE tenant_id = $1`;
+      const params: unknown[] = [tenantId];
+      if (userId) {
+        sql += ` AND user_id = $2`;
+        params.push(userId);
+      }
+      sql += ` ORDER BY created_at DESC`;
 
-    const result = await query(sql, params);
-    return c.json({ data: result.data?.rows ?? [] });
+      const result = await query(sql, params);
+      return c.json({ data: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao listar user-host-groups", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   });
 
   zabbixRoute.post("/user-host-groups", async (c) => {
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
     try {
       const body = await c.req.json();
@@ -623,53 +637,125 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
         ],
       );
 
-      return c.json({ ok: true, id: result.data?.rows[0]?.id });
+      const assignmentId = result.data?.rows[0]?.id;
+
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "zabbix.user_host_group.assign",
+            entityType: "user_host_groups",
+            entityId: assignmentId,
+            newData: {
+              user_id: parsed.data.user_id,
+              zabbix_host_group_id: parsed.data.zabbix_host_group_id,
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      logger.info("User-host-group atribuido", {
+        assignmentId,
+        tenantId,
+      });
+
+      return c.json({ ok: true, id: assignmentId });
     } catch (error) {
-      return c.json(zabbixErrorResponse(error), 502);
+      logger.error("Erro ao atribuir user-host-group", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "CREATE_ERROR", message: "Erro ao atribuir" } },
+        500,
+      );
     }
   });
 
   zabbixRoute.delete("/user-host-groups/:id", async (c) => {
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
     const assignmentId = c.req.param("id");
 
-    const result = await query(
-      "DELETE FROM public.user_host_groups WHERE id = $1 AND tenant_id = $2",
-      [assignmentId, tenantId],
-    );
+    try {
+      const result = await query(
+        "DELETE FROM public.user_host_groups WHERE id = $1 AND tenant_id = $2",
+        [assignmentId, tenantId],
+      );
 
-    if (result.error) {
-      return c.json(
-        {
-          error: {
-            code: "DELETE_ERROR",
-            message: "Erro ao remover atribuição",
+      if (result.data?.rowCount === 0) {
+        return c.json(
+          {
+            error: {
+              code: "NOT_FOUND",
+              message: "Atribuição não encontrada",
+            },
           },
-        },
+          404,
+        );
+      }
+
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "zabbix.user_host_group.unassign",
+            entityType: "user_host_groups",
+            entityId: assignmentId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      logger.info("User-host-group removido", { assignmentId, tenantId });
+
+      return c.json({ ok: true });
+    } catch (error) {
+      logger.error("Erro ao remover user-host-group", {
+        assignmentId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "DELETE_ERROR", message: "Erro ao remover" } },
         500,
       );
     }
-
-    return c.json({ ok: true });
   });
 
   zabbixRoute.get("/user-host-groups/by-group/:groupId", async (c) => {
     const user = c.get("user");
-    const tenantId = user.tenant_id;
+    const tenantId = user?.tenant_id ?? null;
     const groupId = c.req.param("groupId");
 
-    const result = await query(
-      `SELECT uhg.id, uhg.user_id, uhg.zabbix_host_group_id, uhg.zabbix_host_group_name, uhg.created_at,
-              u.email, u.full_name
-       FROM public.user_host_groups uhg
-       JOIN public.users u ON uhg.user_id = u.id
-       WHERE uhg.tenant_id = $1 AND uhg.zabbix_host_group_id = $2
-       ORDER BY uhg.created_at DESC`,
-      [tenantId, groupId],
-    );
+    try {
+      const result = await query(
+        `SELECT uhg.id, uhg.user_id, uhg.zabbix_host_group_id, uhg.zabbix_host_group_name, uhg.created_at,
+                u.email, u.full_name
+         FROM public.user_host_groups uhg
+         JOIN public.users u ON uhg.user_id = u.id
+         WHERE uhg.tenant_id = $1 AND uhg.zabbix_host_group_id = $2
+         ORDER BY uhg.created_at DESC`,
+        [tenantId, groupId],
+      );
 
-    return c.json({ data: result.data?.rows ?? [] });
+      return c.json({ data: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao buscar user-host-groups by group", {
+        tenantId,
+        groupId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   });
 
   // ==================== NOVOS ENDPOINTS ZABBIX 7.4 ====================
