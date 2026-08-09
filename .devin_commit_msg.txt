@@ -1,47 +1,56 @@
-feat(sla): fix IDOR, info disclosure, parallelize queries, add rate limiting
+feat(contracts): fix IDOR, N+1 queries, add rate limiting, try/catch, logger
 
 Security (CRITICAL):
-- sla.ts: Fixed information disclosure — all DB error messages were
-  leaked to client via `result.error.message`. Replaced with generic
-  Portuguese messages. Affects 8+ endpoints.
-- sla.ts: Fixed IDOR in POST /incidents — now verifies service_id
-  belongs to tenant before creating incident (was missing, allowing
-  incident creation on other tenants' services).
-- sla.ts: Fixed crash risk — `user.tenant_id` was used directly
-  instead of `user?.tenant_id ?? null`, causing crash if user is
-  undefined. Fixed in all 15+ endpoints.
-- sla.ts: Added rateLimitWrite on POST /services, PUT /services/:id,
-  DELETE /services/:id, POST /incidents, PUT /incidents/:id,
-  POST /maintenance, PUT /maintenance/:id, DELETE /maintenance/:id.
-- shared-validation: Added enum validation for service status
-  (operational, degraded, down, maintenance), incident status
-  (open, investigating, resolved, closed), maintenance status
-  (scheduled, active, completed, cancelled), and maintenance_type
-  (scheduled, emergency, corrective). Added max length constraints.
+- contracts.ts: Fixed IDOR in /hour-bank, /hour-bank/periods,
+  /hour-bank/close — added verifyContractOwnership() check before
+  accessing hour bank data. Was allowing any tenant to access other
+  tenants' contract hour bank summaries and close periods.
+- contracts.ts: Fixed IDOR in POST /work-logs and POST /work-logs/start
+  — added verifyTicketOwnership() check ensuring ticket_id belongs to
+  tenant before creating work log. Also added verifyContractOwnership()
+  when contract_id is explicitly provided.
+- contracts.ts: Fixed IDOR in GET /:id/work-logs — added tenant_id
+  filter via JOIN with tenant_contracts.
+- contracts.ts: Fixed IDOR in GET /tickets/:ticketId/work-logs — added
+  tenant_id filter via JOIN with tickets.
+- contracts.ts: Fixed IDOR in GET /work-logs/active — added tenant_id
+  filter to query.
+- contracts.ts: Fixed info disclosure in /hour-bank/close —
+  result.error?.message was leaked to client. Replaced with generic
+  Portuguese message.
+- contracts.ts: Added rateLimitWrite on POST /, PUT /:id, DELETE /:id,
+  POST /work-logs, PUT /work-logs/:logId, DELETE /work-logs/:logId,
+  POST /work-logs/start, POST /work-logs/:logId/pause,
+  POST /work-logs/:logId/resume, POST /work-logs/:logId/finish,
+  POST /:id/hour-bank/close (11 endpoints).
 
 Performance:
-- sla.ts: Parallelized 2 sequential queries in GET / with Promise.all.
-  Added httpCache(30).
-- sla.ts: Parallelized 4 sequential queries in GET /dashboard with
-  Promise.all (slaResult, incidentsResult, aggregateResult, trendResult).
-  Added structured logging with durationMs.
-- sla.ts: Added httpCache(30) on /services, httpCache(15) on /incidents,
-  httpCache(30) on /maintenance.
+- contracts.ts: Fixed N+1 query in GET / — replaced 2 correlated
+  subqueries per row with a single LATERAL JOIN. Reduces O(N*2)
+  subquery executions to O(1) join.
+- contracts.ts: Added httpCache(30) on GET / for list caching.
+- contracts.ts: Parallelized audit log write with rate recalculation
+  in POST /work-logs/:logId/finish using Promise.
 
 Code quality:
-- sla.ts: Added try/catch on all 15 endpoints with graceful error
+- contracts.ts: Added try/catch on all 15 endpoints with graceful error
   responses and structured logging via @repo/logger.
-- sla.ts: Added logger with tenantId, serviceId, incidentId,
-  maintenanceId, and durationMs context.
+- contracts.ts: Added logger with tenantId, contractId, ticketId,
+  logId, workLogId context.
+- contracts.ts: Added verifyContractOwnership() and
+  verifyTicketOwnership() helper functions for reusable IDOR checks.
+- contracts.ts: Added validation error details (parsed.error.flatten())
+  to PUT /:id and PUT /work-logs/:logId error responses (was missing).
 
 Tests:
-- sla.test.ts (NEW): 64 tests covering all Zod schemas (createService,
-  updateService, createMaintenanceWindow, updateMaintenanceWindow,
-  createServiceIncident, updateServiceIncident, slaReportQuery),
-  uptime calculation, MTTR calculation, weighted SLA by priority,
-  and edge cases (empty tenant, feature flag, incident resolution).
+- contracts.test.ts (NEW): 87 tests covering all Zod schemas
+  (createContract, updateContract, createWorkLog, updateWorkLog,
+  startWorkLog, finishWorkLog), amount calculation, rate map by
+  work_type, carry-over rules, minutes-to-hours conversion, edge cases
+  (open-ended contract, on_demand with 0 hours, non-billable work log),
+  and IDOR protection logic.
 
-Total: 447 tests passing (was 383, +64 new).
+Total: 534 tests passing (was 447, +87 new).
 
 Generated with [Devin](https://devin.ai)
 

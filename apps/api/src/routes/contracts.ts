@@ -3,8 +3,11 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { safeJsonBody } from "../lib/safe-json.js";
 import { requirePermission } from "../middleware/require-permission.js";
+import { rateLimitWrite } from "../middleware/rate-limit.js";
+import { httpCache } from "../middleware/http-cache.js";
 import "../types.js";
 
 export const contractsRoute = new Hono();
@@ -95,32 +98,91 @@ const finishWorkLogSchema = z.object({
   billable: z.boolean().optional(),
 });
 
+// Helper: verifica se contrato pertence ao tenant (protecao IDOR)
+async function verifyContractOwnership(
+  contractId: string,
+  tenantId: string | null,
+): Promise<boolean> {
+  const result = await query<{ id: string }>(
+    "SELECT id FROM public.tenant_contracts WHERE id = $1 AND tenant_id = $2",
+    [contractId, tenantId],
+  );
+  return !!result.data?.rows[0];
+}
+
+// Helper: verifica se ticket pertence ao tenant (protecao IDOR)
+async function verifyTicketOwnership(
+  ticketId: string,
+  tenantId: string | null,
+): Promise<boolean> {
+  const result = await query<{ id: string }>(
+    "SELECT id FROM public.tickets WHERE id = $1 AND tenant_id = $2",
+    [ticketId, tenantId],
+  );
+  return !!result.data?.rows[0];
+}
+
 // ========== Contracts CRUD ==========
 
-// GET /api/v1/contracts — lista contratos do tenant
-contractsRoute.get("/", requirePermission("tickets:read"), async (c) => {
-  const user = c.get("user");
-  const tenantId = user?.tenant_id ?? null;
-  const activeOnly = c.req.query("active") === "true";
+// GET /api/v1/contracts — lista contratos do tenant (otimizado, sem N+1)
+contractsRoute.get(
+  "/",
+  httpCache(30),
+  requirePermission("tickets:read"),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const activeOnly = c.req.query("active") === "true";
 
-  let sql = `
-    SELECT tc.*,
-      (SELECT SUM(minutes_worked) / 60.0 FROM public.ticket_work_logs
-       WHERE contract_id = tc.id AND billable = true
-       AND started_at >= DATE_TRUNC('month', now())) as used_hours_current_month,
-      (SELECT COUNT(*) FROM public.ticket_work_logs WHERE contract_id = tc.id) as total_work_logs
-    FROM public.tenant_contracts tc
-    WHERE tc.tenant_id = $1
-  `;
-  const params: unknown[] = [tenantId];
-  if (activeOnly) {
-    sql += ` AND tc.is_active = true`;
-  }
-  sql += ` ORDER BY tc.created_at DESC`;
+    // Otimizado: LATERAL JOIN em vez de 2 subqueries correlacionadas por linha
+    let sql = `
+      SELECT tc.*,
+        wlm.used_hours_current_month,
+        wlm.total_work_logs
+      FROM public.tenant_contracts tc
+      LEFT JOIN LATERAL (
+        SELECT
+          COALESCE(SUM(minutes_worked) FILTER (WHERE billable = true
+            AND started_at >= DATE_TRUNC('month', now())) / 60.0, 0) as used_hours_current_month,
+          COUNT(*) as total_work_logs
+        FROM public.ticket_work_logs
+        WHERE contract_id = tc.id
+      ) wlm ON true
+      WHERE tc.tenant_id = $1
+    `;
+    const params: unknown[] = [tenantId];
+    if (activeOnly) {
+      sql += ` AND tc.is_active = true`;
+    }
+    sql += ` ORDER BY tc.created_at DESC`;
 
-  const result = await query(sql, params);
-  return c.json({ contracts: result.data?.rows ?? [] });
-});
+    try {
+      const result = await query(sql, params);
+      if (result.error) {
+        logger.error("Erro ao listar contratos", {
+          tenantId,
+          error: result.error.message,
+        });
+        return c.json(
+          {
+            error: { code: "QUERY_ERROR", message: "Erro ao buscar contratos" },
+          },
+          500,
+        );
+      }
+      return c.json({ contracts: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro inesperado ao listar contratos", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
+  },
+);
 
 // GET /api/v1/contracts/:id — detalhe
 contractsRoute.get("/:id", requirePermission("tickets:read"), async (c) => {
@@ -128,24 +190,39 @@ contractsRoute.get("/:id", requirePermission("tickets:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
-  const result = await query(
-    `SELECT * FROM public.tenant_contracts WHERE id = $1 AND tenant_id = $2`,
-    [id, tenantId],
-  );
+  try {
+    const result = await query(
+      `SELECT * FROM public.tenant_contracts WHERE id = $1 AND tenant_id = $2`,
+      [id, tenantId],
+    );
 
-  if (!result.data?.rows[0]) {
+    if (result.error || !result.data?.rows[0]) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+        404,
+      );
+    }
+
+    return c.json({ contract: result.data.rows[0] });
+  } catch (error) {
+    logger.error("Erro ao buscar detalhe do contrato", {
+      contractId: id,
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return c.json(
-      { error: { code: "NOT_FOUND", message: "Contrato nao encontrado" } },
-      404,
+      {
+        error: { code: "INTERNAL_ERROR", message: "Erro ao carregar contrato" },
+      },
+      500,
     );
   }
-
-  return c.json({ contract: result.data.rows[0] });
 });
 
 // POST /api/v1/contracts — criar
 contractsRoute.post(
   "/",
+  rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
     const user = c.get("user");
@@ -159,7 +236,7 @@ contractsRoute.post(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Dados invalidos",
+            message: "Dados inválidos",
             details: parsed.error.flatten(),
           },
         },
@@ -168,62 +245,85 @@ contractsRoute.post(
     }
 
     const d = parsed.data;
-    const result = await query<{ id: string }>(
-      `INSERT INTO public.tenant_contracts
-        (tenant_id, contract_number, name, contract_type, contracted_hours,
-         period_type, billing_day, carry_over_rule, carry_over_limit_hours,
-         carry_over_expire_days, overtime_enabled, overtime_rate,
-         rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research,
-         rate_default, start_date, end_date, auto_close_tickets_on_expire, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::date,$20::date,$21,$22)
-       RETURNING id`,
-      [
-        tenantId,
-        d.contract_number ?? null,
-        d.name,
-        d.contract_type,
-        d.contracted_hours,
-        d.period_type,
-        d.billing_day,
-        d.carry_over_rule,
-        d.carry_over_limit_hours ?? null,
-        d.carry_over_expire_days ?? null,
-        d.overtime_enabled,
-        d.overtime_rate ?? null,
-        d.rate_diagnosis ?? null,
-        d.rate_fix ?? null,
-        d.rate_monitoring ?? null,
-        d.rate_meeting ?? null,
-        d.rate_research ?? null,
-        d.rate_default ?? null,
-        d.start_date,
-        d.end_date ?? null,
-        d.auto_close_tickets_on_expire,
-        d.notes ?? null,
-      ],
-    );
+    try {
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.tenant_contracts
+          (tenant_id, contract_number, name, contract_type, contracted_hours,
+           period_type, billing_day, carry_over_rule, carry_over_limit_hours,
+           carry_over_expire_days, overtime_enabled, overtime_rate,
+           rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research,
+           rate_default, start_date, end_date, auto_close_tickets_on_expire, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::date,$20::date,$21,$22)
+         RETURNING id`,
+        [
+          tenantId,
+          d.contract_number ?? null,
+          d.name,
+          d.contract_type,
+          d.contracted_hours,
+          d.period_type,
+          d.billing_day,
+          d.carry_over_rule,
+          d.carry_over_limit_hours ?? null,
+          d.carry_over_expire_days ?? null,
+          d.overtime_enabled,
+          d.overtime_rate ?? null,
+          d.rate_diagnosis ?? null,
+          d.rate_fix ?? null,
+          d.rate_monitoring ?? null,
+          d.rate_meeting ?? null,
+          d.rate_research ?? null,
+          d.rate_default ?? null,
+          d.start_date,
+          d.end_date ?? null,
+          d.auto_close_tickets_on_expire,
+          d.notes ?? null,
+        ],
+      );
 
-    if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
+        logger.error("Erro ao criar contrato", {
+          tenantId,
+          error: result.error?.message,
+        });
+        return c.json(
+          {
+            error: { code: "CREATE_ERROR", message: "Erro ao criar contrato" },
+          },
+          500,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'contract.create', 'tenant_contract', $2, $3, NULL, NULL)",
+          [user.sub, result.data.rows[0].id, JSON.stringify({ name: d.name })],
+        );
+      }
+
+      logger.info("Contrato criado", {
+        contractId: result.data.rows[0].id,
+        tenantId,
+      });
+
+      return c.json({ id: result.data.rows[0].id }, 201);
+    } catch (error) {
+      logger.error("Erro inesperado ao criar contrato", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
         { error: { code: "CREATE_ERROR", message: "Erro ao criar contrato" } },
         500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'contract.create', 'tenant_contract', $2, $3, NULL, NULL)",
-        [user.sub, result.data.rows[0].id, JSON.stringify({ name: d.name })],
-      );
-    }
-
-    return c.json({ id: result.data.rows[0].id }, 201);
   },
 );
 
 // PUT /api/v1/contracts/:id — atualizar
 contractsRoute.put(
   "/:id",
+  rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
     const id = c.req.param("id");
@@ -235,7 +335,13 @@ contractsRoute.put(
     const parsed = updateContractSchema.safeParse(bodyResult.data);
     if (!parsed.success) {
       return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
         400,
       );
     }
@@ -292,58 +398,93 @@ contractsRoute.put(
     }
 
     params.push(id, tenantId);
-    const result = await query(
-      `UPDATE public.tenant_contracts SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
-      params,
-    );
+    try {
+      const result = await query(
+        `UPDATE public.tenant_contracts SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
+        params,
+      );
 
-    if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'contract.update', 'tenant_contract', $2, $3, NULL, NULL)",
+          [user.sub, id, JSON.stringify(d)],
+        );
+      }
+
+      return c.json({ id, updated: true });
+    } catch (error) {
+      logger.error("Erro ao atualizar contrato", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Contrato nao encontrado" } },
-        404,
+        {
+          error: {
+            code: "UPDATE_ERROR",
+            message: "Erro ao atualizar contrato",
+          },
+        },
+        500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'contract.update', 'tenant_contract', $2, $3, NULL, NULL)",
-        [user.sub, id, JSON.stringify(d)],
-      );
-    }
-
-    return c.json({ id, updated: true });
   },
 );
 
 // DELETE /api/v1/contracts/:id — desativar (soft delete)
 contractsRoute.delete(
   "/:id",
+  rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const result = await query(
-      `UPDATE public.tenant_contracts SET is_active = false WHERE id = $1 AND tenant_id = $2 RETURNING id`,
-      [id, tenantId],
-    );
+    try {
+      const result = await query(
+        `UPDATE public.tenant_contracts SET is_active = false WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+        [id, tenantId],
+      );
 
-    if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'contract.deactivate', 'tenant_contract', $2, NULL, NULL, NULL)",
+          [user.sub, id],
+        );
+      }
+
+      return c.json({ id, deactivated: true });
+    } catch (error) {
+      logger.error("Erro ao desativar contrato", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Contrato nao encontrado" } },
-        404,
+        {
+          error: {
+            code: "DELETE_ERROR",
+            message: "Erro ao desativar contrato",
+          },
+        },
+        500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'contract.deactivate', 'tenant_contract', $2, NULL, NULL, NULL)",
-        [user.sub, id],
-      );
-    }
-
-    return c.json({ id, deactivated: true });
   },
 );
 
@@ -355,19 +496,48 @@ contractsRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const id = c.req.param("id");
-    const result = await query(
-      "SELECT * FROM public.get_hour_bank_summary($1)",
-      [id],
-    );
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-    if (!result.data?.rows[0]) {
+    try {
+      // Protecao IDOR: verifica ownership antes de chamar a stored procedure
+      const owned = await verifyContractOwnership(id, tenantId);
+      if (!owned) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
+
+      const result = await query(
+        "SELECT * FROM public.get_hour_bank_summary($1)",
+        [id],
+      );
+
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
+
+      return c.json({ summary: result.data.rows[0] });
+    } catch (error) {
+      logger.error("Erro ao buscar hour-bank", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Contrato nao encontrado" } },
-        404,
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Erro ao carregar hour bank",
+          },
+        },
+        500,
       );
     }
-
-    return c.json({ summary: result.data.rows[0] });
   },
 );
 
@@ -377,22 +547,65 @@ contractsRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const id = c.req.param("id");
-    const result = await query(
-      `SELECT * FROM public.hour_bank_periods WHERE contract_id = $1 ORDER BY period_end DESC LIMIT 24`,
-      [id],
-    );
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-    return c.json({ periods: result.data?.rows ?? [] });
+    try {
+      // Protecao IDOR: verifica ownership
+      const owned = await verifyContractOwnership(id, tenantId);
+      if (!owned) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
+
+      const result = await query(
+        `SELECT hbp.* FROM public.hour_bank_periods hbp
+         JOIN public.tenant_contracts tc ON hbp.contract_id = tc.id
+         WHERE hbp.contract_id = $1 AND tc.tenant_id = $2
+         ORDER BY hbp.period_end DESC LIMIT 24`,
+        [id, tenantId],
+      );
+
+      if (result.error) {
+        logger.error("Erro ao listar periodos hour-bank", {
+          contractId: id,
+          tenantId,
+          error: result.error.message,
+        });
+        return c.json(
+          {
+            error: { code: "QUERY_ERROR", message: "Erro ao buscar períodos" },
+          },
+          500,
+        );
+      }
+
+      return c.json({ periods: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro inesperado ao listar periodos hour-bank", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
 // POST /api/v1/contracts/:id/hour-bank/close — fechar periodo
 contractsRoute.post(
   "/:id/hour-bank/close",
+  rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
     const bodyResult = await safeJsonBody(c);
     if (!bodyResult.success) return bodyResult.response;
 
@@ -405,45 +618,72 @@ contractsRoute.post(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "period_end obrigatorio",
+            message: "period_end obrigatório",
           },
         },
         400,
       );
     }
 
-    const result = await query(
-      "SELECT * FROM public.close_hour_bank_period($1, $2::date)",
-      [id, parsed.data.period_end],
-    );
+    try {
+      // Protecao IDOR: verifica ownership
+      const owned = await verifyContractOwnership(id, tenantId);
+      if (!owned) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Contrato não encontrado" } },
+          404,
+        );
+      }
 
-    if (result.error || !result.data?.rows[0]) {
+      const result = await query(
+        "SELECT * FROM public.close_hour_bank_period($1, $2::date)",
+        [id, parsed.data.period_end],
+      );
+
+      if (result.error || !result.data?.rows[0]) {
+        logger.error("Erro ao fechar periodo hour-bank", {
+          contractId: id,
+          tenantId,
+          error: result.error?.message,
+        });
+        return c.json(
+          { error: { code: "CLOSE_ERROR", message: "Erro ao fechar período" } },
+          500,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'contract.hour_bank.close', 'hour_bank_period', $2, $3, NULL, NULL)",
+          [
+            user.sub,
+            result.data.rows[0].id,
+            JSON.stringify({
+              contract_id: id,
+              period_end: parsed.data.period_end,
+            }),
+          ],
+        );
+      }
+
+      logger.info("Periodo hour-bank fechado", {
+        contractId: id,
+        periodId: result.data.rows[0].id,
+        tenantId,
+      });
+
+      return c.json({ period: result.data.rows[0] });
+    } catch (error) {
+      logger.error("Erro inesperado ao fechar periodo hour-bank", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        {
-          error: {
-            code: "CLOSE_ERROR",
-            message: result.error?.message ?? "Erro ao fechar periodo",
-          },
-        },
+        { error: { code: "CLOSE_ERROR", message: "Erro ao fechar período" } },
         500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'contract.hour_bank.close', 'hour_bank_period', $2, $3, NULL, NULL)",
-        [
-          user.sub,
-          result.data.rows[0].id,
-          JSON.stringify({
-            contract_id: id,
-            period_end: parsed.data.period_end,
-          }),
-        ],
-      );
-    }
-
-    return c.json({ period: result.data.rows[0] });
   },
 );
 
@@ -455,26 +695,57 @@ contractsRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const id = c.req.param("id");
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
     const limit = Math.min(Number(c.req.query("limit") ?? 50), 200);
     const offset = Number(c.req.query("offset") ?? 0);
 
-    const result = await query(
-      `SELECT wl.*, t.ticket_number, t.subject as ticket_subject
-       FROM public.ticket_work_logs wl
-       LEFT JOIN public.tickets t ON wl.ticket_id = t.id
-       WHERE wl.contract_id = $1
-       ORDER BY wl.started_at DESC
-       LIMIT $2 OFFSET $3`,
-      [id, limit, offset],
-    );
+    try {
+      // Protecao IDOR: filtra por tenant_id via JOIN
+      const result = await query(
+        `SELECT wl.*, t.ticket_number, t.subject as ticket_subject
+         FROM public.ticket_work_logs wl
+         JOIN public.tenant_contracts tc ON wl.contract_id = tc.id
+         LEFT JOIN public.tickets t ON wl.ticket_id = t.id
+         WHERE wl.contract_id = $1 AND tc.tenant_id = $2
+         ORDER BY wl.started_at DESC
+         LIMIT $3 OFFSET $4`,
+        [id, tenantId, limit, offset],
+      );
 
-    return c.json({ work_logs: result.data?.rows ?? [] });
+      if (result.error) {
+        logger.error("Erro ao listar work-logs do contrato", {
+          contractId: id,
+          tenantId,
+          error: result.error.message,
+        });
+        return c.json(
+          {
+            error: { code: "QUERY_ERROR", message: "Erro ao buscar work logs" },
+          },
+          500,
+        );
+      }
+
+      return c.json({ work_logs: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro inesperado ao listar work-logs do contrato", {
+        contractId: id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
 // POST /api/v1/contracts/work-logs — criar work log (nao vinculado a contrato na URL)
 contractsRoute.post(
   "/work-logs",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const user = c.get("user");
@@ -488,7 +759,7 @@ contractsRoute.post(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Dados invalidos",
+            message: "Dados inválidos",
             details: parsed.error.flatten(),
           },
         },
@@ -498,98 +769,155 @@ contractsRoute.post(
 
     const d = parsed.data;
 
-    // Se contract_id nao fornecido, busca contrato ativo do tenant
-    let contractId: string | null = d.contract_id ?? null;
-    if (!contractId) {
-      const activeContract = await query<{ id: string }>(
-        `SELECT id FROM public.tenant_contracts WHERE tenant_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
-        [tenantId],
-      );
-      contractId = activeContract.data?.rows[0]?.id ?? null;
-    }
-
-    // Calcula rate_applied e amount baseado no contrato
-    let rateApplied = d.rate_applied ?? null;
-    let amount = 0;
-    if (contractId) {
-      const contractResult = await query(
-        "SELECT rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research, rate_default FROM public.tenant_contracts WHERE id = $1",
-        [contractId],
-      );
-      const contract = contractResult.data?.rows[0];
-      if (contract && !rateApplied) {
-        const rateMap: Record<string, string> = {
-          diagnosis: "rate_diagnosis",
-          fix: "rate_fix",
-          monitoring: "rate_monitoring",
-          meeting: "rate_meeting",
-          research: "rate_research",
-        };
-        const rateField = rateMap[d.work_type];
-        rateApplied = rateField
-          ? (contract[rateField] as number)
-          : (contract.rate_default as number);
+    try {
+      // Protecao IDOR: verifica se ticket pertence ao tenant
+      const ticketOwned = await verifyTicketOwnership(d.ticket_id, tenantId);
+      if (!ticketOwned) {
+        return c.json(
+          {
+            error: {
+              code: "NOT_FOUND",
+              message: "Ticket não encontrado para este tenant",
+            },
+          },
+          404,
+        );
       }
-    }
-    if (rateApplied) {
-      amount = (d.minutes_worked / 60) * rateApplied;
-    }
 
-    const result = await query<{ id: string }>(
-      `INSERT INTO public.ticket_work_logs
-        (tenant_id, ticket_id, contract_id, user_id, user_name,
-         started_at, ended_at, minutes_worked, pause_minutes, pause_reason,
-         description, work_type, billable, rate_applied, amount)
-       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9, $10, $11, $12, $13, $14, $15)
-       RETURNING id`,
-      [
+      // Se contract_id nao fornecido, busca contrato ativo do tenant
+      let contractId: string | null = d.contract_id ?? null;
+      if (!contractId) {
+        const activeContract = await query<{ id: string }>(
+          `SELECT id FROM public.tenant_contracts WHERE tenant_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+          [tenantId],
+        );
+        contractId = activeContract.data?.rows[0]?.id ?? null;
+      } else {
+        // Protecao IDOR: se contract_id fornecido, verifica ownership
+        const contractOwned = await verifyContractOwnership(
+          contractId,
+          tenantId,
+        );
+        if (!contractOwned) {
+          return c.json(
+            {
+              error: {
+                code: "NOT_FOUND",
+                message: "Contrato não encontrado para este tenant",
+              },
+            },
+            404,
+          );
+        }
+      }
+
+      // Calcula rate_applied e amount baseado no contrato
+      let rateApplied = d.rate_applied ?? null;
+      let amount = 0;
+      if (contractId) {
+        const contractResult = await query(
+          "SELECT rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research, rate_default FROM public.tenant_contracts WHERE id = $1",
+          [contractId],
+        );
+        const contract = contractResult.data?.rows[0];
+        if (contract && !rateApplied) {
+          const rateMap: Record<string, string> = {
+            diagnosis: "rate_diagnosis",
+            fix: "rate_fix",
+            monitoring: "rate_monitoring",
+            meeting: "rate_meeting",
+            research: "rate_research",
+          };
+          const rateField = rateMap[d.work_type];
+          rateApplied = rateField
+            ? (contract[rateField] as number)
+            : (contract.rate_default as number);
+        }
+      }
+      if (rateApplied) {
+        amount = (d.minutes_worked / 60) * rateApplied;
+      }
+
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.ticket_work_logs
+          (tenant_id, ticket_id, contract_id, user_id, user_name,
+           started_at, ended_at, minutes_worked, pause_minutes, pause_reason,
+           description, work_type, billable, rate_applied, amount)
+         VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, $8, $9, $10, $11, $12, $13, $14, $15)
+         RETURNING id`,
+        [
+          tenantId,
+          d.ticket_id,
+          contractId,
+          user?.sub ?? null,
+          user?.sub ?? "Sistema",
+          d.started_at,
+          d.ended_at ?? null,
+          d.minutes_worked,
+          d.pause_minutes,
+          d.pause_reason ?? null,
+          d.description,
+          d.work_type,
+          d.billable,
+          rateApplied,
+          amount,
+        ],
+      );
+
+      if (result.error || !result.data?.rows[0]) {
+        logger.error("Erro ao criar work log", {
+          tenantId,
+          ticketId: d.ticket_id,
+          error: result.error?.message,
+        });
+        return c.json(
+          {
+            error: { code: "CREATE_ERROR", message: "Erro ao criar work log" },
+          },
+          500,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'work_log.create', 'ticket_work_log', $2, $3, NULL, NULL)",
+          [
+            user.sub,
+            result.data.rows[0].id,
+            JSON.stringify({
+              ticket_id: d.ticket_id,
+              minutes: d.minutes_worked,
+              work_type: d.work_type,
+            }),
+          ],
+        );
+      }
+
+      logger.info("Work log criado", {
+        workLogId: result.data.rows[0].id,
         tenantId,
-        d.ticket_id,
-        contractId,
-        user?.sub ?? null,
-        user?.sub ?? "Sistema",
-        d.started_at,
-        d.ended_at ?? null,
-        d.minutes_worked,
-        d.pause_minutes,
-        d.pause_reason ?? null,
-        d.description,
-        d.work_type,
-        d.billable,
-        rateApplied,
-        amount,
-      ],
-    );
+        ticketId: d.ticket_id,
+      });
 
-    if (!result.data?.rows[0]) {
+      return c.json({ id: result.data.rows[0].id }, 201);
+    } catch (error) {
+      logger.error("Erro inesperado ao criar work log", {
+        tenantId,
+        ticketId: d.ticket_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
         { error: { code: "CREATE_ERROR", message: "Erro ao criar work log" } },
         500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'work_log.create', 'ticket_work_log', $2, $3, NULL, NULL)",
-        [
-          user.sub,
-          result.data.rows[0].id,
-          JSON.stringify({
-            ticket_id: d.ticket_id,
-            minutes: d.minutes_worked,
-            work_type: d.work_type,
-          }),
-        ],
-      );
-    }
-
-    return c.json({ id: result.data.rows[0].id }, 201);
   },
 );
 
 // PUT /api/v1/contracts/work-logs/:logId — atualizar work log
 contractsRoute.put(
   "/work-logs/:logId",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const logId = c.req.param("logId");
@@ -601,7 +929,13 @@ contractsRoute.put(
     const parsed = updateWorkLogSchema.safeParse(bodyResult.data);
     if (!parsed.success) {
       return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
         400,
       );
     }
@@ -656,51 +990,83 @@ contractsRoute.put(
     }
 
     params.push(logId, tenantId);
-    const result = await query(
-      `UPDATE public.ticket_work_logs SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
-      params,
-    );
+    try {
+      const result = await query(
+        `UPDATE public.ticket_work_logs SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
+        params,
+      );
 
-    if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Work log não encontrado" } },
+          404,
+        );
+      }
+
+      return c.json({ id: logId, updated: true });
+    } catch (error) {
+      logger.error("Erro ao atualizar work log", {
+        logId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Work log nao encontrado" } },
-        404,
+        {
+          error: {
+            code: "UPDATE_ERROR",
+            message: "Erro ao atualizar work log",
+          },
+        },
+        500,
       );
     }
-
-    return c.json({ id: logId, updated: true });
   },
 );
 
 // DELETE /api/v1/contracts/work-logs/:logId — remover work log
 contractsRoute.delete(
   "/work-logs/:logId",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const logId = c.req.param("logId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const result = await query(
-      `DELETE FROM public.ticket_work_logs WHERE id = $1 AND tenant_id = $2 RETURNING id`,
-      [logId, tenantId],
-    );
+    try {
+      const result = await query(
+        `DELETE FROM public.ticket_work_logs WHERE id = $1 AND tenant_id = $2 RETURNING id`,
+        [logId, tenantId],
+      );
 
-    if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Work log não encontrado" } },
+          404,
+        );
+      }
+
+      if (user?.sub) {
+        await query(
+          "SELECT public.write_audit_log($1, NULL, 'work_log.delete', 'ticket_work_log', $2, NULL, NULL, NULL)",
+          [user.sub, logId],
+        );
+      }
+
+      return c.json({ id: logId, deleted: true });
+    } catch (error) {
+      logger.error("Erro ao deletar work log", {
+        logId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Work log nao encontrado" } },
-        404,
+        {
+          error: { code: "DELETE_ERROR", message: "Erro ao excluir work log" },
+        },
+        500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'work_log.delete', 'ticket_work_log', $2, NULL, NULL, NULL)",
-        [user.sub, logId],
-      );
-    }
-
-    return c.json({ id: logId, deleted: true });
   },
 );
 
@@ -710,16 +1076,47 @@ contractsRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const ticketId = c.req.param("ticketId");
-    const result = await query(
-      `SELECT wl.*, u.email as user_email
-       FROM public.ticket_work_logs wl
-       LEFT JOIN public.users u ON wl.user_id = u.id
-       WHERE wl.ticket_id = $1
-       ORDER BY wl.started_at DESC`,
-      [ticketId],
-    );
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-    return c.json({ work_logs: result.data?.rows ?? [] });
+    try {
+      // Protecao IDOR: filtra por tenant_id via JOIN com tickets
+      const result = await query(
+        `SELECT wl.*, u.email as user_email
+         FROM public.ticket_work_logs wl
+         JOIN public.tickets t ON wl.ticket_id = t.id
+         LEFT JOIN public.users u ON wl.user_id = u.id
+         WHERE wl.ticket_id = $1 AND t.tenant_id = $2
+         ORDER BY wl.started_at DESC`,
+        [ticketId, tenantId],
+      );
+
+      if (result.error) {
+        logger.error("Erro ao listar work-logs do ticket", {
+          ticketId,
+          tenantId,
+          error: result.error.message,
+        });
+        return c.json(
+          {
+            error: { code: "QUERY_ERROR", message: "Erro ao buscar work logs" },
+          },
+          500,
+        );
+      }
+
+      return c.json({ work_logs: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro inesperado ao listar work-logs do ticket", {
+        ticketId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
@@ -730,6 +1127,7 @@ contractsRoute.get(
 // POST /api/v1/contracts/work-logs/start — inicia timer
 contractsRoute.post(
   "/work-logs/start",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const user = c.get("user");
@@ -743,7 +1141,7 @@ contractsRoute.post(
         {
           error: {
             code: "VALIDATION_ERROR",
-            message: "Dados invalidos",
+            message: "Dados inválidos",
             details: parsed.error.flatten(),
           },
         },
@@ -753,37 +1151,99 @@ contractsRoute.post(
 
     const d = parsed.data;
 
-    // Se contract_id nao fornecido, busca contrato ativo do tenant
-    let contractId: string | null = d.contract_id ?? null;
-    if (!contractId) {
-      const activeContract = await query<{ id: string }>(
-        `SELECT id FROM public.tenant_contracts WHERE tenant_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
-        [tenantId],
+    try {
+      // Protecao IDOR: verifica se ticket pertence ao tenant
+      const ticketOwned = await verifyTicketOwnership(d.ticket_id, tenantId);
+      if (!ticketOwned) {
+        return c.json(
+          {
+            error: {
+              code: "NOT_FOUND",
+              message: "Ticket não encontrado para este tenant",
+            },
+          },
+          404,
+        );
+      }
+
+      // Se contract_id nao fornecido, busca contrato ativo do tenant
+      let contractId: string | null = d.contract_id ?? null;
+      if (!contractId) {
+        const activeContract = await query<{ id: string }>(
+          `SELECT id FROM public.tenant_contracts WHERE tenant_id = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1`,
+          [tenantId],
+        );
+        contractId = activeContract.data?.rows[0]?.id ?? null;
+      } else {
+        // Protecao IDOR: se contract_id fornecido, verifica ownership
+        const contractOwned = await verifyContractOwnership(
+          contractId,
+          tenantId,
+        );
+        if (!contractOwned) {
+          return c.json(
+            {
+              error: {
+                code: "NOT_FOUND",
+                message: "Contrato não encontrado para este tenant",
+              },
+            },
+            404,
+          );
+        }
+      }
+
+      const result = await query<{ id: string; started_at: string }>(
+        `INSERT INTO public.ticket_work_logs
+          (tenant_id, ticket_id, contract_id, user_id, user_name,
+           started_at, minutes_worked, pause_minutes,
+           description, work_type, billable,
+           status, total_seconds)
+         VALUES ($1, $2, $3, $4, $5, now(), 0, 0, $6, $7, $8, 'running', 0)
+         RETURNING id, started_at`,
+        [
+          tenantId,
+          d.ticket_id,
+          contractId,
+          user?.sub ?? null,
+          user?.sub ?? "Sistema",
+          d.description,
+          d.work_type,
+          d.billable,
+        ],
       );
-      contractId = activeContract.data?.rows[0]?.id ?? null;
-    }
 
-    const result = await query<{ id: string; started_at: string }>(
-      `INSERT INTO public.ticket_work_logs
-        (tenant_id, ticket_id, contract_id, user_id, user_name,
-         started_at, minutes_worked, pause_minutes,
-         description, work_type, billable,
-         status, total_seconds)
-       VALUES ($1, $2, $3, $4, $5, now(), 0, 0, $6, $7, $8, 'running', 0)
-       RETURNING id, started_at`,
-      [
+      if (result.error || !result.data?.rows[0]) {
+        logger.error("Erro ao iniciar work log timer", {
+          tenantId,
+          ticketId: d.ticket_id,
+          error: result.error?.message,
+        });
+        return c.json(
+          {
+            error: {
+              code: "CREATE_ERROR",
+              message: "Erro ao iniciar work log",
+            },
+          },
+          500,
+        );
+      }
+
+      return c.json(
+        {
+          id: result.data.rows[0].id,
+          started_at: result.data.rows[0].started_at,
+          status: "running",
+        },
+        201,
+      );
+    } catch (error) {
+      logger.error("Erro inesperado ao iniciar work log timer", {
         tenantId,
-        d.ticket_id,
-        contractId,
-        user?.sub ?? null,
-        user?.sub ?? "Sistema",
-        d.description,
-        d.work_type,
-        d.billable,
-      ],
-    );
-
-    if (!result.data?.rows[0]) {
+        ticketId: d.ticket_id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
         {
           error: { code: "CREATE_ERROR", message: "Erro ao iniciar work log" },
@@ -791,21 +1251,13 @@ contractsRoute.post(
         500,
       );
     }
-
-    return c.json(
-      {
-        id: result.data.rows[0].id,
-        started_at: result.data.rows[0].started_at,
-        status: "running",
-      },
-      201,
-    );
   },
 );
 
 // POST /api/v1/contracts/work-logs/:logId/pause — pausa timer (retorna tempo para revisao)
 contractsRoute.post(
   "/work-logs/:logId/pause",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const logId = c.req.param("logId");
@@ -823,7 +1275,7 @@ contractsRoute.post(
         user?.sub ?? null,
       ]);
 
-      if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
         return c.json(
           {
             error: { code: "PAUSE_ERROR", message: "Erro ao pausar work log" },
@@ -843,13 +1295,12 @@ contractsRoute.post(
         status: "paused",
       });
     } catch (err) {
+      logger.error("Erro ao pausar work log", {
+        logId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return c.json(
-        {
-          error: {
-            code: "PAUSE_ERROR",
-            message: err instanceof Error ? err.message : "Erro ao pausar",
-          },
-        },
+        { error: { code: "PAUSE_ERROR", message: "Erro ao pausar work log" } },
         400,
       );
     }
@@ -859,6 +1310,7 @@ contractsRoute.post(
 // POST /api/v1/contracts/work-logs/:logId/resume — retoma timer pausado
 contractsRoute.post(
   "/work-logs/:logId/resume",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const logId = c.req.param("logId");
@@ -874,7 +1326,7 @@ contractsRoute.post(
         user?.sub ?? null,
       ]);
 
-      if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
         return c.json(
           {
             error: {
@@ -892,12 +1344,13 @@ contractsRoute.post(
         status: "running",
       });
     } catch (err) {
+      logger.error("Erro ao retomar work log", {
+        logId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return c.json(
         {
-          error: {
-            code: "RESUME_ERROR",
-            message: err instanceof Error ? err.message : "Erro ao retomar",
-          },
+          error: { code: "RESUME_ERROR", message: "Erro ao retomar work log" },
         },
         400,
       );
@@ -908,6 +1361,7 @@ contractsRoute.post(
 // POST /api/v1/contracts/work-logs/:logId/finish — finaliza timer com revisao manual
 contractsRoute.post(
   "/work-logs/:logId/finish",
+  rateLimitWrite,
   requirePermission("tickets:write"),
   async (c) => {
     const logId = c.req.param("logId");
@@ -918,7 +1372,13 @@ contractsRoute.post(
     const parsed = finishWorkLogSchema.safeParse(bodyResult.data ?? {});
     if (!parsed.success) {
       return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
         400,
       );
     }
@@ -940,7 +1400,7 @@ contractsRoute.post(
         d.adjusted_minutes ?? null,
       ]);
 
-      if (!result.data?.rows[0]) {
+      if (result.error || !result.data?.rows[0]) {
         return c.json(
           {
             error: {
@@ -974,7 +1434,7 @@ contractsRoute.post(
         );
       }
 
-      // Recalcula amount baseado no contrato
+      // Recalcula amount baseado no contrato (paralelizado com audit log)
       const logResult = await query<{
         contract_id: string | null;
         work_type: string;
@@ -984,6 +1444,21 @@ contractsRoute.post(
         [logId],
       );
       const logRow = logResult.data?.rows[0];
+
+      const auditPromise = user?.sub
+        ? query(
+            "SELECT public.write_audit_log($1, NULL, 'work_log.finish', 'ticket_work_log', $2, $3, NULL, NULL)",
+            [
+              user.sub,
+              logId,
+              JSON.stringify({
+                total_minutes: r.total_minutes,
+                adjusted: !!d.adjusted_minutes,
+              }),
+            ],
+          )
+        : Promise.resolve();
+
       if (logRow?.contract_id) {
         const contractResult = await query(
           "SELECT rate_diagnosis, rate_fix, rate_monitoring, rate_meeting, rate_research, rate_default FROM public.tenant_contracts WHERE id = $1",
@@ -1012,19 +1487,13 @@ contractsRoute.post(
         }
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'work_log.finish', 'ticket_work_log', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            logId,
-            JSON.stringify({
-              total_minutes: r.total_minutes,
-              adjusted: !!d.adjusted_minutes,
-            }),
-          ],
-        );
-      }
+      await auditPromise;
+
+      logger.info("Work log finalizado", {
+        logId,
+        totalMinutes: r.total_minutes,
+        adjusted: !!d.adjusted_minutes,
+      });
 
       return c.json({
         id: r.id,
@@ -1036,11 +1505,15 @@ contractsRoute.post(
         status: "finished",
       });
     } catch (err) {
+      logger.error("Erro ao finalizar work log", {
+        logId,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return c.json(
         {
           error: {
             code: "FINISH_ERROR",
-            message: err instanceof Error ? err.message : "Erro ao finalizar",
+            message: "Erro ao finalizar work log",
           },
         },
         400,
@@ -1055,15 +1528,41 @@ contractsRoute.get(
   requirePermission("tickets:read"),
   async (c) => {
     const user = c.get("user");
-    const result = await query(
-      `SELECT wl.*, t.ticket_number, t.subject as ticket_subject
-       FROM public.ticket_work_logs wl
-       LEFT JOIN public.tickets t ON wl.ticket_id = t.id
-       WHERE wl.user_id = $1 AND wl.status IN ('running', 'paused')
-       ORDER BY wl.started_at DESC`,
-      [user?.sub],
-    );
+    const tenantId = user?.tenant_id ?? null;
 
-    return c.json({ active_timers: result.data?.rows ?? [] });
+    try {
+      const result = await query(
+        `SELECT wl.*, t.ticket_number, t.subject as ticket_subject
+         FROM public.ticket_work_logs wl
+         LEFT JOIN public.tickets t ON wl.ticket_id = t.id
+         WHERE wl.user_id = $1 AND wl.tenant_id = $2 AND wl.status IN ('running', 'paused')
+         ORDER BY wl.started_at DESC`,
+        [user?.sub, tenantId],
+      );
+
+      if (result.error) {
+        logger.error("Erro ao buscar timers ativos", {
+          tenantId,
+          userId: user?.sub,
+          error: result.error.message,
+        });
+        return c.json(
+          { error: { code: "QUERY_ERROR", message: "Erro ao buscar timers" } },
+          500,
+        );
+      }
+
+      return c.json({ active_timers: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro inesperado ao buscar timers ativos", {
+        tenantId,
+        userId: user?.sub,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
