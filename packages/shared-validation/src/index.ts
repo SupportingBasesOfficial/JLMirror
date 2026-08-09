@@ -2366,10 +2366,10 @@ export type LgpdDeleteInput = z.infer<typeof lgpdDeleteSchema>;
 
 // ========== Client Portal Schemas ==========
 export const clientPortalUserSchema = z.object({
-  email: z.string().email(),
-  contact_name: z.string().min(1),
-  company_name: z.string().optional(),
-  phone: z.string().optional(),
+  email: z.string().email().max(255),
+  contact_name: z.string().min(1).max(200),
+  company_name: z.string().max(200).optional(),
+  phone: z.string().max(50).optional(),
   can_view_incidents: z.boolean().optional(),
   can_view_sla: z.boolean().optional(),
   can_view_services: z.boolean().optional(),

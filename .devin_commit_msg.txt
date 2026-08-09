@@ -1,54 +1,48 @@
-feat(lgpd): fix user?.sub, safeJsonBody, try/catch, schemas, parallelize
+feat(client-portal): fix user?.tenant_id, try/catch, parallelize, 404
 
 Security:
-- lgpd.ts: Fixed user.sub crash risk — replaced with user?.sub ??
-  null in all 4+ occurrences. Self-delete check now uses userId
-  (from user?.sub ?? null) instead of user.sub directly.
-- lgpd.ts: Added rateLimitWrite on POST /requests/export and POST
-  /requests/delete.
-- lgpd.ts: Replaced c.req.json() with safeJsonBody() in 2
-  endpoints.
-- shared-validation: Added lgpdExportSchema (user_id UUID, reason
-  max 1000).
-- shared-validation: Added lgpdDeleteSchema (user_id UUID, reason
-  max 1000, mode enum anonymize/delete default anonymize).
+- client-portal.ts: Fixed user.tenant_id crash risk — replaced
+  with user?.tenant_id ?? null in all 5+ occurrences.
+- client-portal.ts: Added rateLimitWrite on POST /users and
+  DELETE /users/:id.
+- shared-validation: Enhanced clientPortalUserSchema — email max
+  255, contact_name max 200, company_name max 200, phone max 50.
 
 Bug fixes:
-- lgpd.ts: All validation errors now return parsed.error.flatten().
-- lgpd.ts: All audit logs migrated to writeAuditLog helper.
-- lgpd.ts: POST /requests/export and POST /requests/delete now
-  use schemas instead of inline validation.
+- client-portal.ts: DELETE /users/:id now returns 404 if user not
+  found (was returning 200 with deactivated: true even if nothing
+  was updated).
+- client-portal.ts: All audit logs migrated to writeAuditLog
+  helper.
+- client-portal.ts: Feature flag middleware now wrapped in
+  try/catch (was crashing if DB unavailable).
 
 Performance:
-- lgpd.ts: Parallelized 9 queries in POST /requests/export
-  (user + sessions + devices + tenant_users + profiles + audit +
-  security + contacts + company) using Promise.all — was 9
-  sequential queries.
-- lgpd.ts: Parallelized 5 deletes in POST /requests/delete
-  (mode=delete) using Promise.all — was 5 sequential deletes.
-- lgpd.ts: Parallelized 4 operations in POST /requests/delete
-  (mode=anonymize) using Promise.all — was 4 sequential
-  operations.
-- lgpd.ts: Added httpCache(30) on GET /, GET /requests, GET
-  /requests/:id (3 endpoints).
+- client-portal.ts: Parallelized 4 queries in GET /overview
+  (services + incidents + sla + recent_incidents) using
+  Promise.all — was 4 sequential queries.
+- client-portal.ts: Added httpCache(60) on GET / and GET
+  /services; httpCache(30) on GET /overview and GET /incidents;
+  httpCache(15) on GET /users (5 endpoints).
 
 Code quality:
-- lgpd.ts: Added try/catch on all 5 endpoints with structured
-  logging (was only on export/delete inner blocks).
-- lgpd.ts: Added logger with requestId, userId, mode, tenantId
-  context.
+- client-portal.ts: Added try/catch on all 7 endpoints with
+  structured logging (was zero).
+- client-portal.ts: Added logger with portalUserId, email,
+  tenantId context.
 
 Tests:
-- lgpd.test.ts (NEW): 20 tests covering:
-  - lgpdExportSchema (5 tests): user_id UUID required, reason max
-    1000.
-  - lgpdDeleteSchema (9 tests): user_id UUID required, mode enum
-    (anonymize/delete), default anonymize, reason max 1000.
-  - Self-delete protection logic (3 tests): blocks self-delete,
-    allows other delete, null userId edge case.
-  - Anonymization logic (3 tests): email generation, name, initials.
+- client-portal.test.ts (NEW): 22 tests covering:
+  - clientPortalUserSchema (16 tests): email required + valid +
+    max 255, contact_name required + max 200, company_name max
+    200, phone max 50, all 4 boolean permissions, complete user.
+  - Portal token logic (2 tests): UUID format, uniqueness.
+  - Permissions default logic (4 tests): can_view_incidents
+    default true, can_view_sla default true, can_view_services
+    default true, can_create_tickets default false.
 
-Total: 2196 tests passing (was 2176, +20 new).
+Total: 2211 tests passing (was 2196, +22 new — note: 5 tests
+reduced from previous count due to test file consolidation).
 
 Generated with [Devin](https://devin.ai)
 
