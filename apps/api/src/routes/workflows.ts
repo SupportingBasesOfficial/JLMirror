@@ -8,6 +8,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const workflowRoute = new Hono();
@@ -300,18 +301,22 @@ workflowRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.create', 'workflows', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.create",
+            entityType: "workflows",
+            newData: {
               id: workflowId,
               name: data.name,
               device: data.device_hostname,
               steps: data.steps.length,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Workflow criado", {
@@ -437,10 +442,17 @@ workflowRoute.put(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.update', 'workflows', $2, NULL, NULL, NULL)",
-          [user.sub, workflowId],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.update",
+            entityType: "workflows",
+            entityId: workflowId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Workflow atualizado", { workflowId });
@@ -486,10 +498,17 @@ workflowRoute.delete(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.delete', 'workflows', $2, NULL, NULL, NULL)",
-          [user.sub, workflowId],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.delete",
+            entityType: "workflows",
+            entityId: workflowId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Workflow deletado", { workflowId });
@@ -612,17 +631,21 @@ workflowRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.clone', 'workflows', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.clone",
+            entityType: "workflows",
+            newData: {
               source: workflowId,
               clone: cloneId,
               device: body.device_hostname,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Workflow clonado", {
@@ -700,10 +723,8 @@ workflowRoute.post(
         [workflowId],
       );
 
-      const totalSteps = parseInt(
-        stepsCountResult.data?.rows[0]?.count ?? "0",
-        10,
-      );
+      const totalSteps =
+        Number.parseInt(stepsCountResult.data?.rows[0]?.count ?? "0", 10) || 0;
       if (totalSteps === 0) {
         return c.json(
           { error: { code: "NO_STEPS", message: "Workflow não possui steps" } },
@@ -761,17 +782,21 @@ workflowRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.execute', 'workflow_executions', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.execute",
+            entityType: "workflow_executions",
+            newData: {
               execution_id: executionId,
               workflow_id: workflowId,
               reason: body.reason,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       // Notifica via WebSocket que execução começou
@@ -817,7 +842,10 @@ workflowRoute.get(
   async (c) => {
     const workflowId = c.req.param("id");
     const user = c.get("user");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 100);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "20", 10) || 20,
+      100,
+    );
 
     try {
       const result = await query(
@@ -918,10 +946,17 @@ workflowRoute.post(
       );
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.cancel', 'workflow_executions', $2, NULL, NULL, NULL)",
-          [user.sub, executionId],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.cancel",
+            entityType: "workflow_executions",
+            entityId: executionId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Execução cancelada", { executionId });
@@ -974,17 +1009,21 @@ workflowRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.step.approve', 'workflow_step_executions', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            stepId,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.step.approve",
+            entityType: "workflow_step_executions",
+            entityId: stepId,
+            newData: {
               execution_id: executionId,
               step_name: result.data.rows[0].step_name,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Step aprovado", { executionId, stepId });
@@ -1064,18 +1103,22 @@ workflowRoute.post(
       );
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'workflow.step.reject', 'workflow_step_executions', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            stepId,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "workflow.step.reject",
+            entityType: "workflow_step_executions",
+            entityId: stepId,
+            newData: {
               execution_id: executionId,
               step_name: result.data.rows[0].step_name,
               reason: body.reason,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Step rejeitado", {

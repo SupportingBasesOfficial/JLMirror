@@ -182,8 +182,8 @@ describe("tv — bearer token auth", () => {
   });
 
   it("rejeita header vazio", () => {
-    const authHeader: string | undefined = undefined;
+    const authHeader = undefined as string | undefined;
     const hasBearer = authHeader?.startsWith("Bearer ");
-    expect(hasBearer).toBeFalsy();
+    expect(hasBearer).toBeUndefined();
   });
 });
