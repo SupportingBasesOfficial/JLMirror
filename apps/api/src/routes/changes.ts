@@ -14,6 +14,7 @@ import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
 import { safeRows, safeCount } from "../lib/query-helpers.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const changesRoute = new Hono();
@@ -34,7 +35,8 @@ changesRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const status = c.req.query("status");
     const changeType = c.req.query("type");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const parsedLimit = parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     let sql = `SELECT cr.*, u.name as requester_name, u.email as requester_email,
        a.name as assignee_name
@@ -263,26 +265,28 @@ changesRoute.post(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = createChangeRequestSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createChangeRequestSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       // Gera RFC number
       const seqResult = await query(
         "SELECT nextval('public.change_rfc_seq') as val",
@@ -309,7 +313,7 @@ changesRoute.post(
           data.change_type,
           data.priority,
           data.risk_level,
-          user?.sub ?? null,
+          userId,
           data.planned_start_at ?? null,
           data.planned_end_at ?? null,
           JSON.stringify(data.affected_systems ?? []),
@@ -335,18 +339,19 @@ changesRoute.post(
       const changeId = result.data.rows[0].id as string;
       const createdRfc = result.data.rows[0].rfc_number as string;
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.create', 'change_requests', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
-              id: changeId,
-              rfc: createdRfc,
-              title: data.title,
-            }),
-          ],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.create",
+            entityType: "change_requests",
+            entityId: changeId,
+            newData: { id: changeId, rfc: createdRfc, title: data.title },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Change request criado", {
@@ -380,68 +385,70 @@ changesRoute.put(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = updateChangeRequestSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      title: "title",
-      description: "description",
-      change_type: "change_type",
-      priority: "priority",
-      risk_level: "risk_level",
-      status: "status",
-      assigned_to: "assigned_to",
-      planned_start_at: "planned_start_at",
-      planned_end_at: "planned_end_at",
-      impact_assessment: "impact_assessment",
-      rollback_plan: "rollback_plan",
-      rollback_status: "rollback_status",
-      implementation_notes: "implementation_notes",
-      post_implementation_review: "post_implementation_review",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (data.affected_systems !== undefined) {
-      updateFields.push(`affected_systems = $${paramIdx++}`);
-      params.push(JSON.stringify(data.affected_systems));
-    }
-    if (data.affected_services !== undefined) {
-      updateFields.push(`affected_services = $${paramIdx++}`);
-      params.push(JSON.stringify(data.affected_services));
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ updated: true });
-    }
-
-    params.push(changeId, tenantId);
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = updateChangeRequestSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        title: "title",
+        description: "description",
+        change_type: "change_type",
+        priority: "priority",
+        risk_level: "risk_level",
+        status: "status",
+        assigned_to: "assigned_to",
+        planned_start_at: "planned_start_at",
+        planned_end_at: "planned_end_at",
+        impact_assessment: "impact_assessment",
+        rollback_plan: "rollback_plan",
+        rollback_status: "rollback_status",
+        implementation_notes: "implementation_notes",
+        post_implementation_review: "post_implementation_review",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (data.affected_systems !== undefined) {
+        updateFields.push(`affected_systems = $${paramIdx++}`);
+        params.push(JSON.stringify(data.affected_systems));
+      }
+      if (data.affected_services !== undefined) {
+        updateFields.push(`affected_services = $${paramIdx++}`);
+        params.push(JSON.stringify(data.affected_services));
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ updated: true });
+      }
+
+      params.push(changeId, tenantId);
+
       const result = await query(
         `UPDATE public.change_requests SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++} RETURNING id`,
         params,
@@ -457,6 +464,20 @@ changesRoute.put(
           },
           404,
         );
+      }
+
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.update",
+            entityType: "change_requests",
+            entityId: changeId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ updated: true });
@@ -486,26 +507,28 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = approveChangeSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = approveChangeSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       // Verifica status atual
       const currentResult = await query(
         "SELECT status, approval_required FROM public.change_requests WHERE id = $1 AND tenant_id = $2",
@@ -543,7 +566,7 @@ changesRoute.post(
         [
           tenantId,
           changeId,
-          user?.sub ?? null,
+          userId,
           data.approver_role ?? null,
           data.comment ?? null,
         ],
@@ -552,14 +575,22 @@ changesRoute.post(
       // Atualiza change request
       await query(
         `UPDATE public.change_requests SET status = 'approved', approved_by = $1, approved_at = NOW(), approval_comment = $2 WHERE id = $3 AND tenant_id = $4`,
-        [user?.sub ?? null, data.comment ?? null, changeId, tenantId],
+        [userId, data.comment ?? null, changeId, tenantId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.approve', 'change_requests', $2, $3, NULL, NULL)",
-          [user.sub, changeId, JSON.stringify({ comment: data.comment })],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.approve",
+            entityType: "change_requests",
+            entityId: changeId,
+            newData: { comment: data.comment },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Change aprovado", { changeId, tenantId });
@@ -589,26 +620,28 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = approveChangeSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = approveChangeSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       // Verifica existencia
       const currentResult = await query(
         "SELECT id FROM public.change_requests WHERE id = $1 AND tenant_id = $2",
@@ -632,7 +665,7 @@ changesRoute.post(
         [
           tenantId,
           changeId,
-          user?.sub ?? null,
+          userId,
           data.approver_role ?? null,
           data.comment ?? null,
         ],
@@ -640,14 +673,22 @@ changesRoute.post(
 
       await query(
         `UPDATE public.change_requests SET status = 'rejected', approved_by = $1, approved_at = NOW(), approval_comment = $2 WHERE id = $3 AND tenant_id = $4`,
-        [user?.sub ?? null, data.comment ?? null, changeId, tenantId],
+        [userId, data.comment ?? null, changeId, tenantId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.reject', 'change_requests', $2, $3, NULL, NULL)",
-          [user.sub, changeId, JSON.stringify({ comment: data.comment })],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.reject",
+            entityType: "change_requests",
+            entityId: changeId,
+            newData: { comment: data.comment },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Change rejeitado", { changeId, tenantId });
@@ -677,6 +718,7 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
     try {
       const currentResult = await query(
@@ -713,11 +755,18 @@ changesRoute.post(
         [changeId, tenantId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.implement_start', 'change_requests', $2, NULL, NULL, NULL)",
-          [user.sub, changeId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.implement_start",
+            entityType: "change_requests",
+            entityId: changeId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Implementação iniciada", { changeId, tenantId });
@@ -752,12 +801,14 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const body = bodyResult.data as { notes?: string; review?: string };
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const body = bodyResult.data as { notes?: string; review?: string };
+
       const result = await query(
         `UPDATE public.change_requests SET status = 'implemented', actual_end_at = NOW(),
         implementation_notes = $1, post_implementation_review = $2 WHERE id = $3 AND tenant_id = $4 RETURNING id`,
@@ -776,11 +827,18 @@ changesRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.implement_complete', 'change_requests', $2, NULL, NULL, NULL)",
-          [user.sub, changeId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.implement_complete",
+            entityType: "change_requests",
+            entityId: changeId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Implementação concluída", { changeId, tenantId });
@@ -815,12 +873,14 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const body = bodyResult.data as { notes?: string };
+    const userId = user?.sub ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const body = bodyResult.data as { notes?: string };
+
       const result = await query(
         `UPDATE public.change_requests SET status = 'rolled_back', rollback_status = 'executed',
         actual_end_at = NOW(), implementation_notes = $1 WHERE id = $2 AND tenant_id = $3 RETURNING id`,
@@ -839,11 +899,19 @@ changesRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'change.rollback', 'change_requests', $2, $3, NULL, NULL)",
-          [user.sub, changeId, JSON.stringify({ notes: body.notes })],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "change.rollback",
+            entityType: "change_requests",
+            entityId: changeId,
+            newData: { notes: body.notes },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Rollback executado", { changeId, tenantId });
@@ -921,26 +989,27 @@ changesRoute.post(
     const changeId = c.req.param("changeId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = createChangeTaskSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createChangeTaskSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       // Verifica se o change request existe
       const changeResult = await query(
         "SELECT id FROM public.change_requests WHERE id = $1 AND tenant_id = $2",
@@ -1002,41 +1071,42 @@ changesRoute.put(
     const taskId = c.req.param("taskId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const body = bodyResult.data as { status?: string; notes?: string };
-
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    if (body.status) {
-      updateFields.push(`status = $${paramIdx++}`);
-      params.push(body.status);
-      if (body.status === "in_progress") {
-        updateFields.push(`started_at = COALESCE(started_at, NOW())`);
-      }
-      if (
-        body.status === "completed" ||
-        body.status === "skipped" ||
-        body.status === "failed"
-      ) {
-        updateFields.push(`completed_at = NOW()`);
-      }
-    }
-    if (body.notes !== undefined) {
-      updateFields.push(`notes = $${paramIdx++}`);
-      params.push(body.notes);
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ updated: true });
-    }
-
-    params.push(taskId, tenantId);
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const body = bodyResult.data as { status?: string; notes?: string };
+
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      if (body.status) {
+        updateFields.push(`status = $${paramIdx++}`);
+        params.push(body.status);
+        if (body.status === "in_progress") {
+          updateFields.push(`started_at = COALESCE(started_at, NOW())`);
+        }
+        if (
+          body.status === "completed" ||
+          body.status === "skipped" ||
+          body.status === "failed"
+        ) {
+          updateFields.push(`completed_at = NOW()`);
+        }
+      }
+      if (body.notes !== undefined) {
+        updateFields.push(`notes = $${paramIdx++}`);
+        params.push(body.notes);
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ updated: true });
+      }
+
+      params.push(taskId, tenantId);
+
       const result = await query(
         `UPDATE public.change_tasks SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++} RETURNING id`,
         params,
