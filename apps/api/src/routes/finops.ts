@@ -41,7 +41,10 @@ finopsRoute.get(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      100,
+    );
     const category = c.req.query("category");
     const year = c.req.query("year");
 
@@ -55,7 +58,7 @@ finopsRoute.get(
     }
     if (year) {
       sql += ` AND EXTRACT(YEAR FROM period_start) = $${paramIdx++}`;
-      params.push(parseInt(year, 10));
+      params.push(Number.parseInt(year, 10) || 0);
     }
 
     sql += ` ORDER BY period_start DESC, category LIMIT $${paramIdx++}`;
@@ -167,7 +170,7 @@ finopsRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const year = c.req.query("year") ?? new Date().getFullYear().toString();
-    const yearNum = parseInt(year, 10);
+    const yearNum = Number.parseInt(year, 10) || new Date().getFullYear();
 
     try {
       // Paraleliza 3 queries independentes
@@ -431,7 +434,7 @@ finopsRoute.get(
     try {
       const result = await query(
         "SELECT * FROM public.cost_budgets WHERE tenant_id = $1 AND year = $2 ORDER BY month, category",
-        [tenantId, parseInt(year, 10)],
+        [tenantId, Number.parseInt(year, 10) || 0],
       );
 
       return c.json({ budgets: result.data?.rows ?? [] });
@@ -588,7 +591,7 @@ finopsRoute.get(
         data?: { rows?: Array<Record<string, unknown>> } | null;
       }): number => {
         const row = r.data?.rows?.[0];
-        return row ? parseInt((row.count as string) ?? "0", 10) : 0;
+        return row ? Number.parseInt((row.count as string) ?? "0", 10) || 0 : 0;
       };
 
       return c.json({
