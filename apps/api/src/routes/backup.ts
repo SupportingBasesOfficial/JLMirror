@@ -16,6 +16,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const backupRoute = new Hono();
@@ -242,62 +243,64 @@ backupRoute.post(
   requirePermission("backup:write"),
   async (c) => {
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = createBackupJobSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-
-    // Validacao de seguranca: bloqueia paths com shell metacharacters
-    if (!isSafePath(data.source_path)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PATH",
-            message: "source_path contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-    if (!isSafePath(data.destination_path)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PATH",
-            message: "destination_path contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-    if (!isSafeHostname(data.target_host)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_HOST",
-            message: "target_host contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createBackupJobSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
+      // Validacao de seguranca: bloqueia paths com shell metacharacters
+      if (!isSafePath(data.source_path)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PATH",
+              message: "source_path contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+      if (!isSafePath(data.destination_path)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PATH",
+              message: "destination_path contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+      if (!isSafeHostname(data.target_host)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_HOST",
+              message: "target_host contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.backup_jobs (tenant_id, name, description, target_host, backup_type, source_path,
          destination_type, destination_path, retention_count, retention_days, compression, encryption,
@@ -320,7 +323,7 @@ backupRoute.post(
           data.encryption_key_id ?? null,
           data.is_scheduled,
           data.cron_expression ?? null,
-          user?.sub ?? null,
+          userId,
         ],
       );
 
@@ -343,19 +346,23 @@ backupRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'backup.job.create', 'backup_job', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "backup.job.create",
+            entityType: "backup_job",
+            entityId: result.data.rows[0].id,
+            newData: {
               name: data.name,
               type: data.backup_type,
               host: data.target_host,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Backup job criado", {
@@ -387,104 +394,105 @@ backupRoute.put(
     const jobId = c.req.param("id");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = updateBackupJobSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-
-    // Validacao de seguranca: bloqueia paths com shell metacharacters
-    if (data.source_path && !isSafePath(data.source_path)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PATH",
-            message: "source_path contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-    if (data.destination_path && !isSafePath(data.destination_path)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PATH",
-            message: "destination_path contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-    if (data.target_host && !isSafeHostname(data.target_host)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_HOST",
-            message: "target_host contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      description: "description",
-      target_host: "target_host",
-      backup_type: "backup_type",
-      source_path: "source_path",
-      destination_type: "destination_type",
-      destination_path: "destination_path",
-      retention_count: "retention_count",
-      retention_days: "retention_days",
-      compression: "compression",
-      encryption: "encryption",
-      encryption_key_id: "encryption_key_id",
-      is_scheduled: "is_scheduled",
-      cron_expression: "cron_expression",
-      is_active: "is_active",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ id: jobId });
-    }
-
-    // Recalcula next_run se cron mudou
-    if (data.cron_expression !== undefined && data.is_scheduled) {
-      updateFields.push(
-        `next_run_at = public.calculate_next_run($${paramIdx++})`,
-      );
-      params.push(data.cron_expression);
-    }
-
-    params.push(jobId, tenantId);
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = updateBackupJobSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
+      // Validacao de seguranca: bloqueia paths com shell metacharacters
+      if (data.source_path && !isSafePath(data.source_path)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PATH",
+              message: "source_path contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+      if (data.destination_path && !isSafePath(data.destination_path)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PATH",
+              message: "destination_path contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+      if (data.target_host && !isSafeHostname(data.target_host)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_HOST",
+              message: "target_host contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        description: "description",
+        target_host: "target_host",
+        backup_type: "backup_type",
+        source_path: "source_path",
+        destination_type: "destination_type",
+        destination_path: "destination_path",
+        retention_count: "retention_count",
+        retention_days: "retention_days",
+        compression: "compression",
+        encryption: "encryption",
+        encryption_key_id: "encryption_key_id",
+        is_scheduled: "is_scheduled",
+        cron_expression: "cron_expression",
+        is_active: "is_active",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ id: jobId });
+      }
+
+      // Recalcula next_run se cron mudou
+      if (data.cron_expression !== undefined && data.is_scheduled) {
+        updateFields.push(
+          `next_run_at = public.calculate_next_run($${paramIdx++})`,
+        );
+        params.push(data.cron_expression);
+      }
+
+      params.push(jobId, tenantId);
+
       const result = await query(
         `UPDATE public.backup_jobs SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++} RETURNING id`,
         params,
@@ -520,6 +528,7 @@ backupRoute.delete(
   async (c) => {
     const jobId = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
 
     try {
@@ -535,11 +544,18 @@ backupRoute.delete(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'backup.job.delete', 'backup_job', $2, NULL, NULL, NULL)",
-          [user.sub, jobId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "backup.job.delete",
+            entityType: "backup_job",
+            entityId: jobId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ deleted: true });
@@ -565,6 +581,7 @@ backupRoute.post(
   async (c) => {
     const jobId = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
 
     try {
@@ -671,18 +688,22 @@ backupRoute.post(
           "UPDATE public.backup_snapshots SET status = 'failed', completed_at = timezone('utc'::text, now()), duration_ms = $1, error_message = $2 WHERE id = $3",
           [Date.now() - startTime, tarResult.stderr.slice(0, 5000), snapshotId],
         );
-        if (user?.sub) {
-          await query(
-            "SELECT public.write_audit_log($1, NULL, 'backup.job.run', 'backup_job', $2, $3, NULL, NULL)",
-            [
-              user.sub,
-              jobId,
-              JSON.stringify({
+        if (userId) {
+          try {
+            await writeAuditLog({
+              userId,
+              tenantId,
+              action: "backup.job.run",
+              entityType: "backup_job",
+              entityId: jobId,
+              newData: {
                 snapshot_id: snapshotId,
                 error: tarResult.stderr.slice(0, 1000),
-              }),
-            ],
-          );
+              },
+            });
+          } catch {
+            // Audit log falhou — nao bloqueia
+          }
         }
         logger.error("Backup falhou", {
           jobId,
@@ -723,20 +744,24 @@ backupRoute.post(
       // Limpa snapshots expirados
       await query("SELECT public.cleanup_expired_snapshots($1)", [jobId]);
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'backup.job.run', 'backup_job', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            jobId,
-            JSON.stringify({
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "backup.job.run",
+            entityType: "backup_job",
+            entityId: jobId,
+            newData: {
               snapshot_id: snapshotId,
               duration_ms: durationMs,
               file_size: fileSize,
               checksum,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Backup concluido", {
@@ -777,6 +802,7 @@ backupRoute.post(
   async (c) => {
     const snapshotId = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
 
     try {
@@ -815,15 +841,19 @@ backupRoute.post(
         [status, verified, snapshotId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'backup.snapshot.verify', 'backup_snapshot', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            snapshotId,
-            JSON.stringify({ verified, checksum: snapshot.checksum_sha256 }),
-          ],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "backup.snapshot.verify",
+            entityType: "backup_snapshot",
+            entityId: snapshotId,
+            newData: { verified, checksum: snapshot.checksum_sha256 },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Snapshot verificado", {
@@ -868,7 +898,8 @@ backupRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const jobId = c.req.query("job_id");
     const status = c.req.query("status");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     const conditions: string[] = ["s.tenant_id = $1"];
     const params: unknown[] = [tenantId];
@@ -933,51 +964,53 @@ backupRoute.post(
   requirePermission("backup:write"),
   async (c) => {
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = createRestoreSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-
-    // Validacao de seguranca: bloqueia paths com shell metacharacters
-    if (!isSafePath(data.target_path)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_PATH",
-            message: "target_path contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
-    if (!isSafeHostname(data.target_host)) {
-      return c.json(
-        {
-          error: {
-            code: "INVALID_HOST",
-            message: "target_host contém caracteres inválidos",
-          },
-        },
-        400,
-      );
-    }
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createRestoreSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
+      // Validacao de seguranca: bloqueia paths com shell metacharacters
+      if (!isSafePath(data.target_path)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_PATH",
+              message: "target_path contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+      if (!isSafeHostname(data.target_host)) {
+        return c.json(
+          {
+            error: {
+              code: "INVALID_HOST",
+              message: "target_host contém caracteres inválidos",
+            },
+          },
+          400,
+        );
+      }
+
       // Verifica se snapshot existe e está completo
       const snapshotResult = await query<{
         id: string;
@@ -1087,19 +1120,23 @@ backupRoute.post(
         ],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'backup.restore', 'backup_restore', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            restoreId,
-            JSON.stringify({
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "backup.restore",
+            entityType: "backup_restore",
+            entityId: restoreId,
+            newData: {
               snapshot_id: data.snapshot_id,
               target: `${data.target_host}:${data.target_path}`,
               success: restoreSuccess,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Restore concluido", {
@@ -1120,7 +1157,6 @@ backupRoute.post(
     } catch (error) {
       logger.error("Erro inesperado ao executar restore", {
         tenantId,
-        snapshotId: data.snapshot_id,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -1139,7 +1175,8 @@ backupRoute.get(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     try {
       const result = await query(

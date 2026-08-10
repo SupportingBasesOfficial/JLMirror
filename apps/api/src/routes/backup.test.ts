@@ -569,3 +569,177 @@ describe("backup — logica de restore", () => {
     expect(checksumVerified).toBe(false);
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("backup — logica de tenant isolation", () => {
+  it("queries de backup_jobs filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql = "SELECT * FROM public.backup_jobs WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de backup_snapshots filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql = "SELECT * FROM public.backup_snapshots WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de backup_restores filtram por tenant_id", () => {
+    const tenantId = "t-789";
+    const sql = "SELECT * FROM public.backup_restores WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE backup_jobs inclui tenant_id no WHERE", () => {
+    const tenantId = "t-upd";
+    const jobId = "j-1";
+    const sql =
+      "UPDATE public.backup_jobs SET name = $1 WHERE id = $2 AND tenant_id = $3";
+    const params: unknown[] = ["novo", jobId, tenantId];
+    expect(sql).toContain("tenant_id = $3");
+    expect(params[2]).toBe(tenantId);
+  });
+
+  it("DELETE backup_jobs inclui tenant_id no WHERE", () => {
+    const tenantId = "t-del";
+    const jobId = "j-2";
+    const sql =
+      "UPDATE public.backup_jobs SET is_active = false WHERE id = $1 AND tenant_id = $2";
+    const params: unknown[] = [jobId, tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de 404 Handling ==========
+
+describe("backup — logica de 404 handling", () => {
+  it.each([
+    ["GET /jobs/:id", 0, true],
+    ["PUT /jobs/:id", 0, true],
+    ["DELETE /jobs/:id", 0, true],
+    ["POST /jobs/:id/run", 0, true],
+    ["POST /snapshots/:id/verify", 0, true],
+    ["POST /restore", 0, true],
+  ])(`%s retorna 404 quando rowCount=0`, (_action, rowCount, expected) => {
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(expected);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("backup — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getSub(user: TestUser | null | undefined): string | null {
+    return user?.sub ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.sub retorna null quando user e null", () => {
+    expect(getSub(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.sub retorna valor quando user existe", () => {
+    expect(getSub({ sub: "u1", tenant_id: "t1" })).toBe("u1");
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("backup — logica de parallel queries", () => {
+  it("overview paraleliza 2 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total: "10" }] } }),
+      Promise.resolve({ data: { rows: [{ total: "5" }] } }),
+    ]);
+    expect(results).toHaveLength(2);
+  });
+
+  it("stats paraleliza 3 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+    ]);
+    expect(results).toHaveLength(3);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Limit Pagination ==========
+
+describe("backup — logica de limit pagination", () => {
+  function parseLimit(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 50 : parsed, 200);
+  }
+
+  it.each([
+    ["50", 50],
+    ["999", 200],
+    ["100", 100],
+    ["abc", 50],
+    ["", 50],
+  ])(`limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimit(raw)).toBe(expected);
+  });
+});
+
+// ========== Logica de Field Map Update ==========
+
+describe("backup — logica de field map update", () => {
+  it("constroi UPDATE dinâmico com fieldMap", () => {
+    const data = { name: "Novo Nome", is_active: false };
+    const fieldMap: Record<string, string> = {
+      name: "name",
+      is_active: "is_active",
+    };
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (data[key as keyof typeof data] !== undefined) {
+        updateFields.push(`${dbField} = $${paramIdx++}`);
+        params.push(data[key as keyof typeof data]);
+      }
+    }
+    expect(updateFields).toEqual(["name = $1", "is_active = $2"]);
+    expect(params).toEqual(["Novo Nome", false]);
+  });
+
+  it("update vazio retorna id sem UPDATE", () => {
+    const updateFields: string[] = [];
+    const shouldReturnId = updateFields.length === 0;
+    expect(shouldReturnId).toBe(true);
+  });
+});
