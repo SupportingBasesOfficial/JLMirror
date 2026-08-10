@@ -66,4 +66,28 @@ tmp-*
 scripts/fix-db.js
 scripts/check-users.js
 scripts/stress-test.js
+scripts/test-*.ps1
+scripts/tsc-errors*.txt
+scripts/*-progress.ps1
+scripts/check-file-encoding.ps1
+scripts/check-zabbix-html.ps1
 .db_schema_audit.txt
+
+# --- Artefatos de Auditoria ---
+*-audit.txt
+*-audit.md
+*-audit-output.txt
+*-weak-policies.txt
+all-backend-routes.txt
+backend-routes-audit.txt
+frontend-fetch-audit.txt
+frontend-stats-urls.txt
+route-defs.txt
+useapi-audit.txt
+api-calls-audit.txt
+check-triggers.cjs
+utputFormat
+.devin_commit_msg.txt
+
+# --- Config de IDEs duplicadas ---
+.cursorrules

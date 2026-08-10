@@ -1,8 +1,0 @@
-[build]
-  command = ""
-  publish = ".next"
-
-[build.environment]
-  NEXT_PUBLIC_API_URL = "https://jlmirror-api.netlify.app"
-  NEXT_PUBLIC_SITE_URL = "https://jlmirror-web.netlify.app"
-  NPM_FLAGS = "--legacy-peer-deps"
