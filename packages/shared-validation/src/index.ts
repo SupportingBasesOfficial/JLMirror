@@ -2235,6 +2235,34 @@ export const driftScanSchema = z.object({
 });
 export type DriftScanInput = z.infer<typeof driftScanSchema>;
 
+// ========== Correlation Schemas ==========
+export const correlationRuleSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  time_window_seconds: z.number().int().min(60).max(86400).default(300),
+  grouping_strategy: z
+    .enum([
+      "same_device",
+      "same_host_group",
+      "same_tag",
+      "same_severity",
+      "cross_device",
+    ])
+    .default("same_host_group"),
+  tag_key: z.string().max(100).optional(),
+  min_severity: z.enum(["info", "warning", "critical"]).default("warning"),
+  escalation_threshold: z.number().int().min(2).max(100).default(3),
+  escalated_severity: z
+    .enum(["info", "warning", "critical"])
+    .default("critical"),
+  suppress_individual: z.boolean().default(true),
+  auto_create_incident: z.boolean().default(false),
+  send_group_notification: z.boolean().default(true),
+  group_channel_ids: z.array(z.string().uuid()).default([]),
+  is_active: z.boolean().default(true),
+});
+export type CorrelationRuleInput = z.infer<typeof correlationRuleSchema>;
+
 // ========== Discovery Schemas ==========
 export const discoverySessionSchema = z.object({
   name: z.string().min(1).max(200),
