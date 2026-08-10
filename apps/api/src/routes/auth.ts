@@ -509,6 +509,29 @@ authRoute.get("/me", jwtAuth, async (c) => {
   }
 });
 
+// GET /api/v1/auth/ws-token — retorna access token para conexao WebSocket
+// Necessario porque o cookie é HttpOnly e o frontend nao consegue ler direto
+// O token ja tem TTL curto (15min) e é valido apenas para o usuario autenticado
+authRoute.get("/ws-token", jwtAuth, async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json(
+      { error: { code: "UNAUTHORIZED", message: "Autenticação necessária" } },
+      401,
+    );
+  }
+  // Re-emite um access token fresco para o WS com TTL padrao
+  const { signAccessToken } = await import("@repo/auth");
+  const token = signAccessToken({
+    sub: user.sub,
+    tenant_id: user.tenant_id,
+    roles: user.roles,
+    scope: user.scope,
+    tenant_ids: user.tenantIds,
+  });
+  return c.json({ token });
+});
+
 // GET /api/v1/auth/sessions — lista sessões ativas do usuário
 authRoute.get("/sessions", jwtAuth, async (c) => {
   const user = c.get("user");

@@ -131,7 +131,7 @@ INSERT INTO public.data_transfer_whitelist (table_name, allowed_export, allowed_
   ('users', false, false, 0),
   ('audit_logs', true, false, 500000),
   ('compliance_policies', true, true, 10000),
-  ('notifications', true, false, 100000)
+  ('notification_log', true, false, 100000)
 ON CONFLICT (table_name) DO NOTHING;
 
 ALTER TABLE public.data_transfer_whitelist ENABLE ROW LEVEL SECURITY;

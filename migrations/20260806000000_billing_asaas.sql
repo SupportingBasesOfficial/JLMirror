@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.billing_invoices (
     asaas_payment_id TEXT UNIQUE,
     invoice_number TEXT,
     amount_cents INTEGER NOT NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
+    status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
     payment_method VARCHAR(20),
     due_date DATE NOT NULL,
     paid_at TIMESTAMPTZ,

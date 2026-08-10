@@ -845,8 +845,8 @@ slaRoute.post(
       const d = parsed.data;
       const result = await query(
         `INSERT INTO public.maintenance_windows (tenant_id, name, description, device_ids, start_at, end_at,
-         maintenance_type, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         maintenance_type, metadata, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
         [
           tenantId,
@@ -857,6 +857,7 @@ slaRoute.post(
           d.end_at,
           d.maintenance_type,
           JSON.stringify(d.metadata),
+          user?.sub ?? null,
         ],
       );
 

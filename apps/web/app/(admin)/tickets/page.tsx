@@ -164,7 +164,7 @@ export default function TicketsPage() {
   if (search) ticketParams.set("search", search);
   if (overdueOnly) ticketParams.set("overdue", "true");
 
-  const { data: tData, mutate: mutateTickets } = useApi<{ tickets: Ticket[] }>(
+  const { data: tData, mutate: mutateTickets } = useApi<{ data: Ticket[] }>(
     `/api/tickets?${ticketParams.toString()}`,
   );
   const { data: cData, mutate: mutateCategories } = useApi<{
@@ -173,7 +173,7 @@ export default function TicketsPage() {
   const { data: stats, mutate: mutateStats } =
     useApi<TicketStats>("/api/tickets/stats");
 
-  const tickets = tData?.tickets ?? [];
+  const tickets = tData?.data ?? [];
   const categories = cData?.categories ?? [];
 
   async function handleCreateTicket() {

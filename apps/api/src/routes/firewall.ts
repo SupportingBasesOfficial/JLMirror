@@ -31,7 +31,7 @@ firewallRoute.get(
 
     try {
       const rulesResult = await query(
-        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.firewall_rules WHERE tenant_id = $1",
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_enabled = true) as active FROM public.firewall_rules WHERE tenant_id = $1",
         [tenantId],
       );
 
@@ -425,7 +425,6 @@ firewallRoute.put(
         priority: "priority",
         description: "description",
         is_enabled: "is_enabled",
-        is_active: "is_active",
       };
 
       for (const [key, dbField] of Object.entries(fieldMap)) {

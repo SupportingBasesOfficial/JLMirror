@@ -112,14 +112,12 @@ export default function WebhooksPage() {
     data: whData,
     isLoading: whLoading,
     mutate: mutateWebhooks,
-  } = useApi<{
-    webhooks: Webhook[];
-  }>("/api/webhooks");
+  } = useApi<{ data: Webhook[] }>("/api/webhooks");
   const { data: stats, mutate: mutateStats } = useApi<WebhookStats>(
     "/api/webhooks/stats",
   );
 
-  const webhooks = whData?.webhooks ?? [];
+  const webhooks = whData?.data ?? [];
   const loading = whLoading;
 
   async function handleCreate() {

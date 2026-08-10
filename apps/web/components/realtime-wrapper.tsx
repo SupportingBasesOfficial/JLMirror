@@ -12,7 +12,7 @@ export function RealtimeWrapper({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Busca o access_token via API pois o cookie é HttpOnly
     let cancelled = false;
-    fetch("/api/ws-token", { credentials: "include" })
+    fetch("/api/auth/ws-token", { credentials: "include" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data?.token) {
