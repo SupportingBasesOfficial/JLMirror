@@ -526,7 +526,7 @@ marketplaceRoute.get(
         data?: { rows?: Array<Record<string, unknown>> } | null;
       }): number => {
         const row = r.data?.rows?.[0];
-        return row ? parseInt((row.count as string) ?? "0", 10) : 0;
+        return row ? Number.parseInt((row.count as string) ?? "0", 10) || 0 : 0;
       };
 
       return c.json({
