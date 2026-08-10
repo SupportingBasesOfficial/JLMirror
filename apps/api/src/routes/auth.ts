@@ -50,28 +50,28 @@ export const authRoute = new Hono();
 
 // POST /api/v1/auth/login
 authRoute.post("/login", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = loginInputSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "INVALID_CREDENTIALS",
-          message: "Email ou senha inválidos",
-        },
-      },
-      401,
-    );
-  }
-
-  const { email, password } = parsed.data as LoginInput;
-  const clientIp =
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-    c.req.header("x-real-ip") ||
-    null;
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = loginInputSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "INVALID_CREDENTIALS",
+            message: "Email ou senha inválidos",
+          },
+        },
+        401,
+      );
+    }
+
+    const { email, password } = parsed.data as LoginInput;
+    const clientIp =
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+      c.req.header("x-real-ip") ||
+      null;
+
     // Busca usuário global em public.users
     const userResult = await query<{
       id: string;
@@ -312,7 +312,6 @@ authRoute.post("/login", async (c) => {
     });
   } catch (error) {
     logger.error("Erro interno no login", {
-      email,
       error: error instanceof Error ? error.message : String(error),
     });
     return c.json(
@@ -324,19 +323,22 @@ authRoute.post("/login", async (c) => {
 
 // POST /api/v1/auth/refresh
 authRoute.post("/refresh", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = refreshTokenSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: { code: "VALIDATION_ERROR", message: "Refresh token inválido" },
-      },
-      400,
-    );
-  }
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = refreshTokenSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Refresh token inválido",
+          },
+        },
+        400,
+      );
+    }
+
     const payload = verifyToken(parsed.data.refresh_token);
     if (payload.type !== "refresh") {
       return c.json(
@@ -415,19 +417,22 @@ authRoute.post("/logout", jwtAuth, async (c) => {
 
 // POST /api/v1/auth/revoke
 authRoute.post("/revoke", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = refreshTokenSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: { code: "VALIDATION_ERROR", message: "Refresh token inválido" },
-      },
-      400,
-    );
-  }
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = refreshTokenSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Refresh token inválido",
+          },
+        },
+        400,
+      );
+    }
+
     const payload = verifyToken(parsed.data.refresh_token);
     if (payload.type !== "refresh") {
       return c.json(
@@ -701,25 +706,26 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
     );
   }
 
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = changePasswordSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          details: parsed.error.flatten(),
-        },
-      },
-      400,
-    );
-  }
-
-  const { current_password, new_password } = parsed.data as ChangePasswordInput;
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = changePasswordSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const { current_password, new_password } =
+      parsed.data as ChangePasswordInput;
+
     // Busca senha atual do usuário
     const userResult = await query<{ password_hash: string }>(
       "SELECT password_hash FROM public.users WHERE id = $1",
@@ -807,67 +813,71 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
 // POST /api/v1/auth/forgot-password — solicita reset de senha por email
 // Resposta sempre generica (anti user-enumeration). Rate limit ja aplicado em /auth/*.
 authRoute.post("/forgot-password", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = forgotPasswordSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parsed.error.issues[0]?.message ?? "Email inválido",
-        },
-      },
-      400,
-    );
-  }
-
-  const requestIp =
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = forgotPasswordSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "Email inválido",
+          },
+        },
+        400,
+      );
+    }
+
+    const requestIp =
+      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+
     // Processamento assincrono nao-bloqueante seria ideal, mas await mantem
     // timing constante independente do email existir ou nao
     await requestPasswordReset(
       (parsed.data as ForgotPasswordInput).email,
       requestIp,
     );
+
+    return c.json({
+      sent: true,
+      message:
+        "Se o email estiver cadastrado, você receberá um link de recuperação em instantes",
+    });
   } catch (error) {
     // Loga erro mas retorna resposta generica (anti user-enumeration)
     logger.error("Erro no forgot-password", {
-      email: (parsed.data as ForgotPasswordInput).email,
       error: error instanceof Error ? error.message : String(error),
     });
+    return c.json({
+      sent: true,
+      message:
+        "Se o email estiver cadastrado, você receberá um link de recuperação em instantes",
+    });
   }
-
-  return c.json({
-    sent: true,
-    message:
-      "Se o email estiver cadastrado, você receberá um link de recuperação em instantes",
-  });
 });
 
 // POST /api/v1/auth/reset-password — redefine senha com token valido
 authRoute.post("/reset-password", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = resetPasswordSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          details: parsed.error.flatten(),
-        },
-      },
-      400,
-    );
-  }
-
-  const { token, new_password } = parsed.data as ResetPasswordInput;
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = resetPasswordSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const { token, new_password } = parsed.data as ResetPasswordInput;
+
     const newHash = await argon2.hash(new_password);
     const result = await consumeResetToken(token, newHash);
 
@@ -940,52 +950,52 @@ authRoute.get("/oauth/google", (c) => {
 
 // POST /api/v1/auth/oauth/callback — troca code por tokens
 authRoute.post("/oauth/callback", async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = oauthCallbackSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          details: parsed.error.flatten(),
-        },
-      },
-      400,
-    );
-  }
-
-  const body = parsed.data as OauthCallbackInput;
-
-  let provider: GoogleOAuthProvider | null = null;
-  if (body.provider === "google") {
-    provider = googleProvider;
-  } else {
-    return c.json(
-      {
-        error: {
-          code: "UNKNOWN_PROVIDER",
-          message: `Provider desconhecido: ${body.provider}`,
-        },
-      },
-      400,
-    );
-  }
-
-  if (!provider.isConfigured()) {
-    return c.json(
-      {
-        error: {
-          code: "OAUTH_NOT_CONFIGURED",
-          message: `${body.provider} OAuth não configurado`,
-        },
-      },
-      501,
-    );
-  }
-
   try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = oauthCallbackSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const body = parsed.data as OauthCallbackInput;
+
+    let provider: GoogleOAuthProvider | null = null;
+    if (body.provider === "google") {
+      provider = googleProvider;
+    } else {
+      return c.json(
+        {
+          error: {
+            code: "UNKNOWN_PROVIDER",
+            message: `Provider desconhecido: ${body.provider}`,
+          },
+        },
+        400,
+      );
+    }
+
+    if (!provider.isConfigured()) {
+      return c.json(
+        {
+          error: {
+            code: "OAUTH_NOT_CONFIGURED",
+            message: `${body.provider} OAuth não configurado`,
+          },
+        },
+        501,
+      );
+    }
+
     const tokenResult = await provider.exchangeCode(body.code);
     const userInfo = await provider.getUserInfo(tokenResult.access_token);
 
@@ -1061,7 +1071,6 @@ authRoute.post("/oauth/callback", async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
     logger.error("Erro no oauth/callback", {
-      provider: body.provider,
       error: message,
     });
     return c.json({ error: { code: "OAUTH_FAILED", message } }, 500);
@@ -1074,34 +1083,37 @@ const ldapProvider = new LdapAuthProvider();
 
 // POST /api/v1/auth/ldap/bind
 authRoute.post("/ldap/bind", async (c) => {
-  if (!ldapProvider.isConfigured()) {
-    return c.json(
-      {
-        error: { code: "LDAP_NOT_CONFIGURED", message: "LDAP não configurado" },
-      },
-      501,
-    );
-  }
-
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = ldapBindSchema.safeParse(parsedBody.data);
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: {
-          code: "VALIDATION_ERROR",
-          message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          details: parsed.error.flatten(),
-        },
-      },
-      400,
-    );
-  }
-
-  const body = parsed.data as LdapBindInput;
-
   try {
+    if (!ldapProvider.isConfigured()) {
+      return c.json(
+        {
+          error: {
+            code: "LDAP_NOT_CONFIGURED",
+            message: "LDAP não configurado",
+          },
+        },
+        501,
+      );
+    }
+
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = ldapBindSchema.safeParse(parsedBody.data);
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            details: parsed.error.flatten(),
+          },
+        },
+        400,
+      );
+    }
+
+    const body = parsed.data as LdapBindInput;
+
     const ldapUser = await ldapProvider.authenticate(
       body.username,
       body.password,
@@ -1202,7 +1214,6 @@ authRoute.post("/ldap/bind", async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro desconhecido";
     logger.error("Erro no ldap/bind", {
-      username: body.username,
       error: message,
     });
     return c.json({ error: { code: "LDAP_ERROR", message } }, 500);
