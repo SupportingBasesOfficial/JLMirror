@@ -8,14 +8,12 @@ import {
   updateAssetSchema,
   createLicenseSchema,
   updateLicenseSchema,
-  type CreateAssetInput,
-  type UpdateAssetInput,
-  type CreateLicenseInput,
-  type UpdateLicenseInput,
 } from "@repo/shared-validation";
 import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
+import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const assetRoute = new Hono();
@@ -28,7 +26,8 @@ assetRoute.get("/", requirePermission("assets:read"), async (c) => {
   const category = c.req.query("category");
   const criticality = c.req.query("criticality");
   const search = c.req.query("search");
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 500);
+  const parsedLimit = Number.parseInt(c.req.query("limit") ?? "100", 10);
+  const limit = Math.min(Number.isNaN(parsedLimit) ? 100 : parsedLimit, 500);
 
   const conditions: string[] = ["tenant_id = $1"];
   const params: unknown[] = [user?.tenant_id ?? null];
@@ -254,17 +253,21 @@ assetRoute.post(
   requirePermission("assets:write"),
   async (c) => {
     const user = c.get("user");
-    const body = await c.req.json<CreateAssetInput>();
-    const parsed = createAssetSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-        400,
-      );
-    }
+    const userId = user?.sub ?? null;
+    const tenantId = user?.tenant_id ?? null;
 
-    const data = parsed.data;
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createAssetSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+          400,
+        );
+      }
+
+      const data = parsed.data;
       const result = await query<{ id: string }>(
         `INSERT INTO public.assets (tenant_id, asset_tag, name, asset_type, category, status, criticality,
          hostname, ip_address, mac_address, serial_number, manufacturer, model, os_type, os_version,
@@ -274,7 +277,7 @@ assetRoute.post(
          $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
          RETURNING id`,
         [
-          user?.tenant_id ?? null,
+          tenantId,
           data.asset_tag,
           data.name,
           data.asset_type,
@@ -302,13 +305,13 @@ assetRoute.post(
           JSON.stringify(data.tags ?? []),
           JSON.stringify(data.custom_fields ?? {}),
           data.parent_asset_id ?? null,
-          user.sub,
+          userId,
         ],
       );
 
       if (result.error || !result.data?.rows[0]) {
         logger.error("Erro ao criar asset", {
-          tenantId: user?.tenant_id,
+          tenantId,
           error: result.error?.message,
         });
         return c.json(
@@ -319,24 +322,30 @@ assetRoute.post(
 
       const assetId = result.data.rows[0].id;
 
-      await query(
-        "SELECT public.log_asset_change($1, 'created', NULL, NULL, NULL, $2)",
-        [assetId, user.sub],
-      );
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'asset.create', 'asset', $2, $3, NULL, NULL)",
-        [
-          user.sub,
-          assetId,
-          JSON.stringify({
-            asset_tag: data.asset_tag,
-            name: data.name,
-            type: data.asset_type,
-          }),
-        ],
-      );
+      if (userId) {
+        await query(
+          "SELECT public.log_asset_change($1, 'created', NULL, NULL, NULL, $2)",
+          [assetId, userId],
+        );
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "asset.create",
+            entityType: "asset",
+            entityId: assetId,
+            newData: {
+              asset_tag: data.asset_tag,
+              name: data.name,
+              type: data.asset_type,
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
-      logger.info("Asset criado", { assetId, tenantId: user?.tenant_id });
+      logger.info("Asset criado", { assetId, tenantId });
 
       return c.json({ id: assetId }, 201);
     } catch (error) {
@@ -360,88 +369,94 @@ assetRoute.put(
   async (c) => {
     const assetId = c.req.param("id");
     const user = c.get("user");
-    const body = await c.req.json<UpdateAssetInput>();
-    const parsed = updateAssetSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      asset_tag: "asset_tag",
-      name: "name",
-      asset_type: "asset_type",
-      category: "category",
-      status: "status",
-      criticality: "criticality",
-      hostname: "hostname",
-      ip_address: "ip_address",
-      mac_address: "mac_address",
-      serial_number: "serial_number",
-      manufacturer: "manufacturer",
-      model: "model",
-      os_type: "os_type",
-      os_version: "os_version",
-      location: "location",
-      rack: "rack",
-      rack_position: "rack_position",
-      purchase_date: "purchase_date",
-      purchase_cost: "purchase_cost",
-      warranty_expiry: "warranty_expiry",
-      vendor: "vendor",
-      assigned_to: "assigned_to",
-      department: "department",
-      notes: "notes",
-      parent_asset_id: "parent_asset_id",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (data.tags !== undefined) {
-      updateFields.push(`tags = $${paramIdx++}`);
-      params.push(JSON.stringify(data.tags));
-    }
-    if (data.custom_fields !== undefined) {
-      updateFields.push(`custom_fields = $${paramIdx++}`);
-      params.push(JSON.stringify(data.custom_fields));
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ id: assetId });
-    }
-
-    params.push(assetId, user?.tenant_id ?? null);
+    const userId = user?.sub ?? null;
+    const tenantId = user?.tenant_id ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateAssetSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        asset_tag: "asset_tag",
+        name: "name",
+        asset_type: "asset_type",
+        category: "category",
+        status: "status",
+        criticality: "criticality",
+        hostname: "hostname",
+        ip_address: "ip_address",
+        mac_address: "mac_address",
+        serial_number: "serial_number",
+        manufacturer: "manufacturer",
+        model: "model",
+        os_type: "os_type",
+        os_version: "os_version",
+        location: "location",
+        rack: "rack",
+        rack_position: "rack_position",
+        purchase_date: "purchase_date",
+        purchase_cost: "purchase_cost",
+        warranty_expiry: "warranty_expiry",
+        vendor: "vendor",
+        assigned_to: "assigned_to",
+        department: "department",
+        notes: "notes",
+        parent_asset_id: "parent_asset_id",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (data.tags !== undefined) {
+        updateFields.push(`tags = $${paramIdx++}`);
+        params.push(JSON.stringify(data.tags));
+      }
+      if (data.custom_fields !== undefined) {
+        updateFields.push(`custom_fields = $${paramIdx++}`);
+        params.push(JSON.stringify(data.custom_fields));
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ id: assetId });
+      }
+
+      params.push(assetId, tenantId);
+
       await query(
         `UPDATE public.assets SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
       );
 
       // Registra mudanca de status se aplicavel
-      if (data.status) {
+      if (data.status && userId) {
         await query(
           "SELECT public.log_asset_change($1, 'status_changed', 'status', NULL, $2, $3)",
-          [assetId, data.status, user.sub],
+          [assetId, data.status, userId],
         );
       }
 
-      await query(
-        "SELECT public.log_asset_change($1, 'updated', NULL, NULL, NULL, $2)",
-        [assetId, user.sub],
-      );
+      if (userId) {
+        await query(
+          "SELECT public.log_asset_change($1, 'updated', NULL, NULL, NULL, $2)",
+          [assetId, userId],
+        );
+      }
 
       return c.json({ id: assetId });
     } catch (error) {
@@ -466,12 +481,14 @@ assetRoute.delete(
   async (c) => {
     const assetId = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
+    const tenantId = user?.tenant_id ?? null;
 
     try {
       // Verifica se o asset existe e pertence ao tenant antes de deletar
       const checkResult = await query(
         "SELECT id FROM public.assets WHERE id = $1 AND tenant_id = $2",
-        [assetId, user?.tenant_id ?? null],
+        [assetId, tenantId],
       );
 
       if (!checkResult.data?.rows[0]) {
@@ -483,21 +500,30 @@ assetRoute.delete(
 
       await query(
         "DELETE FROM public.assets WHERE id = $1 AND tenant_id = $2",
-        [assetId, user?.tenant_id ?? null],
+        [assetId, tenantId],
       );
 
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'asset.delete', 'asset', $2, NULL, NULL, NULL)",
-        [user.sub, assetId],
-      );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "asset.delete",
+            entityType: "asset",
+            entityId: assetId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
-      logger.info("Asset deletado", { assetId, tenantId: user?.tenant_id });
+      logger.info("Asset deletado", { assetId, tenantId });
 
       return c.json({ deleted: true });
     } catch (error) {
       logger.error("Erro ao deletar asset", {
         assetId,
-        tenantId: user?.tenant_id,
+        tenantId,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -513,13 +539,26 @@ assetRoute.delete(
 assetRoute.get("/:id/licenses", requirePermission("assets:read"), async (c) => {
   const assetId = c.req.param("id");
   const user = c.get("user");
+  const tenantId = user?.tenant_id ?? null;
 
-  const result = await query(
-    "SELECT * FROM public.asset_licenses WHERE asset_id = $1 AND tenant_id = $2 ORDER BY software_name",
-    [assetId, user?.tenant_id ?? null],
-  );
+  try {
+    const result = await query(
+      "SELECT * FROM public.asset_licenses WHERE asset_id = $1 AND tenant_id = $2 ORDER BY software_name",
+      [assetId, tenantId],
+    );
 
-  return c.json({ licenses: result.data?.rows ?? [] });
+    return c.json({ licenses: result.data?.rows ?? [] });
+  } catch (error) {
+    logger.error("Erro ao listar licencas do asset", {
+      assetId,
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
+    );
+  }
 });
 
 assetRoute.post(
@@ -529,20 +568,24 @@ assetRoute.post(
   async (c) => {
     const assetId = c.req.param("id");
     const user = c.get("user");
-    const body = await c.req.json<CreateLicenseInput>();
-    const parsed = createLicenseSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-        400,
-      );
-    }
+    const userId = user?.sub ?? null;
+    const tenantId = user?.tenant_id ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createLicenseSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+          400,
+        );
+      }
+
       // Verifica se o asset pertence ao tenant antes de adicionar licenca (IDOR protection)
       const assetCheck = await query(
         "SELECT id FROM public.assets WHERE id = $1 AND tenant_id = $2",
-        [assetId, user?.tenant_id ?? null],
+        [assetId, tenantId],
       );
 
       if (!assetCheck.data?.rows[0]) {
@@ -559,7 +602,7 @@ assetRoute.post(
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING id`,
         [
-          user?.tenant_id ?? null,
+          tenantId,
           assetId,
           data.license_key ?? null,
           data.software_name,
@@ -583,24 +626,30 @@ assetRoute.post(
         );
       }
 
-      await query(
-        "SELECT public.log_asset_change($1, 'license_added', 'license', NULL, $2, $3)",
-        [assetId, data.software_name, user.sub],
-      );
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'asset.license.add', 'asset_license', $2, $3, NULL, NULL)",
-        [
-          user.sub,
-          result.data.rows[0].id,
-          JSON.stringify({ asset_id: assetId, software: data.software_name }),
-        ],
-      );
+      if (userId) {
+        await query(
+          "SELECT public.log_asset_change($1, 'license_added', 'license', NULL, $2, $3)",
+          [assetId, data.software_name, userId],
+        );
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "asset.license.add",
+            entityType: "asset_license",
+            entityId: result.data.rows[0].id,
+            newData: { asset_id: assetId, software: data.software_name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
       return c.json({ id: result.data.rows[0].id }, 201);
     } catch (error) {
       logger.error("Erro ao criar licenca", {
         assetId,
-        tenantId: user?.tenant_id,
+        tenantId,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -618,49 +667,52 @@ assetRoute.put(
   async (c) => {
     const licenseId = c.req.param("licenseId");
     const user = c.get("user");
-    const body = await c.req.json<UpdateLicenseInput>();
-    const parsed = updateLicenseSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-        400,
-      );
-    }
-
-    const data = parsed.data;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      license_key: "license_key",
-      software_name: "software_name",
-      vendor: "vendor",
-      license_type: "license_type",
-      seats_total: "seats_total",
-      seats_used: "seats_used",
-      purchase_date: "purchase_date",
-      expiry_date: "expiry_date",
-      renewal_date: "renewal_date",
-      cost: "cost",
-      is_active: "is_active",
-      notes: "notes",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ id: licenseId });
-    }
-
-    params.push(licenseId, user?.tenant_id ?? null);
+    const tenantId = user?.tenant_id ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateLicenseSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        license_key: "license_key",
+        software_name: "software_name",
+        vendor: "vendor",
+        license_type: "license_type",
+        seats_total: "seats_total",
+        seats_used: "seats_used",
+        purchase_date: "purchase_date",
+        expiry_date: "expiry_date",
+        renewal_date: "renewal_date",
+        cost: "cost",
+        is_active: "is_active",
+        notes: "notes",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ id: licenseId });
+      }
+
+      params.push(licenseId, tenantId);
+
       await query(
         `UPDATE public.asset_licenses SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
@@ -670,7 +722,7 @@ assetRoute.put(
     } catch (error) {
       logger.error("Erro ao atualizar licenca", {
         licenseId,
-        tenantId: user?.tenant_id,
+        tenantId,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -690,18 +742,26 @@ assetRoute.delete(
   async (c) => {
     const licenseId = c.req.param("licenseId");
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
     try {
-      await query(
-        "DELETE FROM public.asset_licenses WHERE id = $1 AND tenant_id = $2",
-        [licenseId, user?.tenant_id ?? null],
+      const result = await query(
+        "DELETE FROM public.asset_licenses WHERE id = $1 AND tenant_id = $2 RETURNING id",
+        [licenseId, tenantId],
       );
+
+      if (result.data?.rowCount === 0) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Licença não encontrada" } },
+          404,
+        );
+      }
 
       return c.json({ deleted: true });
     } catch (error) {
       logger.error("Erro ao deletar licenca", {
         licenseId,
-        tenantId: user?.tenant_id,
+        tenantId,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
