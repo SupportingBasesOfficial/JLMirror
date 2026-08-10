@@ -338,6 +338,10 @@ export default function DataTransferPage() {
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 
@@ -353,6 +357,10 @@ export default function DataTransferPage() {
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 
@@ -368,6 +376,10 @@ export default function DataTransferPage() {
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 

@@ -251,8 +251,12 @@ export default function K8sPage() {
       if (res.ok) {
         mutateResources();
       }
-    } catch {
-      // Ignora
+    } catch (err) {
+      console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 

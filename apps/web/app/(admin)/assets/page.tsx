@@ -407,8 +407,12 @@ export default function AssetsPage() {
         mutateAssets();
         mutateStats();
       }
-    } catch {
-      // Ignora
+    } catch (err) {
+      console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 
@@ -422,8 +426,12 @@ export default function AssetsPage() {
         const data = await res.json();
         setLicenses(data.licenses ?? []);
       }
-    } catch {
-      // Ignora
+    } catch (err) {
+      console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 
@@ -479,8 +487,12 @@ export default function AssetsPage() {
         handleSelectAsset(selectedAsset);
         mutateStats();
       }
-    } catch {
-      // Ignora
+    } catch (err) {
+      console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 

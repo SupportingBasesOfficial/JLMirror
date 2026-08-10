@@ -232,6 +232,10 @@ export default function ChangesPage() {
       }
     } catch (err) {
       console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     }
   }
 

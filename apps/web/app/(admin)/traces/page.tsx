@@ -22,7 +22,14 @@ const COLORS = {
   purple: "var(--status-info-text)",
 };
 
-const SERVICE_COLORS = [COLORS.teal, COLORS.blue, COLORS.purple, COLORS.green, COLORS.amber, COLORS.red];
+const SERVICE_COLORS = [
+  COLORS.teal,
+  COLORS.blue,
+  COLORS.purple,
+  COLORS.green,
+  COLORS.amber,
+  COLORS.red,
+];
 
 interface TraceSummary {
   trace_id: string;
@@ -97,6 +104,7 @@ function getServiceColor(service: string, services: string[]): string {
 export default function TracesPage() {
   const [selectedTrace, setSelectedTrace] = useState<TraceDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [serviceFilter, setServiceFilter] = useState("");
   const [operationFilter, setOperationFilter] = useState("");
@@ -113,7 +121,15 @@ export default function TracesPage() {
   traceParams.set("limit", String(limit));
   traceParams.set("offset", String(offset));
 
-  const { data: traceData, error, isLoading, progress, mutate } = useApi<{ traces: TraceSummary[]; total: number }>(`/api/traces/search?${traceParams.toString()}`);
+  const {
+    data: traceData,
+    error: apiError,
+    isLoading,
+    progress,
+    mutate,
+  } = useApi<{ traces: TraceSummary[]; total: number }>(
+    `/api/traces/search?${traceParams.toString()}`,
+  );
   const { data: stats } = useApi<TraceStats>("/api/traces/stats");
 
   const traces = traceData?.traces ?? [];
@@ -122,13 +138,19 @@ export default function TracesPage() {
   const fetchTraceDetail = async (traceId: string) => {
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/traces/${traceId}`, { credentials: "include" });
+      const res = await fetch(`/api/traces/${traceId}`, {
+        credentials: "include",
+      });
       const data = await res.json();
       if (res.ok) {
         setSelectedTrace(data);
       }
-    } catch {
-      // Ignora
+    } catch (err) {
+      console.error("Operacao falhou:", err);
+      setError(
+        "Operação falhou: " +
+          (err instanceof Error ? err.message : "erro desconhecido"),
+      );
     } finally {
       setLoadingDetail(false);
     }
@@ -147,7 +169,11 @@ export default function TracesPage() {
   return (
     <div
       className="min-h-screen p-6 space-y-6"
-      style={{ background: COLORS.bg, fontFamily: "'JetBrains Mono','Consolas',monospace", color: COLORS.text }}
+      style={{
+        background: COLORS.bg,
+        fontFamily: "'JetBrains Mono','Consolas',monospace",
+        color: COLORS.text,
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -163,26 +189,39 @@ export default function TracesPage() {
           <button
             onClick={() => mutate()}
             className="text-[12px] px-3 py-1.5 rounded border transition-colors"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted, cursor: "pointer" }}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.muted,
+              cursor: "pointer",
+            }}
           >
             <RefreshCw size={12} className="inline" /> Atualizar
           </button>
           <a
             href="/dashboard"
             className="text-[12px] px-3 py-1.5 rounded border transition-colors"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted }}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.muted,
+            }}
           >
             <ArrowLeft size={12} className="inline" /> Dashboard
           </a>
         </div>
       </div>
 
-      {error && (
+      {(error || apiError) && (
         <div
           className="rounded-md p-3 text-sm"
-          style={{ background: `var(--status-error-bg)`, border: `1px solid var(--status-error-border)`, color: COLORS.red }}
+          style={{
+            background: `var(--status-error-bg)`,
+            border: `1px solid var(--status-error-border)`,
+            color: COLORS.red,
+          }}
         >
-          {error}
+          {error || apiError}
         </div>
       )}
 
@@ -190,9 +229,15 @@ export default function TracesPage() {
       {stats && stats.services.length > 0 && (
         <div
           className="rounded-xl p-4"
-          style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+          style={{
+            background: COLORS.card,
+            border: `1px solid ${COLORS.border}`,
+          }}
         >
-          <div className="text-[12px] font-bold mb-3" style={{ color: COLORS.muted }}>
+          <div
+            className="text-[12px] font-bold mb-3"
+            style={{ color: COLORS.muted }}
+          >
             SERVIÇOS
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -200,22 +245,55 @@ export default function TracesPage() {
               <div
                 key={s.service}
                 className="p-3 rounded-md"
-                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+                style={{
+                  background: COLORS.bg,
+                  border: `1px solid ${COLORS.border}`,
+                }}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div
                     className="w-2 h-2 rounded-full"
-                    style={{ background: getServiceColor(s.service, allServices) }}
+                    style={{
+                      background: getServiceColor(s.service, allServices),
+                    }}
                   />
-                  <span className="text-[12px] font-bold" style={{ color: COLORS.text }}>
+                  <span
+                    className="text-[12px] font-bold"
+                    style={{ color: COLORS.text }}
+                  >
                     {s.service}
                   </span>
                 </div>
-                <div className="text-[10px] space-y-0.5" style={{ color: COLORS.muted }}>
-                  <div>spans: <span style={{ color: COLORS.text }}>{s.span_count}</span></div>
-                  <div>errors: <span style={{ color: s.error_count !== "0" ? COLORS.red : COLORS.text }}>{s.error_count}</span></div>
-                  <div>avg: <span style={{ color: COLORS.teal }}>{formatDuration(parseFloat(s.avg_duration_ms))}</span></div>
-                  <div>max: <span style={{ color: COLORS.amber }}>{formatDuration(parseFloat(s.max_duration_ms))}</span></div>
+                <div
+                  className="text-[10px] space-y-0.5"
+                  style={{ color: COLORS.muted }}
+                >
+                  <div>
+                    spans:{" "}
+                    <span style={{ color: COLORS.text }}>{s.span_count}</span>
+                  </div>
+                  <div>
+                    errors:{" "}
+                    <span
+                      style={{
+                        color: s.error_count !== "0" ? COLORS.red : COLORS.text,
+                      }}
+                    >
+                      {s.error_count}
+                    </span>
+                  </div>
+                  <div>
+                    avg:{" "}
+                    <span style={{ color: COLORS.teal }}>
+                      {formatDuration(parseFloat(s.avg_duration_ms))}
+                    </span>
+                  </div>
+                  <div>
+                    max:{" "}
+                    <span style={{ color: COLORS.amber }}>
+                      {formatDuration(parseFloat(s.max_duration_ms))}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -226,10 +304,17 @@ export default function TracesPage() {
       {/* Filtros */}
       <div
         className="rounded-xl p-4 flex flex-wrap items-end gap-4"
-        style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
       >
         <div className="space-y-1">
-          <label htmlFor="trace-service-filter" className="text-[11px] font-bold uppercase" style={{ color: COLORS.muted }}>
+          <label
+            htmlFor="trace-service-filter"
+            className="text-[11px] font-bold uppercase"
+            style={{ color: COLORS.muted }}
+          >
             Serviço
           </label>
           <input
@@ -239,11 +324,20 @@ export default function TracesPage() {
             onChange={(e) => setServiceFilter(e.target.value)}
             placeholder="api, worker, etc"
             className="rounded-md px-3 py-1.5 text-[13px]"
-            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text, width: 140 }}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              width: 140,
+            }}
           />
         </div>
         <div className="space-y-1">
-          <label htmlFor="trace-op-filter" className="text-[11px] font-bold uppercase" style={{ color: COLORS.muted }}>
+          <label
+            htmlFor="trace-op-filter"
+            className="text-[11px] font-bold uppercase"
+            style={{ color: COLORS.muted }}
+          >
             Operação
           </label>
           <input
@@ -253,11 +347,20 @@ export default function TracesPage() {
             onChange={(e) => setOperationFilter(e.target.value)}
             placeholder="GET /api/v1/..."
             className="rounded-md px-3 py-1.5 text-[13px]"
-            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text, width: 200 }}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              width: 200,
+            }}
           />
         </div>
         <div className="space-y-1">
-          <label htmlFor="trace-status-filter" className="text-[11px] font-bold uppercase" style={{ color: COLORS.muted }}>
+          <label
+            htmlFor="trace-status-filter"
+            className="text-[11px] font-bold uppercase"
+            style={{ color: COLORS.muted }}
+          >
             Status
           </label>
           <select
@@ -265,14 +368,22 @@ export default function TracesPage() {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-md px-3 py-1.5 text-[13px]"
-            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text }}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+            }}
           >
             <option value="">Todos</option>
             <option value="error">Com erro</option>
           </select>
         </div>
         <div className="space-y-1">
-          <label htmlFor="trace-min-dur" className="text-[11px] font-bold uppercase" style={{ color: COLORS.muted }}>
+          <label
+            htmlFor="trace-min-dur"
+            className="text-[11px] font-bold uppercase"
+            style={{ color: COLORS.muted }}
+          >
             Dur. mín. (ms)
           </label>
           <input
@@ -282,13 +393,22 @@ export default function TracesPage() {
             onChange={(e) => setMinDuration(e.target.value)}
             placeholder="100"
             className="rounded-md px-3 py-1.5 text-[13px]"
-            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.text, width: 100 }}
+            style={{
+              background: COLORS.bg,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              width: 100,
+            }}
           />
         </div>
         <button
           onClick={handleSearch}
           className="px-4 py-1.5 rounded-md text-[13px] font-bold"
-          style={{ background: COLORS.teal, color: COLORS.bg, cursor: "pointer" }}
+          style={{
+            background: COLORS.teal,
+            color: COLORS.bg,
+            cursor: "pointer",
+          }}
         >
           Buscar
         </button>
@@ -300,22 +420,60 @@ export default function TracesPage() {
       {/* Lista de traces */}
       <div
         className="rounded-xl overflow-hidden"
-        style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+        style={{
+          background: COLORS.card,
+          border: `1px solid ${COLORS.border}`,
+        }}
       >
         {isLoading ? (
           <LoadingState label="Carregando traces..." progress={progress} />
         ) : traces.length === 0 ? (
-          <div className="p-8 text-center text-sm" style={{ color: COLORS.muted }}>Nenhum trace encontrado</div>
+          <div
+            className="p-8 text-center text-sm"
+            style={{ color: COLORS.muted }}
+          >
+            Nenhum trace encontrado
+          </div>
         ) : (
           <table className="w-full text-[12px]">
             <thead>
               <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                <th className="text-left px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Início</th>
-                <th className="text-left px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Operação</th>
-                <th className="text-left px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Serviço</th>
-                <th className="text-right px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Duração</th>
-                <th className="text-right px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Spans</th>
-                <th className="text-right px-3 py-2 font-bold uppercase text-[10px]" style={{ color: COLORS.muted }}>Erros</th>
+                <th
+                  className="text-left px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Início
+                </th>
+                <th
+                  className="text-left px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Operação
+                </th>
+                <th
+                  className="text-left px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Serviço
+                </th>
+                <th
+                  className="text-right px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Duração
+                </th>
+                <th
+                  className="text-right px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Spans
+                </th>
+                <th
+                  className="text-right px-3 py-2 font-bold uppercase text-[10px]"
+                  style={{ color: COLORS.muted }}
+                >
+                  Erros
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -323,14 +481,27 @@ export default function TracesPage() {
                 <tr
                   key={t.trace_id}
                   onClick={() => fetchTraceDetail(t.trace_id)}
-                  onKeyDown={(e) => { if (e.key === "Enter") fetchTraceDetail(t.trace_id); }}
-                  style={{ borderBottom: `1px solid ${COLORS.border}`, cursor: "pointer", transition: "background 0.15s" }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") fetchTraceDetail(t.trace_id);
+                  }}
+                  style={{
+                    borderBottom: `1px solid ${COLORS.border}`,
+                    cursor: "pointer",
+                    transition: "background 0.15s",
+                  }}
                   role="button"
                   tabIndex={0}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = COLORS.cardHover; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = COLORS.cardHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                  }}
                 >
-                  <td className="px-3 py-2 whitespace-nowrap" style={{ color: COLORS.muted }}>
+                  <td
+                    className="px-3 py-2 whitespace-nowrap"
+                    style={{ color: COLORS.muted }}
+                  >
                     {formatTime(t.start_time)}
                   </td>
                   <td className="px-3 py-2" style={{ color: COLORS.text }}>
@@ -338,22 +509,48 @@ export default function TracesPage() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ background: getServiceColor(t.primary_service, allServices) }} />
-                      <span style={{ color: COLORS.text }}>{t.primary_service}</span>
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{
+                          background: getServiceColor(
+                            t.primary_service,
+                            allServices,
+                          ),
+                        }}
+                      />
+                      <span style={{ color: COLORS.text }}>
+                        {t.primary_service}
+                      </span>
                       {t.service_count > 1 && (
-                        <span className="text-[10px]" style={{ color: COLORS.muted }}>+{t.service_count - 1}</span>
+                        <span
+                          className="text-[10px]"
+                          style={{ color: COLORS.muted }}
+                        >
+                          +{t.service_count - 1}
+                        </span>
                       )}
                     </div>
                   </td>
-                  <td className="px-3 py-2 text-right font-bold" style={{ color: t.total_duration_ms > 1000 ? COLORS.amber : COLORS.teal }}>
+                  <td
+                    className="px-3 py-2 text-right font-bold"
+                    style={{
+                      color:
+                        t.total_duration_ms > 1000 ? COLORS.amber : COLORS.teal,
+                    }}
+                  >
                     {formatDuration(t.total_duration_ms)}
                   </td>
-                  <td className="px-3 py-2 text-right" style={{ color: COLORS.text }}>
+                  <td
+                    className="px-3 py-2 text-right"
+                    style={{ color: COLORS.text }}
+                  >
                     {t.span_count}
                   </td>
                   <td className="px-3 py-2 text-right">
                     {t.error_count > 0 ? (
-                      <span className="font-bold" style={{ color: COLORS.red }}>{t.error_count}</span>
+                      <span className="font-bold" style={{ color: COLORS.red }}>
+                        {t.error_count}
+                      </span>
                     ) : (
                       <span style={{ color: COLORS.muted }}>0</span>
                     )}
@@ -372,16 +569,30 @@ export default function TracesPage() {
             onClick={() => setOffset(Math.max(0, offset - limit))}
             disabled={offset === 0}
             className="px-3 py-1.5 rounded text-[12px] disabled:opacity-30"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.text, cursor: offset === 0 ? "not-allowed" : "pointer" }}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              cursor: offset === 0 ? "not-allowed" : "pointer",
+            }}
           >
             ← Anterior
           </button>
-          <span className="text-[12px] px-3" style={{ color: COLORS.muted }}>{currentPage} / {totalPages}</span>
+          <span className="text-[12px] px-3" style={{ color: COLORS.muted }}>
+            {currentPage} / {totalPages}
+          </span>
           <button
-            onClick={() => setOffset(Math.min((totalPages - 1) * limit, offset + limit))}
+            onClick={() =>
+              setOffset(Math.min((totalPages - 1) * limit, offset + limit))
+            }
             disabled={offset + limit >= total}
             className="px-3 py-1.5 rounded text-[12px] disabled:opacity-30"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.text, cursor: offset + limit >= total ? "not-allowed" : "pointer" }}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+              color: COLORS.text,
+              cursor: offset + limit >= total ? "not-allowed" : "pointer",
+            }}
           >
             Próxima →
           </button>
@@ -394,20 +605,28 @@ export default function TracesPage() {
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "var(--overlay-modal)" }}
           onClick={() => setSelectedTrace(null)}
-          onKeyDown={(e) => { if (e.key === "Escape") setSelectedTrace(null); }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setSelectedTrace(null);
+          }}
           role="button"
           tabIndex={0}
         >
           <div
             className="rounded-xl p-6 max-w-4xl w-full max-h-[85vh] overflow-y-auto"
-            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}
+            style={{
+              background: COLORS.card,
+              border: `1px solid ${COLORS.border}`,
+            }}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             role="presentation"
           >
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-bold" style={{ color: COLORS.teal }}>
+                <h2
+                  className="text-sm font-bold"
+                  style={{ color: COLORS.teal }}
+                >
                   Trace Details
                 </h2>
                 <code className="text-[10px]" style={{ color: COLORS.muted }}>
@@ -433,11 +652,19 @@ export default function TracesPage() {
               </div>
               <div>
                 <span style={{ color: COLORS.muted }}>Spans: </span>
-                <span style={{ color: COLORS.text }}>{selectedTrace.span_count}</span>
+                <span style={{ color: COLORS.text }}>
+                  {selectedTrace.span_count}
+                </span>
               </div>
               <div>
                 <span style={{ color: COLORS.muted }}>Erros: </span>
-                <span className="font-bold" style={{ color: selectedTrace.error_count > 0 ? COLORS.red : COLORS.text }}>
+                <span
+                  className="font-bold"
+                  style={{
+                    color:
+                      selectedTrace.error_count > 0 ? COLORS.red : COLORS.text,
+                  }}
+                >
                   {selectedTrace.error_count}
                 </span>
               </div>
@@ -450,17 +677,30 @@ export default function TracesPage() {
               <div className="space-y-1">
                 {(() => {
                   const earliest = Math.min(
-                    ...selectedTrace.spans.map((s) => new Date(s.start_time).getTime())
+                    ...selectedTrace.spans.map((s) =>
+                      new Date(s.start_time).getTime(),
+                    ),
                   );
                   const totalDur = selectedTrace.total_duration_ms || 1;
 
                   return selectedTrace.spans
-                    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+                    .sort(
+                      (a, b) =>
+                        new Date(a.start_time).getTime() -
+                        new Date(b.start_time).getTime(),
+                    )
                     .map((span) => {
-                      const startOffset = new Date(span.start_time).getTime() - earliest;
+                      const startOffset =
+                        new Date(span.start_time).getTime() - earliest;
                       const leftPct = (startOffset / totalDur) * 100;
-                      const widthPct = Math.max((span.duration_ms / totalDur) * 100, 0.5);
-                      const color = span.status === "error" ? COLORS.red : getServiceColor(span.service, allServices);
+                      const widthPct = Math.max(
+                        (span.duration_ms / totalDur) * 100,
+                        0.5,
+                      );
+                      const color =
+                        span.status === "error"
+                          ? COLORS.red
+                          : getServiceColor(span.service, allServices);
                       const depth = span.parent_span_id ? 1 : 0;
 
                       return (
@@ -469,13 +709,25 @@ export default function TracesPage() {
                           className="flex items-center gap-2 group"
                           style={{ paddingLeft: `${depth * 20}px` }}
                         >
-                          <div className="flex-shrink-0 w-[200px] truncate text-[11px]" style={{ color: COLORS.text }}>
+                          <div
+                            className="flex-shrink-0 w-[200px] truncate text-[11px]"
+                            style={{ color: COLORS.text }}
+                          >
                             {span.operation_name}
                           </div>
-                          <div className="flex-shrink-0 w-[100px] text-[10px]" style={{ color: COLORS.muted }}>
+                          <div
+                            className="flex-shrink-0 w-[100px] text-[10px]"
+                            style={{ color: COLORS.muted }}
+                          >
                             {span.service}
                           </div>
-                          <div className="flex-1 relative h-6 rounded" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                          <div
+                            className="flex-1 relative h-6 rounded"
+                            style={{
+                              background: COLORS.bg,
+                              border: `1px solid ${COLORS.border}`,
+                            }}
+                          >
                             <div
                               className="absolute h-full rounded transition-opacity group-hover:opacity-80"
                               style={{
@@ -487,7 +739,10 @@ export default function TracesPage() {
                               title={`${span.operation_name} — ${formatDuration(span.duration_ms)}`}
                             />
                           </div>
-                          <div className="flex-shrink-0 w-[60px] text-right text-[10px] font-bold" style={{ color }}>
+                          <div
+                            className="flex-shrink-0 w-[60px] text-right text-[10px] font-bold"
+                            style={{ color }}
+                          >
                             {formatDuration(span.duration_ms)}
                           </div>
                         </div>
@@ -499,55 +754,105 @@ export default function TracesPage() {
 
             {/* Detalhes dos spans */}
             <div className="mt-4 space-y-2">
-              <div className="text-[12px] font-bold" style={{ color: COLORS.muted }}>
+              <div
+                className="text-[12px] font-bold"
+                style={{ color: COLORS.muted }}
+              >
                 SPANS DETALHADOS
               </div>
               {selectedTrace.spans.map((span) => (
                 <div
                   key={span.id}
                   className="p-3 rounded-md"
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                  }}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div
                         className="w-2 h-2 rounded-full"
-                        style={{ background: span.status === "error" ? COLORS.red : getServiceColor(span.service, allServices) }}
+                        style={{
+                          background:
+                            span.status === "error"
+                              ? COLORS.red
+                              : getServiceColor(span.service, allServices),
+                        }}
                       />
-                      <span className="text-[12px] font-bold" style={{ color: COLORS.text }}>
+                      <span
+                        className="text-[12px] font-bold"
+                        style={{ color: COLORS.text }}
+                      >
                         {span.operation_name}
                       </span>
                       <span
                         className="px-1.5 py-0.5 rounded text-[9px] uppercase"
-                        style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.muted }}
+                        style={{
+                          background: COLORS.card,
+                          border: `1px solid ${COLORS.border}`,
+                          color: COLORS.muted,
+                        }}
                       >
                         {span.kind}
                       </span>
                     </div>
-                    <span className="text-[11px] font-bold" style={{ color: COLORS.teal }}>
+                    <span
+                      className="text-[11px] font-bold"
+                      style={{ color: COLORS.teal }}
+                    >
                       {formatDuration(span.duration_ms)}
                     </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-[10px]" style={{ color: COLORS.muted }}>
-                    <div>service: <span style={{ color: COLORS.text }}>{span.service}</span></div>
-                    <div>span_id: <code style={{ color: COLORS.text }}>{span.span_id.slice(0, 12)}</code></div>
-                    <div>parent: <code style={{ color: COLORS.text }}>{span.parent_span_id?.slice(0, 12) ?? "—"}</code></div>
+                  <div
+                    className="grid grid-cols-3 gap-2 text-[10px]"
+                    style={{ color: COLORS.muted }}
+                  >
+                    <div>
+                      service:{" "}
+                      <span style={{ color: COLORS.text }}>{span.service}</span>
+                    </div>
+                    <div>
+                      span_id:{" "}
+                      <code style={{ color: COLORS.text }}>
+                        {span.span_id.slice(0, 12)}
+                      </code>
+                    </div>
+                    <div>
+                      parent:{" "}
+                      <code style={{ color: COLORS.text }}>
+                        {span.parent_span_id?.slice(0, 12) ?? "—"}
+                      </code>
+                    </div>
                   </div>
                   {span.status_message && (
-                    <div className="mt-1 text-[10px]" style={{ color: COLORS.red }}>
+                    <div
+                      className="mt-1 text-[10px]"
+                      style={{ color: COLORS.red }}
+                    >
                       {span.status_message}
                     </div>
                   )}
-                  {span.attributes != null && Object.keys(span.attributes as object).length > 0 && (
-                    <details className="mt-2">
-                      <summary className="text-[10px] cursor-pointer" style={{ color: COLORS.muted }}>
-                        attributes
-                      </summary>
-                      <pre className="mt-1 p-2 rounded text-[10px] overflow-x-auto" style={{ background: COLORS.card, color: COLORS.teal }}>
-                        {JSON.stringify(span.attributes, null, 2)}
-                      </pre>
-                    </details>
-                  )}
+                  {span.attributes != null &&
+                    Object.keys(span.attributes as object).length > 0 && (
+                      <details className="mt-2">
+                        <summary
+                          className="text-[10px] cursor-pointer"
+                          style={{ color: COLORS.muted }}
+                        >
+                          attributes
+                        </summary>
+                        <pre
+                          className="mt-1 p-2 rounded text-[10px] overflow-x-auto"
+                          style={{
+                            background: COLORS.card,
+                            color: COLORS.teal,
+                          }}
+                        >
+                          {JSON.stringify(span.attributes, null, 2)}
+                        </pre>
+                      </details>
+                    )}
                 </div>
               ))}
             </div>
