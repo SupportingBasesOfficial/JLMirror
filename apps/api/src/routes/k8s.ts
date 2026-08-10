@@ -132,25 +132,25 @@ k8sRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createK8sClusterSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateK8sClusterInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createK8sClusterSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateK8sClusterInput;
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.k8s_clusters (tenant_id, name, display_name, api_server_url, context, namespace, kubeconfig_path)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -230,54 +230,56 @@ k8sRoute.put(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateK8sClusterSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdateK8sClusterInput;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      display_name: "display_name",
-      api_server_url: "api_server_url",
-      context: "context",
-      namespace: "namespace",
-      kubeconfig_path: "kubeconfig_path",
-      is_active: "is_active",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (updateFields.length === 0) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" } },
-        400,
-      );
-    }
-
-    params.push(clusterId, tenantId);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateK8sClusterSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdateK8sClusterInput;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        display_name: "display_name",
+        api_server_url: "api_server_url",
+        context: "context",
+        namespace: "namespace",
+        kubeconfig_path: "kubeconfig_path",
+        is_active: "is_active",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (updateFields.length === 0) {
+        return c.json(
+          {
+            error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" },
+          },
+          400,
+        );
+      }
+
+      params.push(clusterId, tenantId);
+
       const result = await query(
         `UPDATE public.k8s_clusters SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
@@ -386,36 +388,37 @@ k8sRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const namespace = c.req.query("namespace");
-
-    const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
-    if (!typeParsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Tipo de recurso inválido",
-          },
-        },
-        400,
-      );
-    }
-
-    const resourceType = typeParsed.data;
-
-    const conditions: string[] = [
-      "cluster_id = $1",
-      "tenant_id = $2",
-      "resource_type = $3",
-    ];
-    const params: unknown[] = [clusterId, tenantId, resourceType];
-    let paramIdx = 4;
-
-    if (namespace && namespace !== "all") {
-      conditions.push(`namespace = $${paramIdx++}`);
-      params.push(namespace);
-    }
+    let resourceType: string | null = null;
 
     try {
+      const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
+      if (!typeParsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Tipo de recurso inválido",
+            },
+          },
+          400,
+        );
+      }
+
+      resourceType = typeParsed.data;
+
+      const conditions: string[] = [
+        "cluster_id = $1",
+        "tenant_id = $2",
+        "resource_type = $3",
+      ];
+      const params: unknown[] = [clusterId, tenantId, resourceType];
+      let paramIdx = 4;
+
+      if (namespace && namespace !== "all") {
+        conditions.push(`namespace = $${paramIdx++}`);
+        params.push(namespace);
+      }
+
       const result = await query(
         `SELECT id, namespace, name, uid, status, spec, labels, annotations, ready, restarts, node_name, pod_ip, age_seconds, cached_at
        FROM public.k8s_resources_cache
@@ -442,7 +445,7 @@ k8sRoute.get(
     } catch (error) {
       logger.error("Erro ao buscar recursos k8s", {
         clusterId,
-        resourceType,
+        resourceType: resourceType ?? resourceTypeRaw,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -464,22 +467,22 @@ k8sRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
-    if (!typeParsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Tipo de recurso inválido",
-          },
-        },
-        400,
-      );
-    }
-
-    const resourceType = typeParsed.data;
-
     try {
+      const typeParsed = k8sResourceTypeSchema.safeParse(resourceTypeRaw);
+      if (!typeParsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Tipo de recurso inválido",
+            },
+          },
+          400,
+        );
+      }
+
+      const resourceType = typeParsed.data;
+
       // Busca configuracao do cluster
       const clusterResult = await query<{
         id: string;
@@ -618,8 +621,10 @@ k8sRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const namespace = c.req.query("namespace");
     const eventType = c.req.query("type");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 500);
-    const offset = parseInt(c.req.query("offset") ?? "0", 10);
+    const parsedLimit = parseInt(c.req.query("limit") ?? "100", 10);
+    const parsedOffset = parseInt(c.req.query("offset") ?? "0", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 100 : parsedLimit, 500);
+    const offset = Number.isNaN(parsedOffset) ? 0 : parsedOffset;
 
     const conditions: string[] = ["cluster_id = $1", "tenant_id = $2"];
     const params: unknown[] = [clusterId, tenantId];
