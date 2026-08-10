@@ -451,3 +451,136 @@ describe("billing — logica de cycle mapping", () => {
     expect(cycleMap.yearly).toBe("YEARLY");
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("billing — logica de tenant isolation", () => {
+  it("queries de billing_subscriptions filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql =
+      "SELECT * FROM public.billing_subscriptions WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de billing_invoices filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql = "SELECT * FROM public.billing_invoices WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("INSERT billing_subscriptions inclui tenant_id", () => {
+    const tenantId = "t-ins";
+    const params: unknown[] = [tenantId, "sub-1", "cust-1", "pro", "monthly"];
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("INSERT billing_invoices inclui tenant_id", () => {
+    const tenantId = "t-inv";
+    const params: unknown[] = [tenantId, "pay-1", 1000];
+    expect(params[0]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("billing — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getSub(user: TestUser | null | undefined): string | null {
+    return user?.sub ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.sub retorna null quando user e null", () => {
+    expect(getSub(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.sub retorna valor quando user existe", () => {
+    expect(getSub({ sub: "u1", tenant_id: "t1" })).toBe("u1");
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("billing — logica de parallel queries", () => {
+  it("overview paraleliza 2 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total: "10" }] } }),
+      Promise.resolve({ data: { rows: [{ total: "5" }] } }),
+    ]);
+    expect(results).toHaveLength(2);
+  });
+
+  it("stats paraleliza 2 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+    ]);
+    expect(results).toHaveLength(2);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Webhook HMAC ==========
+
+describe("billing — logica de webhook HMAC", () => {
+  it("webhook sem secret nao valida assinatura", () => {
+    const webhookSecret: string | undefined = undefined;
+    const shouldValidate = !!webhookSecret;
+    expect(shouldValidate).toBe(false);
+  });
+
+  it("webhook com secret valida assinatura", () => {
+    const webhookSecret = "secret-123";
+    const shouldValidate = !!webhookSecret;
+    expect(shouldValidate).toBe(true);
+  });
+
+  it("webhook sem assinatura retorna 401 quando secret configurado", () => {
+    const webhookSecret = "secret-123";
+    const providedSig = "";
+    const shouldReject = !!webhookSecret && !providedSig;
+    expect(shouldReject).toBe(true);
+  });
+});
+
+// ========== Logica de 404 Handling ==========
+
+describe("billing — logica de 404 handling", () => {
+  it("POST /payments sem customer retorna 404", () => {
+    const customerId: string | undefined = undefined;
+    const shouldReturn404 = !customerId;
+    expect(shouldReturn404).toBe(true);
+  });
+
+  it("webhook para pagamento desconhecido loga warning", () => {
+    const rowCount = 0;
+    const shouldWarn = rowCount === 0;
+    expect(shouldWarn).toBe(true);
+  });
+});

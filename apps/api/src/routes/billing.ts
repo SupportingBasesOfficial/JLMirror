@@ -168,38 +168,38 @@ billingRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createBillingSubscriptionSchema.safeParse(parsedBody.data);
-
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    if (!isAsaasConfigured()) {
-      return c.json(
-        {
-          error: {
-            code: "ASAAS_NOT_CONFIGURED",
-            message: "Asaas não configurado",
-          },
-        },
-        501,
-      );
-    }
-
-    const data = parsed.data as CreateBillingSubscriptionInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createBillingSubscriptionSchema.safeParse(parsedBody.data);
+
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      if (!isAsaasConfigured()) {
+        return c.json(
+          {
+            error: {
+              code: "ASAAS_NOT_CONFIGURED",
+              message: "Asaas não configurado",
+            },
+          },
+          501,
+        );
+      }
+
+      const data = parsed.data as CreateBillingSubscriptionInput;
+
       // Cria cliente no Asaas
       const customerResult = await createAsaasCustomer({
         name: data.customer_name,
@@ -341,38 +341,38 @@ billingRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createBillingPaymentSchema.safeParse(parsedBody.data);
-
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    if (!isAsaasConfigured()) {
-      return c.json(
-        {
-          error: {
-            code: "ASAAS_NOT_CONFIGURED",
-            message: "Asaas não configurado",
-          },
-        },
-        501,
-      );
-    }
-
-    const data = parsed.data as CreateBillingPaymentInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createBillingPaymentSchema.safeParse(parsedBody.data);
+
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      if (!isAsaasConfigured()) {
+        return c.json(
+          {
+            error: {
+              code: "ASAAS_NOT_CONFIGURED",
+              message: "Asaas não configurado",
+            },
+          },
+          501,
+        );
+      }
+
+      const data = parsed.data as CreateBillingPaymentInput;
+
       // Busca asaas_customer_id do tenant
       const subResult = await query<{ asaas_customer_id: string }>(
         "SELECT asaas_customer_id FROM public.billing_subscriptions WHERE tenant_id = $1 AND asaas_customer_id IS NOT NULL LIMIT 1",
@@ -529,52 +529,55 @@ billingRoute.get(
 // POST /api/v1/billing/webhook — webhook do Asaas (publico, sem auth)
 // Seguranca: valida assinatura HMAC se ASAAS_WEBHOOK_SECRET configurado
 billingRoute.post("/webhook", rateLimitWrite, async (c) => {
-  const parsedBody = await safeJsonBody(c);
-  if (!parsedBody.success) return parsedBody.response;
-  const parsed = asaasWebhookSchema.safeParse(parsedBody.data);
+  try {
+    const parsedBody = await safeJsonBody(c);
+    if (!parsedBody.success) return parsedBody.response;
+    const parsed = asaasWebhookSchema.safeParse(parsedBody.data);
 
-  if (!parsed.success) {
-    return c.json({ received: false, error: "payment.id não encontrado" }, 400);
-  }
-
-  const { event, payment } = parsed.data;
-
-  // Verificacao de assinatura HMAC (se secret configurado)
-  const webhookSecret = process.env.ASAAS_WEBHOOK_SECRET;
-  if (webhookSecret) {
-    const providedSig = c.req.header("X-Asaas-Signature") ?? "";
-    if (!providedSig) {
-      logger.warn("Asaas webhook sem assinatura", {
-        paymentId: payment.id,
-      });
+    if (!parsed.success) {
       return c.json(
-        { received: false, error: "Assinatura não fornecida" },
-        401,
+        { received: false, error: "payment.id não encontrado" },
+        400,
       );
     }
 
-    // Verifica HMAC em tempo constante
-    const { createHmac, timingSafeEqual } = await import("node:crypto");
-    const bodyStr = JSON.stringify(parsedBody.data);
-    const expectedSig = createHmac("sha256", webhookSecret)
-      .update(bodyStr)
-      .digest("hex");
-    const providedBuf = Buffer.from(providedSig, "hex");
-    const expectedBuf = Buffer.from(expectedSig, "hex");
+    const { event, payment } = parsed.data;
 
-    const valid =
-      providedBuf.length === expectedBuf.length &&
-      timingSafeEqual(providedBuf, expectedBuf);
+    // Verificacao de assinatura HMAC (se secret configurado)
+    const webhookSecret = process.env.ASAAS_WEBHOOK_SECRET;
+    if (webhookSecret) {
+      const providedSig = c.req.header("X-Asaas-Signature") ?? "";
+      if (!providedSig) {
+        logger.warn("Asaas webhook sem assinatura", {
+          paymentId: payment.id,
+        });
+        return c.json(
+          { received: false, error: "Assinatura não fornecida" },
+          401,
+        );
+      }
 
-    if (!valid) {
-      logger.warn("Asaas webhook assinatura invalida", {
-        paymentId: payment.id,
-      });
-      return c.json({ received: false, error: "Assinatura inválida" }, 401);
+      // Verifica HMAC em tempo constante
+      const { createHmac, timingSafeEqual } = await import("node:crypto");
+      const bodyStr = JSON.stringify(parsedBody.data);
+      const expectedSig = createHmac("sha256", webhookSecret)
+        .update(bodyStr)
+        .digest("hex");
+      const providedBuf = Buffer.from(providedSig, "hex");
+      const expectedBuf = Buffer.from(expectedSig, "hex");
+
+      const valid =
+        providedBuf.length === expectedBuf.length &&
+        timingSafeEqual(providedBuf, expectedBuf);
+
+      if (!valid) {
+        logger.warn("Asaas webhook assinatura invalida", {
+          paymentId: payment.id,
+        });
+        return c.json({ received: false, error: "Assinatura inválida" }, 401);
+      }
     }
-  }
 
-  try {
     // Atualiza status da fatura no DB
     const result = await query(
       "UPDATE public.billing_invoices SET status = $1, paid_at = CASE WHEN $1 IN ('RECEIVED', 'CONFIRMED') THEN timezone('utc'::text, now()) ELSE paid_at END WHERE asaas_payment_id = $2",
@@ -601,7 +604,6 @@ billingRoute.post("/webhook", rateLimitWrite, async (c) => {
     });
   } catch (error) {
     logger.error("Erro ao processar Asaas webhook", {
-      paymentId: payment.id,
       error: error instanceof Error ? error.message : String(error),
     });
     return c.json({ received: false, error: "Erro ao processar webhook" }, 500);
