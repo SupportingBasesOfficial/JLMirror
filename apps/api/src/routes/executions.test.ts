@@ -191,7 +191,7 @@ describe("executions — logica de script execution", () => {
   });
 
   it("exitCode != 0 muda status para failed", () => {
-    const exitCode = 1;
+    const exitCode: number = 1;
     const status = exitCode !== 0 ? "failed" : "completed";
     expect(status).toBe("failed");
   });
