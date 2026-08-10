@@ -15,30 +15,42 @@ devicesRoute.get("/", async (c) => {
   const user = c.get("user");
   const tenantId = user.tenant_id;
 
-  const result = await query<{
-    id: string;
-    tenant_id: string;
-    hostname: string;
-    ip: string;
-    type: string;
-    status: string;
-    zabbix_host_id: string | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
-     FROM public.devices WHERE tenant_id = $1 ORDER BY hostname`,
-    [tenantId],
-  );
+  try {
+    const result = await query<{
+      id: string;
+      tenant_id: string;
+      hostname: string;
+      ip: string;
+      type: string;
+      status: string;
+      zabbix_host_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
+       FROM public.devices WHERE tenant_id = $1 ORDER BY hostname`,
+      [tenantId],
+    );
 
-  if (result.error) {
+    if (result.error) {
+      return c.json(
+        { error: { code: "DB_ERROR", message: result.error.message } },
+        500,
+      );
+    }
+
+    return c.json({ devices: safeRows(result) });
+  } catch (error) {
     return c.json(
-      { error: { code: "DB_ERROR", message: result.error.message } },
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: error instanceof Error ? error.message : "Erro interno",
+        },
+      },
       500,
     );
   }
-
-  return c.json({ devices: safeRows(result) });
 });
 
 // GET /api/v1/devices/:id
@@ -47,36 +59,48 @@ devicesRoute.get("/:id", async (c) => {
   const tenantId = user.tenant_id;
   const deviceId = c.req.param("id");
 
-  const result = await query<{
-    id: string;
-    tenant_id: string;
-    hostname: string;
-    ip: string;
-    type: string;
-    status: string;
-    zabbix_host_id: string | null;
-    created_at: string;
-    updated_at: string;
-  }>(
-    `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
-     FROM public.devices WHERE tenant_id = $1 AND id = $2`,
-    [tenantId, deviceId],
-  );
+  try {
+    const result = await query<{
+      id: string;
+      tenant_id: string;
+      hostname: string;
+      ip: string;
+      type: string;
+      status: string;
+      zabbix_host_id: string | null;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT id, tenant_id, hostname, ip, type, status, zabbix_host_id, created_at, updated_at
+       FROM public.devices WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, deviceId],
+    );
 
-  if (result.error) {
+    if (result.error) {
+      return c.json(
+        { error: { code: "DB_ERROR", message: result.error.message } },
+        500,
+      );
+    }
+
+    const device = safeFirstRow(result);
+    if (!device) {
+      return c.json(
+        { error: { code: "NOT_FOUND", message: "Dispositivo não encontrado" } },
+        404,
+      );
+    }
+
+    return c.json(device);
+  } catch (error) {
     return c.json(
-      { error: { code: "DB_ERROR", message: result.error.message } },
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: error instanceof Error ? error.message : "Erro interno",
+        },
+      },
       500,
     );
   }
-
-  const device = safeFirstRow(result);
-  if (!device) {
-    return c.json(
-      { error: { code: "NOT_FOUND", message: "Dispositivo não encontrado" } },
-      404,
-    );
-  }
-
-  return c.json(device);
 });

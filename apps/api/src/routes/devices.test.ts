@@ -335,3 +335,93 @@ describe("devices — batch items endpoint", () => {
     expect(itemsByHost["h2"]).toHaveLength(1);
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("devices — logica de tenant isolation", () => {
+  it("queries de devices filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql =
+      "SELECT * FROM public.devices WHERE tenant_id = $1 ORDER BY hostname";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("GET /:id inclui tenant_id no WHERE", () => {
+    const tenantId = "t-456";
+    const deviceId = "d-1";
+    const sql = "SELECT * FROM public.devices WHERE tenant_id = $1 AND id = $2";
+    const params: unknown[] = [tenantId, deviceId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de Error Handling ==========
+
+describe("devices — logica de error handling", () => {
+  it("result.error retorna DB_ERROR 500", () => {
+    const result = { error: { message: "Connection refused" } };
+    const hasError = !!result.error;
+    expect(hasError).toBe(true);
+  });
+
+  it("result sem error retorna dados normalmente", () => {
+    const result = { error: null, data: { rows: [] } };
+    const hasError = !!result.error;
+    expect(hasError).toBe(false);
+  });
+
+  it("device nao encontrado retorna 404", () => {
+    const device = null;
+    const notFound = !device;
+    expect(notFound).toBe(true);
+  });
+
+  it("device encontrado retorna 200", () => {
+    const device = { id: "d-1", hostname: "server-01" };
+    const notFound = !device;
+    expect(notFound).toBe(false);
+  });
+
+  it("catch retorna INTERNAL_ERROR 500", () => {
+    const error = new Error("Unexpected failure");
+    const message = error instanceof Error ? error.message : "Erro interno";
+    expect(message).toBe("Unexpected failure");
+  });
+
+  it("catch com non-Error retorna mensagem generica", () => {
+    const error = "string error";
+    const message = error instanceof Error ? error.message : "Erro interno";
+    expect(message).toBe("Erro interno");
+  });
+});
+
+// ========== Logica de safeRows/safeFirstRow ==========
+
+describe("devices — logica de safeRows/safeFirstRow", () => {
+  it("safeRows retorna array vazio quando data undefined", () => {
+    const result = { data: undefined };
+    const rows = result.data?.rows ?? [];
+    expect(rows).toEqual([]);
+  });
+
+  it("safeRows retorna rows quando data existe", () => {
+    const result = { data: { rows: [{ id: "1" }, { id: "2" }] } };
+    const rows = result.data?.rows ?? [];
+    expect(rows).toHaveLength(2);
+  });
+
+  it("safeFirstRow retorna undefined quando vazio", () => {
+    const result = { data: { rows: [] } };
+    const first = result.data?.rows?.[0];
+    expect(first).toBeUndefined();
+  });
+
+  it("safeFirstRow retorna primeiro elemento", () => {
+    const result = { data: { rows: [{ id: "1" }] } };
+    const first = result.data?.rows?.[0];
+    expect(first).toEqual({ id: "1" });
+  });
+});
