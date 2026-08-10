@@ -209,7 +209,7 @@ describe("security-audit — finding severity counting", () => {
 
   it("conta high findings corretamente", () => {
     let high = 0;
-    const severity = "high";
+    const severity: string = "high";
     if (severity === "critical") high++;
     else if (severity === "high") high++;
     expect(high).toBe(1);
@@ -217,7 +217,7 @@ describe("security-audit — finding severity counting", () => {
 
   it("conta medium findings corretamente", () => {
     let medium = 0;
-    const severity = "medium";
+    const severity: string = "medium";
     if (severity === "critical") medium++;
     else if (severity === "high") medium++;
     else if (severity === "medium") medium++;
@@ -226,7 +226,7 @@ describe("security-audit — finding severity counting", () => {
 
   it("conta low findings corretamente", () => {
     let low = 0;
-    const severity = "low";
+    const severity: string = "low";
     if (severity === "critical") low++;
     else if (severity === "high") low++;
     else if (severity === "medium") low++;

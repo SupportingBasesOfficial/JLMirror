@@ -12,16 +12,11 @@ import {
   createServiceIncidentSchema,
   updateServiceIncidentSchema,
   slaReportQuerySchema,
-  type CreateServiceInput,
-  type UpdateServiceInput,
-  type CreateMaintenanceWindowInput,
-  type UpdateMaintenanceWindowInput,
-  type CreateServiceIncidentInput,
-  type UpdateServiceIncidentInput,
 } from "@repo/shared-validation";
 import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
+import { safeJsonBody } from "../lib/safe-json.js";
 import "../types.js";
 
 export const slaRoute = new Hono();
@@ -181,23 +176,24 @@ slaRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const body = await c.req.json<CreateServiceInput>();
-    const parsed = createServiceSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = createServiceSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
       const result = await query(
         `INSERT INTO public.services (tenant_id, name, description, service_type, status, device_ids,
          sla_target_percentage, coverage_hours, coverage_timezone, coverage_days, priority,
@@ -262,80 +258,98 @@ slaRoute.put(
     const tenantId = user?.tenant_id ?? null;
     const serviceId = c.req.param("id");
 
-    const body = await c.req.json<UpdateServiceInput>();
-    const parsed = updateServiceSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let idx = 1;
-
-    const addField = (col: string, val: unknown) => {
-      if (val !== undefined) {
-        fields.push(`${col} = $${idx}`);
-        values.push(val);
-        idx++;
-      }
-    };
-
-    addField("name", d.name);
-    addField("description", d.description ?? null);
-    addField("service_type", d.service_type);
-    addField("status", d.status);
-    addField(
-      "device_ids",
-      d.device_ids ? JSON.stringify(d.device_ids) : undefined,
-    );
-    addField("sla_target_percentage", d.sla_target_percentage);
-    addField("coverage_hours", d.coverage_hours);
-    addField("coverage_timezone", d.coverage_timezone);
-    addField("coverage_days", d.coverage_days);
-    addField("priority", d.priority);
-    addField("zabbix_service_id", d.zabbix_service_id ?? null);
-    addField("metadata", d.metadata ? JSON.stringify(d.metadata) : undefined);
-    addField("is_active", d.is_active);
-
-    if (fields.length === 0) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Nenhum campo para atualizar",
-          },
-        },
-        400,
-      );
-    }
-
-    values.push(serviceId, tenantId);
     try {
-      const result = await query(
-        `UPDATE public.services SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
-        values,
-      );
-
-      if (result.error || !result.data?.rows[0]) {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = updateServiceSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
         return c.json(
-          { error: { code: "NOT_FOUND", message: "Serviço não encontrado" } },
-          404,
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
         );
       }
 
-      return c.json({ data: { id: result.data.rows[0].id } });
+      const d = parsed.data;
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      const addField = (col: string, val: unknown) => {
+        if (val !== undefined) {
+          fields.push(`${col} = $${idx}`);
+          values.push(val);
+          idx++;
+        }
+      };
+
+      addField("name", d.name);
+      addField("description", d.description ?? null);
+      addField("service_type", d.service_type);
+      addField("status", d.status);
+      addField(
+        "device_ids",
+        d.device_ids ? JSON.stringify(d.device_ids) : undefined,
+      );
+      addField("sla_target_percentage", d.sla_target_percentage);
+      addField("coverage_hours", d.coverage_hours);
+      addField("coverage_timezone", d.coverage_timezone);
+      addField("coverage_days", d.coverage_days);
+      addField("priority", d.priority);
+      addField("zabbix_service_id", d.zabbix_service_id ?? null);
+      addField("metadata", d.metadata ? JSON.stringify(d.metadata) : undefined);
+      addField("is_active", d.is_active);
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      values.push(serviceId, tenantId);
+      try {
+        const result = await query(
+          `UPDATE public.services SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
+          values,
+        );
+
+        if (result.error || !result.data?.rows[0]) {
+          return c.json(
+            { error: { code: "NOT_FOUND", message: "Serviço não encontrado" } },
+            404,
+          );
+        }
+
+        return c.json({ data: { id: result.data.rows[0].id } });
+      } catch (error) {
+        logger.error("Erro ao atualizar servico SLA", {
+          serviceId,
+          tenantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return c.json(
+          {
+            error: {
+              code: "UPDATE_ERROR",
+              message: "Erro ao atualizar serviço",
+            },
+          },
+          500,
+        );
+      }
     } catch (error) {
-      logger.error("Erro ao atualizar servico SLA", {
+      logger.error("Erro inesperado ao atualizar servico SLA", {
         serviceId,
         tenantId,
         error: error instanceof Error ? error.message : String(error),
@@ -530,23 +544,24 @@ slaRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const body = await c.req.json<CreateServiceIncidentInput>();
-    const parsed = createServiceIncidentSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = createServiceIncidentSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
       // IDOR protection: verifica se o service_id pertence ao tenant antes de criar incidente
       const serviceCheck = await query(
         "SELECT id FROM public.services WHERE id = $1 AND tenant_id = $2",
@@ -611,7 +626,6 @@ slaRoute.post(
     } catch (error) {
       logger.error("Erro inesperado ao criar incidente SLA", {
         tenantId,
-        serviceId: d.service_id,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -632,85 +646,107 @@ slaRoute.put(
     const tenantId = user?.tenant_id ?? null;
     const incidentId = c.req.param("id");
 
-    const body = await c.req.json<UpdateServiceIncidentInput>();
-    const parsed = updateServiceIncidentSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let idx = 1;
-
-    const addField = (col: string, val: unknown) => {
-      if (val !== undefined) {
-        fields.push(`${col} = $${idx}`);
-        values.push(val);
-        idx++;
-      }
-    };
-
-    addField("title", d.title);
-    addField("description", d.description ?? null);
-    addField("severity", d.severity);
-    addField("status", d.status);
-    addField("resolved_at", d.resolved_at ?? null);
-    addField("root_cause", d.root_cause ?? null);
-    addField("resolution_notes", d.resolution_notes ?? null);
-    addField(
-      "affected_device_ids",
-      d.affected_device_ids ? JSON.stringify(d.affected_device_ids) : undefined,
-    );
-    addField("ticket_id", d.ticket_id ?? null);
-
-    if (fields.length === 0) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Nenhum campo para atualizar",
-          },
-        },
-        400,
-      );
-    }
-
-    // Se status foi alterado para resolved, calcula downtime_seconds
-    if (d.status === "resolved") {
-      fields.push(
-        `downtime_seconds = EXTRACT(EPOCH FROM (COALESCE($${idx}, now()) - started_at))::bigint`,
-      );
-      values.push(d.resolved_at ?? null);
-      idx++;
-    }
-
-    values.push(incidentId, tenantId);
     try {
-      const result = await query(
-        `UPDATE public.service_incidents SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
-        values,
-      );
-
-      if (result.error || !result.data?.rows[0]) {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = updateServiceIncidentSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
         return c.json(
-          { error: { code: "NOT_FOUND", message: "Incidente não encontrado" } },
-          404,
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
         );
       }
 
-      return c.json({ data: { id: result.data.rows[0].id } });
+      const d = parsed.data;
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      const addField = (col: string, val: unknown) => {
+        if (val !== undefined) {
+          fields.push(`${col} = $${idx}`);
+          values.push(val);
+          idx++;
+        }
+      };
+
+      addField("title", d.title);
+      addField("description", d.description ?? null);
+      addField("severity", d.severity);
+      addField("status", d.status);
+      addField("resolved_at", d.resolved_at ?? null);
+      addField("root_cause", d.root_cause ?? null);
+      addField("resolution_notes", d.resolution_notes ?? null);
+      addField(
+        "affected_device_ids",
+        d.affected_device_ids
+          ? JSON.stringify(d.affected_device_ids)
+          : undefined,
+      );
+      addField("ticket_id", d.ticket_id ?? null);
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      // Se status foi alterado para resolved, calcula downtime_seconds
+      if (d.status === "resolved") {
+        fields.push(
+          `downtime_seconds = EXTRACT(EPOCH FROM (COALESCE($${idx}, now()) - started_at))::bigint`,
+        );
+        values.push(d.resolved_at ?? null);
+        idx++;
+      }
+
+      values.push(incidentId, tenantId);
+      try {
+        const result = await query(
+          `UPDATE public.service_incidents SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
+          values,
+        );
+
+        if (result.error || !result.data?.rows[0]) {
+          return c.json(
+            {
+              error: { code: "NOT_FOUND", message: "Incidente não encontrado" },
+            },
+            404,
+          );
+        }
+
+        return c.json({ data: { id: result.data.rows[0].id } });
+      } catch (error) {
+        logger.error("Erro ao atualizar incidente SLA", {
+          incidentId,
+          tenantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return c.json(
+          {
+            error: {
+              code: "UPDATE_ERROR",
+              message: "Erro ao atualizar incidente",
+            },
+          },
+          500,
+        );
+      }
     } catch (error) {
-      logger.error("Erro ao atualizar incidente SLA", {
+      logger.error("Erro inesperado ao atualizar incidente SLA", {
         incidentId,
         tenantId,
         error: error instanceof Error ? error.message : String(error),
@@ -789,23 +825,24 @@ slaRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const body = await c.req.json<CreateMaintenanceWindowInput>();
-    const parsed = createMaintenanceWindowSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = createMaintenanceWindowSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
       const result = await query(
         `INSERT INTO public.maintenance_windows (tenant_id, name, description, device_ids, start_at, end_at,
          maintenance_type, metadata)
@@ -873,79 +910,97 @@ slaRoute.put(
     const tenantId = user?.tenant_id ?? null;
     const maintenanceId = c.req.param("id");
 
-    const body = await c.req.json<UpdateMaintenanceWindowInput>();
-    const parsed = updateMaintenanceWindowSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let idx = 1;
-
-    const addField = (col: string, val: unknown) => {
-      if (val !== undefined) {
-        fields.push(`${col} = $${idx}`);
-        values.push(val);
-        idx++;
-      }
-    };
-
-    addField("name", d.name);
-    addField("description", d.description ?? null);
-    addField(
-      "device_ids",
-      d.device_ids ? JSON.stringify(d.device_ids) : undefined,
-    );
-    addField("start_at", d.start_at);
-    addField("end_at", d.end_at);
-    addField("status", d.status);
-    addField("maintenance_type", d.maintenance_type);
-
-    if (fields.length === 0) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Nenhum campo para atualizar",
-          },
-        },
-        400,
-      );
-    }
-
-    values.push(maintenanceId, tenantId);
     try {
-      const result = await query(
-        `UPDATE public.maintenance_windows SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
-        values,
-      );
-
-      if (result.error || !result.data?.rows[0]) {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = updateMaintenanceWindowSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
         return c.json(
           {
             error: {
-              code: "NOT_FOUND",
-              message: "Janela de manutenção não encontrada",
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
             },
           },
-          404,
+          400,
         );
       }
 
-      return c.json({ data: { id: result.data.rows[0].id } });
+      const d = parsed.data;
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      const addField = (col: string, val: unknown) => {
+        if (val !== undefined) {
+          fields.push(`${col} = $${idx}`);
+          values.push(val);
+          idx++;
+        }
+      };
+
+      addField("name", d.name);
+      addField("description", d.description ?? null);
+      addField(
+        "device_ids",
+        d.device_ids ? JSON.stringify(d.device_ids) : undefined,
+      );
+      addField("start_at", d.start_at);
+      addField("end_at", d.end_at);
+      addField("status", d.status);
+      addField("maintenance_type", d.maintenance_type);
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      values.push(maintenanceId, tenantId);
+      try {
+        const result = await query(
+          `UPDATE public.maintenance_windows SET ${fields.join(", ")} WHERE id = $${idx} AND tenant_id = $${idx + 1} RETURNING id`,
+          values,
+        );
+
+        if (result.error || !result.data?.rows[0]) {
+          return c.json(
+            {
+              error: {
+                code: "NOT_FOUND",
+                message: "Janela de manutenção não encontrada",
+              },
+            },
+            404,
+          );
+        }
+
+        return c.json({ data: { id: result.data.rows[0].id } });
+      } catch (error) {
+        logger.error("Erro ao atualizar janela de manutencao", {
+          maintenanceId,
+          tenantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return c.json(
+          {
+            error: {
+              code: "UPDATE_ERROR",
+              message: "Erro ao atualizar janela de manutenção",
+            },
+          },
+          500,
+        );
+      }
     } catch (error) {
-      logger.error("Erro ao atualizar janela de manutencao", {
+      logger.error("Erro inesperado ao atualizar janela de manutencao", {
         maintenanceId,
         tenantId,
         error: error instanceof Error ? error.message : String(error),
