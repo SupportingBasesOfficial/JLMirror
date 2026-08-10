@@ -308,12 +308,22 @@ describe("escalation — logica de trigger validation", () => {
     [{ subject: "s", body: "b", source: "" }, false],
     [{ subject: "s", body: "b" }, false],
   ] as const)("trigger body validation: %j → valid=%s", (body, expected) => {
-    const isValid = !!(body.subject && body.body && body.source);
+    const b = body as { subject?: string; body?: string; source?: string };
+    const isValid = !!(b.subject && b.body && b.source);
     expect(isValid).toBe(expected);
   });
 
   it("severity default e critical quando nao fornecido", () => {
-    const body = { subject: "s", body: "b", source: "src" };
+    const body: {
+      subject: string;
+      body: string;
+      source: string;
+      severity?: string;
+    } = {
+      subject: "s",
+      body: "b",
+      source: "src",
+    };
     const severity = body.severity ?? "critical";
     expect(severity).toBe("critical");
   });
