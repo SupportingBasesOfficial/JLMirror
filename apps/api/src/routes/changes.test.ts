@@ -503,96 +503,61 @@ describe("changes — approveChangeSchema", () => {
 // ========== Logica de Status Transitions ==========
 
 describe("changes — logica de transicoes de status", () => {
-  it("approve permite submitted", () => {
-    const status: string = "submitted";
-    const canApprove = status === "submitted" || status === "under_review";
-    expect(canApprove).toBe(true);
+  function canApprove(status: string): boolean {
+    return status === "submitted" || status === "under_review";
+  }
+
+  function canImplement(status: string): boolean {
+    return status === "approved" || status === "scheduled";
+  }
+
+  it.each([
+    ["submitted", true],
+    ["under_review", true],
+    ["approved", false],
+    ["rejected", false],
+    ["implemented", false],
+  ])(`approve(%s) → %s`, (status, expected) => {
+    expect(canApprove(status)).toBe(expected);
   });
 
-  it("approve permite under_review", () => {
-    const status: string = "under_review";
-    const canApprove = status === "submitted" || status === "under_review";
-    expect(canApprove).toBe(true);
-  });
-
-  it("approve bloqueia approved", () => {
-    const status: string = "approved";
-    const canApprove = status === "submitted" || status === "under_review";
-    expect(canApprove).toBe(false);
-  });
-
-  it("approve bloqueia rejected", () => {
-    const status: string = "rejected";
-    const canApprove = status === "submitted" || status === "under_review";
-    expect(canApprove).toBe(false);
-  });
-
-  it("approve bloqueia implemented", () => {
-    const status: string = "implemented";
-    const canApprove = status === "submitted" || status === "under_review";
-    expect(canApprove).toBe(false);
-  });
-
-  it("implement permite approved", () => {
-    const status: string = "approved";
-    const canImplement = status === "approved" || status === "scheduled";
-    expect(canImplement).toBe(true);
-  });
-
-  it("implement permite scheduled", () => {
-    const status: string = "scheduled";
-    const canImplement = status === "approved" || status === "scheduled";
-    expect(canImplement).toBe(true);
-  });
-
-  it("implement bloqueia submitted", () => {
-    const status: string = "submitted";
-    const canImplement = status === "approved" || status === "scheduled";
-    expect(canImplement).toBe(false);
-  });
-
-  it("implement bloqueia in_progress", () => {
-    const status: string = "in_progress";
-    const canImplement = status === "approved" || status === "scheduled";
-    expect(canImplement).toBe(false);
+  it.each([
+    ["approved", true],
+    ["scheduled", true],
+    ["submitted", false],
+    ["in_progress", false],
+  ])(`implement(%s) → %s`, (status, expected) => {
+    expect(canImplement(status)).toBe(expected);
   });
 });
 
 // ========== Logica de Task Status ==========
 
 describe("changes — logica de task status", () => {
-  it("in_progress define started_at", () => {
-    const status: string = "in_progress";
-    const shouldSetStartedAt = status === "in_progress";
-    expect(shouldSetStartedAt).toBe(true);
+  function shouldSetStartedAt(status: string): boolean {
+    return status === "in_progress";
+  }
+
+  function shouldSetCompletedAt(status: string): boolean {
+    return (
+      status === "completed" || status === "skipped" || status === "failed"
+    );
+  }
+
+  it.each([
+    ["in_progress", true],
+    ["pending", false],
+  ])(`started_at para %s → %s`, (status, expected) => {
+    expect(shouldSetStartedAt(status)).toBe(expected);
   });
 
-  it("completed define completed_at", () => {
-    const status: string = "completed";
-    const shouldSetCompletedAt =
-      status === "completed" || status === "skipped" || status === "failed";
-    expect(shouldSetCompletedAt).toBe(true);
-  });
-
-  it("skipped define completed_at", () => {
-    const status: string = "skipped";
-    const shouldSetCompletedAt =
-      status === "completed" || status === "skipped" || status === "failed";
-    expect(shouldSetCompletedAt).toBe(true);
-  });
-
-  it("failed define completed_at", () => {
-    const status: string = "failed";
-    const shouldSetCompletedAt =
-      status === "completed" || status === "skipped" || status === "failed";
-    expect(shouldSetCompletedAt).toBe(true);
-  });
-
-  it("pending nao define completed_at", () => {
-    const status: string = "pending";
-    const shouldSetCompletedAt =
-      status === "completed" || status === "skipped" || status === "failed";
-    expect(shouldSetCompletedAt).toBe(false);
+  it.each([
+    ["completed", true],
+    ["skipped", true],
+    ["failed", true],
+    ["pending", false],
+  ])(`completed_at para %s → %s`, (status, expected) => {
+    expect(shouldSetCompletedAt(status)).toBe(expected);
   });
 });
 

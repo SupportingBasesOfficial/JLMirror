@@ -35,7 +35,7 @@ changesRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const status = c.req.query("status");
     const changeType = c.req.query("type");
-    const parsedLimit = parseInt(c.req.query("limit") ?? "50", 10);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
     const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     let sql = `SELECT cr.*, u.name as requester_name, u.email as requester_email,
