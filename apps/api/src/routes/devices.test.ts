@@ -392,7 +392,7 @@ describe("devices — logica de error handling", () => {
   });
 
   it("catch com non-Error retorna mensagem generica", () => {
-    const error = "string error";
+    const error: unknown = "string error";
     const message = error instanceof Error ? error.message : "Erro interno";
     expect(message).toBe("Erro interno");
   });
@@ -402,7 +402,7 @@ describe("devices — logica de error handling", () => {
 
 describe("devices — logica de safeRows/safeFirstRow", () => {
   it("safeRows retorna array vazio quando data undefined", () => {
-    const result = { data: undefined };
+    const result: { data?: { rows?: unknown[] } } = { data: undefined };
     const rows = result.data?.rows ?? [];
     expect(rows).toEqual([]);
   });
