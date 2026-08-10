@@ -136,16 +136,13 @@ describe("capacity — ingestMetricsBatchSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("valida batch com 100 metricas", () => {
-    const batch = Array(100).fill(validMetric);
+  it.each([
+    [100, true],
+    [1000, true],
+  ])(`valida batch com %i metricas`, (size, expected) => {
+    const batch = Array(size).fill(validMetric);
     const result = ingestMetricsBatchSchema.safeParse(batch);
-    expect(result.success).toBe(true);
-  });
-
-  it("valida batch com 1000 metricas (limite)", () => {
-    const batch = Array(1000).fill(validMetric);
-    const result = ingestMetricsBatchSchema.safeParse(batch);
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(expected);
   });
 
   it("rejeita batch vazio", () => {
@@ -376,44 +373,18 @@ describe("capacity — createReportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("valida report_type=capacity_summary", () => {
+  it.each([
+    ["capacity_summary", true],
+    ["trend_analysis", true],
+    ["forecast", true],
+    ["utilization_breakdown", true],
+    ["invalid_type", false],
+  ])(`report_type=%s → success=%s`, (reportType, expected) => {
     const result = createReportSchema.safeParse({
       ...validReport,
-      report_type: "capacity_summary",
+      report_type: reportType,
     });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida report_type=trend_analysis", () => {
-    const result = createReportSchema.safeParse({
-      ...validReport,
-      report_type: "trend_analysis",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida report_type=forecast", () => {
-    const result = createReportSchema.safeParse({
-      ...validReport,
-      report_type: "forecast",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida report_type=utilization_breakdown", () => {
-    const result = createReportSchema.safeParse({
-      ...validReport,
-      report_type: "utilization_breakdown",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejeita report_type invalido", () => {
-    const result = createReportSchema.safeParse({
-      ...validReport,
-      report_type: "invalid_type",
-    });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(expected);
   });
 
   it("rejeita sem name", () => {
