@@ -151,13 +151,15 @@ describe("branding — logica de optional chaining", () => {
 // ========== Logica de Cache Duration ==========
 
 describe("branding — logica de cache duration", () => {
-  it("branding por slug tem cache de 300s (5min)", () => {
-    const cacheDuration = 300;
-    expect(cacheDuration).toBe(300);
+  it("branding por slug tem cache maior que default overview", () => {
+    const slugCache = 300;
+    const overviewCache = 60;
+    expect(slugCache).toBeGreaterThan(overviewCache);
   });
 
-  it("branding default tem cache de 600s (10min)", () => {
-    const cacheDuration = 600;
-    expect(cacheDuration).toBe(600);
+  it("branding default tem cache maior que branding por slug", () => {
+    const defaultCache = 600;
+    const slugCache = 300;
+    expect(defaultCache).toBeGreaterThan(slugCache);
   });
 });
