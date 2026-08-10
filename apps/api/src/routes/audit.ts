@@ -37,68 +37,70 @@ auditRoute.get(
   async (c) => {
     const user = c.get("user");
 
-    // Parse e valida query params
-    const parsed = auditLogsQuerySchema.safeParse({
-      user_id: c.req.query("user_id"),
-      tenant_id: c.req.query("tenant_id"),
-      action: c.req.query("action"),
-      from: c.req.query("from"),
-      to: c.req.query("to"),
-      limit: c.req.query("limit"),
-      offset: c.req.query("offset"),
-    });
-
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Parâmetros inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const { user_id, tenant_id, action, from, to, limit, offset } = parsed.data;
-
-    // Tenant isolation: usuarios non-global so podem ver logs do seu tenant
-    const isGlobalScope = user?.scope === "global";
-    const effectiveTenantId = isGlobalScope
-      ? tenant_id
-      : (user?.tenant_id ?? null);
-
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    // Sempre filtra por tenant para non-global
-    if (!isGlobalScope || tenant_id) {
-      conditions.push(`tenant_id = $${paramIdx++}`);
-      params.push(effectiveTenantId);
-    }
-    if (user_id) {
-      conditions.push(`user_id = $${paramIdx++}`);
-      params.push(user_id);
-    }
-    if (action) {
-      conditions.push(`action ILIKE $${paramIdx++}`);
-      params.push(`%${action}%`);
-    }
-    if (from) {
-      conditions.push(`created_at >= $${paramIdx++}`);
-      params.push(from);
-    }
-    if (to) {
-      conditions.push(`created_at <= $${paramIdx++}`);
-      params.push(to);
-    }
-
-    const whereClause =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
     try {
+      // Parse e valida query params
+      const parsed = auditLogsQuerySchema.safeParse({
+        user_id: c.req.query("user_id"),
+        tenant_id: c.req.query("tenant_id"),
+        action: c.req.query("action"),
+        from: c.req.query("from"),
+        to: c.req.query("to"),
+        limit: c.req.query("limit"),
+        offset: c.req.query("offset"),
+      });
+
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message:
+                parsed.error.issues[0]?.message ?? "Parâmetros inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const { user_id, tenant_id, action, from, to, limit, offset } =
+        parsed.data;
+
+      // Tenant isolation: usuarios non-global so podem ver logs do seu tenant
+      const isGlobalScope = user?.scope === "global";
+      const effectiveTenantId = isGlobalScope
+        ? tenant_id
+        : (user?.tenant_id ?? null);
+
+      const conditions: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      // Sempre filtra por tenant para non-global
+      if (!isGlobalScope || tenant_id) {
+        conditions.push(`tenant_id = $${paramIdx++}`);
+        params.push(effectiveTenantId);
+      }
+      if (user_id) {
+        conditions.push(`user_id = $${paramIdx++}`);
+        params.push(user_id);
+      }
+      if (action) {
+        conditions.push(`action ILIKE $${paramIdx++}`);
+        params.push(`%${action}%`);
+      }
+      if (from) {
+        conditions.push(`created_at >= $${paramIdx++}`);
+        params.push(from);
+      }
+      if (to) {
+        conditions.push(`created_at <= $${paramIdx++}`);
+        params.push(to);
+      }
+
+      const whereClause =
+        conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
       // Paraleliza data + count queries
       const [result, countResult] = await Promise.all([
         query(
@@ -132,7 +134,7 @@ auditRoute.get(
 
       return c.json({
         logs: result.data?.rows ?? [],
-        total: parseInt(countResult.data?.rows[0]?.count ?? "0", 10),
+        total: Number.parseInt(countResult.data?.rows[0]?.count ?? "0", 10),
         limit,
         offset,
       });
@@ -199,7 +201,7 @@ auditRoute.get(
         actions:
           result.data?.rows.map((r) => ({
             action: r.action,
-            count: parseInt(r.count, 10),
+            count: Number.parseInt(r.count, 10),
             last_occurrence: r.last_occurrence,
           })) ?? [],
       });

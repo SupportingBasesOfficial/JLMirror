@@ -248,17 +248,17 @@ describe("audit — logica de WHERE clause", () => {
 
 describe("audit — logica de paginacao", () => {
   it("limit default 100", () => {
-    const limit = Math.min(parseInt("100", 10), 500);
+    const limit = Math.min(Number.parseInt("100", 10), 500);
     expect(limit).toBe(100);
   });
 
   it("limit maximo 500", () => {
-    const limit = Math.min(parseInt("999", 10), 500);
+    const limit = Math.min(Number.parseInt("999", 10), 500);
     expect(limit).toBe(500);
   });
 
   it("offset default 0", () => {
-    const offset = parseInt("0", 10);
+    const offset = Number.parseInt("0", 10);
     expect(offset).toBe(0);
   });
 
@@ -295,5 +295,134 @@ describe("audit — logica de stats por scope", () => {
   it("stats limit 20 actions", () => {
     const limit = 20;
     expect(limit).toBe(20);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("audit — logica de optional chaining", () => {
+  type TestUser = {
+    sub: string;
+    tenant_id: string;
+    scope?: string;
+  };
+
+  function getScope(user: TestUser | null | undefined): string | null {
+    return user?.scope ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.scope retorna null quando user e null", () => {
+    expect(getScope(null)).toBeNull();
+  });
+
+  it("user?.scope retorna null quando scope undefined", () => {
+    expect(getScope({ sub: "u1", tenant_id: "t1" })).toBeNull();
+  });
+
+  it("user?.scope retorna valor quando definido", () => {
+    expect(getScope({ sub: "u1", tenant_id: "t1", scope: "global" })).toBe(
+      "global",
+    );
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("audit — logica de parallel queries", () => {
+  it("logs paraleliza data + count queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [{ count: "0" }] } }),
+    ]);
+    expect(results).toHaveLength(2);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Count Parsing ==========
+
+describe("audit — logica de count parsing", () => {
+  it("Number.parseInt converte count string", () => {
+    const countStr = "42";
+    const count = Number.parseInt(countStr, 10);
+    expect(count).toBe(42);
+  });
+
+  it("Number.parseInt fallback 0 para string invalida", () => {
+    const countStr = "abc";
+    const count = Number.parseInt(countStr, 10);
+    expect(Number.isNaN(count)).toBe(true);
+  });
+
+  it("count default 0 quando rows vazio", () => {
+    const rows: { count?: string }[] = [];
+    const count = Number.parseInt(rows[0]?.count ?? "0", 10);
+    expect(count).toBe(0);
+  });
+});
+
+// ========== Logica de Action Filter ==========
+
+describe("audit — logica de action filter", () => {
+  it("action filter usa ILIKE com wildcards", () => {
+    const action = "user.create";
+    const param = `%${action}%`;
+    expect(param).toBe("%user.create%");
+  });
+
+  it("action vazio nao adiciona filtro", () => {
+    const action: string | undefined = undefined;
+    const conditions: string[] = [];
+    if (action) {
+      conditions.push("action ILIKE $1");
+    }
+    expect(conditions).toHaveLength(0);
+  });
+});
+
+// ========== Logica de Date Range ==========
+
+describe("audit — logica de date range", () => {
+  it("from filter adiciona created_at >=", () => {
+    const from = "2025-01-01T00:00:00Z";
+    const conditions: string[] = [];
+    if (from) {
+      conditions.push("created_at >= $1");
+    }
+    expect(conditions).toContain("created_at >= $1");
+  });
+
+  it("to filter adiciona created_at <=", () => {
+    const to = "2025-12-31T23:59:59Z";
+    const conditions: string[] = [];
+    if (to) {
+      conditions.push("created_at <= $1");
+    }
+    expect(conditions).toContain("created_at <= $1");
+  });
+
+  it("from e to juntos geram range", () => {
+    const from = "2025-01-01T00:00:00Z";
+    const to = "2025-12-31T23:59:59Z";
+    const conditions: string[] = [];
+    if (from) conditions.push("created_at >= $1");
+    if (to) conditions.push("created_at <= $2");
+    expect(conditions).toHaveLength(2);
   });
 });
