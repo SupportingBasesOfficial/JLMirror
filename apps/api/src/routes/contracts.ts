@@ -5,6 +5,7 @@ import { z } from "zod";
 import { query } from "@repo/db";
 import { logger } from "@repo/logger";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
@@ -226,26 +227,28 @@ contractsRoute.post(
   requirePermission("admin:tenants:write"),
   async (c) => {
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
 
-    const parsed = createContractSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createContractSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
       const result = await query<{ id: string }>(
         `INSERT INTO public.tenant_contracts
           (tenant_id, contract_number, name, contract_type, contracted_hours,
@@ -294,11 +297,19 @@ contractsRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'contract.create', 'tenant_contract', $2, $3, NULL, NULL)",
-          [user.sub, result.data.rows[0].id, JSON.stringify({ name: d.name })],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "contract.create",
+            entityType: "tenant_contract",
+            entityId: result.data.rows[0].id,
+            newData: { name: d.name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Contrato criado", {
@@ -328,77 +339,82 @@ contractsRoute.put(
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
 
-    const parsed = updateContractSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
-    const fields: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      contract_number: "contract_number",
-      contract_type: "contract_type",
-      contracted_hours: "contracted_hours",
-      period_type: "period_type",
-      billing_day: "billing_day",
-      carry_over_rule: "carry_over_rule",
-      carry_over_limit_hours: "carry_over_limit_hours",
-      carry_over_expire_days: "carry_over_expire_days",
-      overtime_enabled: "overtime_enabled",
-      overtime_rate: "overtime_rate",
-      rate_diagnosis: "rate_diagnosis",
-      rate_fix: "rate_fix",
-      rate_monitoring: "rate_monitoring",
-      rate_meeting: "rate_meeting",
-      rate_research: "rate_research",
-      rate_default: "rate_default",
-      start_date: "start_date",
-      end_date: "end_date",
-      auto_close_tickets_on_expire: "auto_close_tickets_on_expire",
-      notes: "notes",
-      is_active: "is_active",
-    };
-
-    for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in d) {
-        const val = d[key as keyof typeof d];
-        if (key === "start_date" || key === "end_date") {
-          fields.push(`${col} = $${idx++}::date`);
-        } else {
-          fields.push(`${col} = $${idx++}`);
-        }
-        params.push(val);
-      }
-    }
-
-    if (fields.length === 0) {
-      return c.json(
-        {
-          error: { code: "NO_FIELDS", message: "Nenhum campo para atualizar" },
-        },
-        400,
-      );
-    }
-
-    params.push(id, tenantId);
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = updateContractSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+      const fields: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        contract_number: "contract_number",
+        contract_type: "contract_type",
+        contracted_hours: "contracted_hours",
+        period_type: "period_type",
+        billing_day: "billing_day",
+        carry_over_rule: "carry_over_rule",
+        carry_over_limit_hours: "carry_over_limit_hours",
+        carry_over_expire_days: "carry_over_expire_days",
+        overtime_enabled: "overtime_enabled",
+        overtime_rate: "overtime_rate",
+        rate_diagnosis: "rate_diagnosis",
+        rate_fix: "rate_fix",
+        rate_monitoring: "rate_monitoring",
+        rate_meeting: "rate_meeting",
+        rate_research: "rate_research",
+        rate_default: "rate_default",
+        start_date: "start_date",
+        end_date: "end_date",
+        auto_close_tickets_on_expire: "auto_close_tickets_on_expire",
+        notes: "notes",
+        is_active: "is_active",
+      };
+
+      for (const [key, col] of Object.entries(fieldMap)) {
+        if (key in d) {
+          const val = d[key as keyof typeof d];
+          if (key === "start_date" || key === "end_date") {
+            fields.push(`${col} = $${idx++}::date`);
+          } else {
+            fields.push(`${col} = $${idx++}`);
+          }
+          params.push(val);
+        }
+      }
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "NO_FIELDS",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      params.push(id, tenantId);
       const result = await query(
         `UPDATE public.tenant_contracts SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
         params,
@@ -411,11 +427,19 @@ contractsRoute.put(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'contract.update', 'tenant_contract', $2, $3, NULL, NULL)",
-          [user.sub, id, JSON.stringify(d)],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "contract.update",
+            entityType: "tenant_contract",
+            entityId: id,
+            newData: d,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ id, updated: true });
@@ -446,6 +470,7 @@ contractsRoute.delete(
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
 
     try {
@@ -461,11 +486,18 @@ contractsRoute.delete(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'contract.deactivate', 'tenant_contract', $2, NULL, NULL, NULL)",
-          [user.sub, id],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "contract.deactivate",
+            entityType: "tenant_contract",
+            entityId: id,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ id, deactivated: true });
@@ -605,27 +637,29 @@ contractsRoute.post(
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const closeSchema = z.object({
-      period_end: z.string().min(1),
-    });
-    const parsed = closeSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "period_end obrigatório",
-          },
-        },
-        400,
-      );
-    }
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const closeSchema = z.object({
+        period_end: z.string().min(1),
+      });
+      const parsed = closeSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "period_end obrigatório",
+            },
+          },
+          400,
+        );
+      }
+
       // Protecao IDOR: verifica ownership
       const owned = await verifyContractOwnership(id, tenantId);
       if (!owned) {
@@ -635,7 +669,7 @@ contractsRoute.post(
         );
       }
 
-      const result = await query(
+      const result = await query<{ id: string }>(
         "SELECT * FROM public.close_hour_bank_period($1, $2::date)",
         [id, parsed.data.period_end],
       );
@@ -652,18 +686,22 @@ contractsRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'contract.hour_bank.close', 'hour_bank_period', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "contract.hour_bank.close",
+            entityType: "hour_bank_period",
+            entityId: result.data.rows[0].id,
+            newData: {
               contract_id: id,
               period_end: parsed.data.period_end,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Periodo hour-bank fechado", {
@@ -749,27 +787,29 @@ contractsRoute.post(
   requirePermission("tickets:write"),
   async (c) => {
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = createWorkLogSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createWorkLogSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+
       // Protecao IDOR: verifica se ticket pertence ao tenant
       const ticketOwned = await verifyTicketOwnership(d.ticket_id, tenantId);
       if (!ticketOwned) {
@@ -849,8 +889,8 @@ contractsRoute.post(
           tenantId,
           d.ticket_id,
           contractId,
-          user?.sub ?? null,
-          user?.sub ?? "Sistema",
+          userId,
+          userId ?? "Sistema",
           d.started_at,
           d.ended_at ?? null,
           d.minutes_worked,
@@ -878,19 +918,23 @@ contractsRoute.post(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'work_log.create', 'ticket_work_log', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "work_log.create",
+            entityType: "ticket_work_log",
+            entityId: result.data.rows[0].id,
+            newData: {
               ticket_id: d.ticket_id,
               minutes: d.minutes_worked,
               work_type: d.work_type,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Work log criado", {
@@ -903,7 +947,6 @@ contractsRoute.post(
     } catch (error) {
       logger.error("Erro inesperado ao criar work log", {
         tenantId,
-        ticketId: d.ticket_id,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -923,74 +966,78 @@ contractsRoute.put(
     const logId = c.req.param("logId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
 
-    const parsed = updateWorkLogSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
-    const fields: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-
-    const fieldMap: Record<string, string> = {
-      ticket_id: "ticket_id",
-      contract_id: "contract_id",
-      started_at: "started_at",
-      ended_at: "ended_at",
-      minutes_worked: "minutes_worked",
-      pause_minutes: "pause_minutes",
-      pause_reason: "pause_reason",
-      description: "description",
-      work_type: "work_type",
-      billable: "billable",
-      rate_applied: "rate_applied",
-    };
-
-    for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in d) {
-        const val = d[key as keyof typeof d];
-        if (key === "started_at" || key === "ended_at") {
-          fields.push(`${col} = $${idx++}::timestamptz`);
-        } else {
-          fields.push(`${col} = $${idx++}`);
-        }
-        params.push(val);
-      }
-    }
-
-    // Recalcula amount se minutes_worked ou rate mudou
-    if ("minutes_worked" in d || "rate_applied" in d) {
-      fields.push(
-        `amount = ($${idx}::numeric / 60.0) * COALESCE($${idx + 1}::numeric, rate_applied, 0)`,
-      );
-      params.push(d.minutes_worked ?? 0, d.rate_applied ?? null);
-      idx += 2;
-    }
-
-    if (fields.length === 0) {
-      return c.json(
-        {
-          error: { code: "NO_FIELDS", message: "Nenhum campo para atualizar" },
-        },
-        400,
-      );
-    }
-
-    params.push(logId, tenantId);
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = updateWorkLogSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+      const fields: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+
+      const fieldMap: Record<string, string> = {
+        ticket_id: "ticket_id",
+        contract_id: "contract_id",
+        started_at: "started_at",
+        ended_at: "ended_at",
+        minutes_worked: "minutes_worked",
+        pause_minutes: "pause_minutes",
+        pause_reason: "pause_reason",
+        description: "description",
+        work_type: "work_type",
+        billable: "billable",
+        rate_applied: "rate_applied",
+      };
+
+      for (const [key, col] of Object.entries(fieldMap)) {
+        if (key in d) {
+          const val = d[key as keyof typeof d];
+          if (key === "started_at" || key === "ended_at") {
+            fields.push(`${col} = $${idx++}::timestamptz`);
+          } else {
+            fields.push(`${col} = $${idx++}`);
+          }
+          params.push(val);
+        }
+      }
+
+      // Recalcula amount se minutes_worked ou rate mudou
+      if ("minutes_worked" in d || "rate_applied" in d) {
+        fields.push(
+          `amount = ($${idx}::numeric / 60.0) * COALESCE($${idx + 1}::numeric, rate_applied, 0)`,
+        );
+        params.push(d.minutes_worked ?? 0, d.rate_applied ?? null);
+        idx += 2;
+      }
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "NO_FIELDS",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      params.push(logId, tenantId);
       const result = await query(
         `UPDATE public.ticket_work_logs SET ${fields.join(", ")} WHERE id = $${idx++} AND tenant_id = $${idx} RETURNING id`,
         params,
@@ -1032,6 +1079,7 @@ contractsRoute.delete(
     const logId = c.req.param("logId");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
     try {
       const result = await query(
@@ -1046,11 +1094,18 @@ contractsRoute.delete(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'work_log.delete', 'ticket_work_log', $2, NULL, NULL, NULL)",
-          [user.sub, logId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "work_log.delete",
+            entityType: "ticket_work_log",
+            entityId: logId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ id: logId, deleted: true });
@@ -1131,27 +1186,29 @@ contractsRoute.post(
   requirePermission("tickets:write"),
   async (c) => {
     const user = c.get("user");
+    const userId = user?.sub ?? null;
     const tenantId = user?.tenant_id ?? null;
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = startWorkLogSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = startWorkLogSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+
       // Protecao IDOR: verifica se ticket pertence ao tenant
       const ticketOwned = await verifyTicketOwnership(d.ticket_id, tenantId);
       if (!ticketOwned) {
@@ -1205,8 +1262,8 @@ contractsRoute.post(
           tenantId,
           d.ticket_id,
           contractId,
-          user?.sub ?? null,
-          user?.sub ?? "Sistema",
+          userId,
+          userId ?? "Sistema",
           d.description,
           d.work_type,
           d.billable,
@@ -1241,7 +1298,6 @@ contractsRoute.post(
     } catch (error) {
       logger.error("Erro inesperado ao iniciar work log timer", {
         tenantId,
-        ticketId: d.ticket_id,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -1366,26 +1422,29 @@ contractsRoute.post(
   async (c) => {
     const logId = c.req.param("logId");
     const user = c.get("user");
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-
-    const parsed = finishWorkLogSchema.safeParse(bodyResult.data ?? {});
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const d = parsed.data;
+    const userId = user?.sub ?? null;
+    const tenantId = user?.tenant_id ?? null;
 
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = finishWorkLogSchema.safeParse(bodyResult.data ?? {});
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+
       const result = await query<{
         id: string;
         elapsed_seconds: number;
@@ -1396,7 +1455,7 @@ contractsRoute.post(
         status: string;
       }>("SELECT * FROM public.finish_work_log($1, $2, $3)", [
         logId,
-        user?.sub ?? null,
+        userId,
         d.adjusted_minutes ?? null,
       ]);
 
@@ -1434,7 +1493,7 @@ contractsRoute.post(
         );
       }
 
-      // Recalcula amount baseado no contrato (paralelizado com audit log)
+      // Recalcula amount baseado no contrato
       const logResult = await query<{
         contract_id: string | null;
         work_type: string;
@@ -1444,20 +1503,6 @@ contractsRoute.post(
         [logId],
       );
       const logRow = logResult.data?.rows[0];
-
-      const auditPromise = user?.sub
-        ? query(
-            "SELECT public.write_audit_log($1, NULL, 'work_log.finish', 'ticket_work_log', $2, $3, NULL, NULL)",
-            [
-              user.sub,
-              logId,
-              JSON.stringify({
-                total_minutes: r.total_minutes,
-                adjusted: !!d.adjusted_minutes,
-              }),
-            ],
-          )
-        : Promise.resolve();
 
       if (logRow?.contract_id) {
         const contractResult = await query(
@@ -1487,7 +1532,23 @@ contractsRoute.post(
         }
       }
 
-      await auditPromise;
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "work_log.finish",
+            entityType: "ticket_work_log",
+            entityId: logId,
+            newData: {
+              total_minutes: r.total_minutes,
+              adjusted: !!d.adjusted_minutes,
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
       logger.info("Work log finalizado", {
         logId,
