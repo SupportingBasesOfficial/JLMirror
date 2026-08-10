@@ -179,9 +179,12 @@ executiveDashboardRoute.get("/overview", httpCache(60), async (c) => {
       passed: "0",
       failed: "0",
     };
-    const totalControls = parseInt(String(complianceRow.total ?? "0"), 10);
-    const passedControls = parseInt(String(complianceRow.passed ?? "0"), 10);
-    const failedControls = parseInt(String(complianceRow.failed ?? "0"), 10);
+    const totalControls =
+      Number.parseInt(String(complianceRow.total ?? "0"), 10) || 0;
+    const passedControls =
+      Number.parseInt(String(complianceRow.passed ?? "0"), 10) || 0;
+    const failedControls =
+      Number.parseInt(String(complianceRow.failed ?? "0"), 10) || 0;
     const complianceScore =
       totalControls > 0
         ? Math.round((passedControls / totalControls) * 100)
@@ -201,11 +204,11 @@ executiveDashboardRoute.get("/overview", httpCache(60), async (c) => {
 
     const healthChecks = safeRows(healthChecksR);
     const criticalHealth = healthChecks.find((r) => r.severity === "critical")
-      ? parseInt(
+      ? Number.parseInt(
           (healthChecks.find((r) => r.severity === "critical")
             ?.count as string) ?? "0",
           10,
-        )
+        ) || 0
       : 0;
 
     logger.info("Executive dashboard overview concluido", {
