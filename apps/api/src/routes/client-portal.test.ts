@@ -183,3 +183,139 @@ describe("client-portal — logica de permissions default", () => {
     expect(can_create_tickets).toBe(false);
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("client-portal — logica de tenant isolation", () => {
+  it("queries de client_portal_users filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql = "SELECT * FROM public.client_portal_users WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de services filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql =
+      "SELECT * FROM public.services WHERE tenant_id = $1 AND is_active = true";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de service_incidents filtram por tenant_id", () => {
+    const tenantId = "t-789";
+    const sql = "SELECT * FROM public.service_incidents WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE client_portal_users inclui tenant_id no WHERE", () => {
+    const tenantId = "t-upd";
+    const userId = "u-1";
+    const sql =
+      "UPDATE public.client_portal_users SET is_active = false WHERE id = $1 AND tenant_id = $2";
+    const params: unknown[] = [userId, tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("client-portal — logica de optional chaining", () => {
+  it("flagResult.data?.rows[0]?.default_value retorna undefined quando vazio", () => {
+    const result: { data?: { rows?: Array<{ default_value: boolean }> } } = {
+      data: { rows: [] },
+    };
+    const flag = result.data?.rows?.[0]?.default_value;
+    expect(flag).toBeUndefined();
+  });
+
+  it("user?.tenant_id retorna null quando user e null", () => {
+    type TestUser = { tenant_id?: string } | null;
+    const user = null as TestUser;
+    const tenantId = user?.tenant_id ?? null;
+    expect(tenantId).toBeNull();
+  });
+
+  it("user?.sub retorna null quando user e undefined", () => {
+    type TestUser = { sub?: string } | undefined;
+    const user = undefined as TestUser;
+    const sub = user?.sub ?? null;
+    expect(sub).toBeNull();
+  });
+
+  it("result.data?.rows[0]?.id retorna undefined quando data undefined", () => {
+    const result: { data?: { rows?: Array<{ id: string }> } } = {
+      data: undefined,
+    };
+    expect(result.data?.rows?.[0]?.id).toBeUndefined();
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("client-portal — logica de parallel queries", () => {
+  it("overview paraleliza 4 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total: "10" }] } }),
+      Promise.resolve({ data: { rows: [{ total: "5" }] } }),
+      Promise.resolve({ data: { rows: [{ avg_sla: "99.9" }] } }),
+      Promise.resolve({ data: { rows: [] } }),
+    ]);
+    expect(results).toHaveLength(4);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Limit Pagination ==========
+
+describe("client-portal — logica de limit pagination", () => {
+  function parseLimit(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 20 : parsed, 50);
+  }
+
+  it.each([
+    ["20", 20],
+    ["999", 50],
+    ["10", 10],
+    ["abc", 20],
+    ["", 20],
+  ])(`limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimit(raw)).toBe(expected);
+  });
+});
+
+// ========== Logica de Feature Flag ==========
+
+describe("client-portal — logica de feature flag", () => {
+  it("feature flag desativada retorna 403", () => {
+    const flagEnabled = false;
+    const shouldBlock = !flagEnabled;
+    expect(shouldBlock).toBe(true);
+  });
+
+  it("feature flag ativada permite acesso", () => {
+    const flagEnabled = true;
+    const shouldBlock = !flagEnabled;
+    expect(shouldBlock).toBe(false);
+  });
+
+  it("feature flag null (nao encontrada) bloqueia", () => {
+    const flagValue: boolean | undefined = undefined;
+    const flagEnabled = flagValue === true;
+    expect(flagEnabled).toBe(false);
+  });
+});

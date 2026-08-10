@@ -363,7 +363,8 @@ clientPortalRoute.get("/services", httpCache(60), async (c) => {
 clientPortalRoute.get("/incidents", httpCache(30), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 50);
+  const parsedLimit = Number.parseInt(c.req.query("limit") ?? "20", 10);
+  const limit = Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 50);
 
   try {
     const result = await query(
