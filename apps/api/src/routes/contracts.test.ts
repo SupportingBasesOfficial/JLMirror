@@ -867,7 +867,8 @@ describe("contracts — logica de optional chaining", () => {
   });
 
   it("logRow?.contract_id retorna null quando logRow undefined", () => {
-    const logRow: { contract_id: string | null } | undefined = undefined;
+    type LogRow = { contract_id?: string | null } | undefined;
+    const logRow = undefined as LogRow;
     expect(logRow?.contract_id ?? null).toBeNull();
   });
 });
