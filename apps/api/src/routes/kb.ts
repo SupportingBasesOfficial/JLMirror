@@ -354,7 +354,10 @@ kbRoute.get(
     const status = c.req.query("status");
     const categoryId = c.req.query("category_id");
     const tag = c.req.query("tag");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
 
     const conditions: string[] = ["tenant_id = $1"];
     const params: unknown[] = [tenantId];
@@ -858,7 +861,10 @@ kbRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const q = c.req.query("q");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 100);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "20", 10) || 20,
+      100,
+    );
 
     if (!q) {
       return c.json({ results: [] });
