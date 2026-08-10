@@ -219,7 +219,7 @@ describe("logs — logica de optional chaining", () => {
     const result: { data?: { rows?: Array<{ id: string }> } } = {
       data: { rows: [] },
     };
-    expect(result.data?.rows[0]?.id).toBeUndefined();
+    expect(result.data?.rows?.[0]?.id).toBeUndefined();
   });
 
   it("result.data?.rows.length ?? 0 retorna 0 quando vazio", () => {

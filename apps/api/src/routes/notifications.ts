@@ -14,6 +14,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { deliverNotification } from "../lib/notification-delivery.js";
 import "../types.js";
 
@@ -176,14 +177,18 @@ notificationRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.channel.create', 'notification_channel', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({ name: data.name, type: data.channel_type }),
-          ],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.channel.create",
+            entityType: "notification_channel",
+            entityId: result.data.rows[0].id,
+            newData: { name: data.name, type: data.channel_type },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Notification channel criado", {
@@ -317,10 +322,17 @@ notificationRoute.delete(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.channel.delete', 'notification_channel', $2, NULL, NULL, NULL)",
-          [user.sub, channelId],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.channel.delete",
+            entityType: "notification_channel",
+            entityId: channelId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ deleted: true });
@@ -403,19 +415,23 @@ notificationRoute.post(
       );
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.channel.test', 'notification_channel', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            channelId,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.channel.test",
+            entityType: "notification_channel",
+            entityId: channelId,
+            newData: {
               success,
               duration_ms: durationMs,
               status_code: deliveryResult.statusCode,
               error: deliveryResult.error,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Teste de canal executado", {
@@ -550,18 +566,22 @@ notificationRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.rule.create', 'notification_rule', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.rule.create",
+            entityType: "notification_rule",
+            entityId: result.data.rows[0].id,
+            newData: {
               name: data.name,
               source: data.event_source,
               channels: data.channel_ids?.length ?? 0,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Notification rule criada", {
@@ -691,10 +711,17 @@ notificationRoute.delete(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.rule.delete', 'notification_rule', $2, NULL, NULL, NULL)",
-          [user.sub, ruleId],
-        );
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.rule.delete",
+            entityType: "notification_rule",
+            entityId: ruleId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ deleted: true });
@@ -893,17 +920,21 @@ notificationRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'notif.send', 'notification_log', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId,
+            action: "notif.send",
+            entityType: "notification_log",
+            newData: {
               event_source: data.event_source,
               rules_matched: rules.length,
               results,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Notificacoes enviadas", {
@@ -943,7 +974,10 @@ notificationRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const status = c.req.query("status");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
 
     const conditions: string[] = ["l.tenant_id = $1"];
     const params: unknown[] = [tenantId];
