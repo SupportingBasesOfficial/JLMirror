@@ -14,6 +14,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { calculateHealthScore } from "../lib/health-score.js";
 import "../types.js";
 
@@ -619,7 +620,10 @@ systemHealthRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const status = c.req.query("status");
     const severity = c.req.query("severity");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 500);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "100", 10) || 100,
+      500,
+    );
 
     const conditions: string[] = ["i.tenant_id = $1"];
     const params: unknown[] = [tenantId];
@@ -754,18 +758,22 @@ systemHealthRoute.post(
       }
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'health.incident.create', 'system_incident', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            result.data.rows[0].id,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "health.incident.create",
+            entityType: "system_incident",
+            entityId: result.data.rows[0].id,
+            newData: {
               incident_number: incidentNumber,
               title: data.title,
               severity: data.severity,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Incidente criado", {
@@ -909,7 +917,10 @@ systemHealthRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const metricType = c.req.query("metric_type");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
 
     const conditions: string[] = ["tenant_id = $1"];
     const params: unknown[] = [tenantId];
