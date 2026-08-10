@@ -617,46 +617,19 @@ describe("changes — validacao de month (calendar)", () => {
     return /^\d{4}-\d{2}$/.test(month);
   }
 
-  it("aceita formato YYYY-MM", () => {
-    expect(isValidMonthFormat("2026-08")).toBe(true);
-  });
-
-  it("aceita mes com zero a esquerda", () => {
-    expect(isValidMonthFormat("2026-01")).toBe(true);
-  });
-
-  it("aceita mes 12", () => {
-    expect(isValidMonthFormat("2026-12")).toBe(true);
-  });
-
-  it("rejeita formato YYYY-MM-DD (completo)", () => {
-    expect(isValidMonthFormat("2026-08-15")).toBe(false);
-  });
-
-  it("rejeita SQL injection attempt", () => {
-    expect(isValidMonthFormat("' OR 1=1 --")).toBe(false);
-  });
-
-  it("rejeita string vazia", () => {
-    expect(isValidMonthFormat("")).toBe(false);
-  });
-
-  it("rejeita apenas ano", () => {
-    expect(isValidMonthFormat("2026")).toBe(false);
-  });
-
-  it("rejeita mes sem zero a esquerda", () => {
-    expect(isValidMonthFormat("2026-8")).toBe(false);
-  });
-
-  it("rejeita caracteres especiais", () => {
-    expect(isValidMonthFormat("2026-08;")).toBe(false);
-  });
-
-  it("rejeita mes 13", () => {
-    // Regex apenas valida formato, mas mes 13 passa no regex
-    // (validacao semantica seria no DB)
-    expect(isValidMonthFormat("2026-13")).toBe(true);
+  it.each([
+    ["2026-08", true],
+    ["2026-01", true],
+    ["2026-12", true],
+    ["2026-13", true], // Regex apenas valida formato, mes 13 passa (validacao semantica no DB)
+    ["2026-08-15", false],
+    ["' OR 1=1 --", false],
+    ["", false],
+    ["2026", false],
+    ["2026-8", false],
+    ["2026-08;", false],
+  ])(`isValidMonthFormat(%j) → %s`, (month, expected) => {
+    expect(isValidMonthFormat(month)).toBe(expected);
   });
 });
 
