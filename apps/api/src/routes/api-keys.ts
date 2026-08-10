@@ -83,26 +83,26 @@ apiKeyRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createApiKeySchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateApiKeyInput;
-    const { rawKey, keyPrefix, keyHash } = generateApiKey();
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createApiKeySchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateApiKeyInput;
+      const { rawKey, keyPrefix, keyHash } = generateApiKey();
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.api_keys (tenant_id, name, description, key_prefix, key_hash, scopes, allowed_ips,
            rate_limit_per_min, rate_limit_per_hour, rate_limit_per_day, expires_at, created_by)
@@ -173,64 +173,66 @@ apiKeyRoute.put(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateApiKeySchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdateApiKeyInput;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      description: "description",
-      rate_limit_per_min: "rate_limit_per_min",
-      rate_limit_per_hour: "rate_limit_per_hour",
-      rate_limit_per_day: "rate_limit_per_day",
-      is_active: "is_active",
-      expires_at: "expires_at",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (data.scopes !== undefined) {
-      updateFields.push(`scopes = $${paramIdx++}`);
-      params.push(JSON.stringify(data.scopes));
-    }
-
-    if (data.allowed_ips !== undefined) {
-      updateFields.push(`allowed_ips = $${paramIdx++}`);
-      params.push(JSON.stringify(data.allowed_ips));
-    }
-
-    if (updateFields.length === 0) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" } },
-        400,
-      );
-    }
-
-    params.push(keyId, tenantId);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateApiKeySchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdateApiKeyInput;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        description: "description",
+        rate_limit_per_min: "rate_limit_per_min",
+        rate_limit_per_hour: "rate_limit_per_hour",
+        rate_limit_per_day: "rate_limit_per_day",
+        is_active: "is_active",
+        expires_at: "expires_at",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (data.scopes !== undefined) {
+        updateFields.push(`scopes = $${paramIdx++}`);
+        params.push(JSON.stringify(data.scopes));
+      }
+
+      if (data.allowed_ips !== undefined) {
+        updateFields.push(`allowed_ips = $${paramIdx++}`);
+        params.push(JSON.stringify(data.allowed_ips));
+      }
+
+      if (updateFields.length === 0) {
+        return c.json(
+          {
+            error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" },
+          },
+          400,
+        );
+      }
+
+      params.push(keyId, tenantId);
+
       const result = await query(
         `UPDATE public.api_keys SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
@@ -530,7 +532,8 @@ apiKeyRoute.get(
     const keyId = c.req.param("id");
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     try {
       const result = await query(

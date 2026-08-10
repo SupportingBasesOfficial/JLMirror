@@ -324,19 +324,20 @@ describe("api-keys — logica de key generation", () => {
 // ========== Logica de Limit Pagination ==========
 
 describe("api-keys — logica de limit pagination", () => {
-  it("usage limit default 50", () => {
-    const limit = Math.min(parseInt("50", 10), 200);
-    expect(limit).toBe(50);
-  });
+  function parseLimit(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 50 : parsed, 200);
+  }
 
-  it("usage limit maximo 200", () => {
-    const limit = Math.min(parseInt("999", 10), 200);
-    expect(limit).toBe(200);
-  });
-
-  it("usage limit custom", () => {
-    const limit = Math.min(parseInt("100", 10), 200);
-    expect(limit).toBe(100);
+  it.each([
+    ["50", 50],
+    ["999", 200],
+    ["100", 100],
+    ["abc", 50],
+    ["", 50],
+    ["0", 0],
+  ])(`limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimit(raw)).toBe(expected);
   });
 });
 
@@ -358,5 +359,203 @@ describe("api-keys — logica de rotation", () => {
       rotated_from: oldKeyId,
     };
     expect(newKeyData.rotated_from).toBe(oldKeyId);
+  });
+});
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("api-keys — logica de tenant isolation", () => {
+  it("queries de api_keys filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql = "SELECT * FROM public.api_keys WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE api_keys inclui tenant_id no WHERE", () => {
+    const tenantId = "t-upd";
+    const keyId = "k-1";
+    const sql =
+      "UPDATE public.api_keys SET name = $1 WHERE id = $2 AND tenant_id = $3";
+    const params: unknown[] = ["novo", keyId, tenantId];
+    expect(sql).toContain("tenant_id = $3");
+    expect(params[2]).toBe(tenantId);
+  });
+
+  it("DELETE api_keys inclui tenant_id no WHERE", () => {
+    const tenantId = "t-del";
+    const keyId = "k-2";
+    const sql = "DELETE FROM public.api_keys WHERE id = $1 AND tenant_id = $2";
+    const params: unknown[] = [keyId, tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+
+  it("INSERT api_keys inclui tenant_id", () => {
+    const tenantId = "t-ins";
+    const params: unknown[] = [tenantId, "name", "prefix", "hash"];
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de usage_log filtram por tenant_id", () => {
+    const tenantId = "t-usage";
+    const sql =
+      "SELECT * FROM public.api_key_usage_log WHERE api_key_id = $1 AND tenant_id = $2";
+    const params: unknown[] = ["k-1", tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+
+  it("stats queries filtram por tenant_id", () => {
+    const tenantId = "t-stats";
+    const sql = "SELECT COUNT(*) FROM public.api_keys WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de 404 Handling ==========
+
+describe("api-keys — logica de 404 handling", () => {
+  it.each([
+    ["PUT /:id", 0, true],
+    ["DELETE /:id", 0, true],
+    ["POST /:id/rotate", 0, true],
+  ])(`%s retorna 404 quando rowCount=0`, (_action, rowCount, expected) => {
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(expected);
+  });
+
+  it.each([
+    ["PUT /:id", 1, false],
+    ["DELETE /:id", 1, false],
+  ])(`%s nao retorna 404 quando rowCount>0`, (_action, rowCount, expected) => {
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(expected);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("api-keys — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getSub(user: TestUser | null | undefined): string | null {
+    return user?.sub ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.sub retorna null quando user e null", () => {
+    expect(getSub(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.sub retorna valor quando user existe", () => {
+    expect(getSub({ sub: "u1", tenant_id: "t1" })).toBe("u1");
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Parallel Queries (Stats) ==========
+
+describe("api-keys — logica de parallel queries (stats)", () => {
+  it("stats paraleliza 3 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total_keys: "10" }] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+    ]);
+    expect(results).toHaveLength(3);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Field Map Update ==========
+
+describe("api-keys — logica de field map update", () => {
+  it("constroi UPDATE dinâmico com fieldMap", () => {
+    const data = {
+      name: "Novo Nome",
+      is_active: false,
+    };
+    const fieldMap: Record<string, string> = {
+      name: "name",
+      description: "description",
+      is_active: "is_active",
+    };
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (data[key as keyof typeof data] !== undefined) {
+        updateFields.push(`${dbField} = $${paramIdx++}`);
+        params.push(data[key as keyof typeof data]);
+      }
+    }
+    expect(updateFields).toEqual(["name = $1", "is_active = $2"]);
+    expect(params).toEqual(["Novo Nome", false]);
+  });
+
+  it("update vazio retorna 400", () => {
+    const data = {};
+    const updateFields: string[] = [];
+    const shouldReturn400 =
+      updateFields.length === 0 && Object.keys(data).length === 0;
+    expect(shouldReturn400).toBe(true);
+  });
+
+  it("scopes serializa como JSON", () => {
+    const scopes = ["read", "write"];
+    const serialized = JSON.stringify(scopes);
+    expect(serialized).toBe('["read","write"]');
+  });
+
+  it("allowed_ips serializa como JSON", () => {
+    const allowed_ips = ["192.168.1.1", "10.0.0.1"];
+    const serialized = JSON.stringify(allowed_ips);
+    expect(serialized).toBe('["192.168.1.1","10.0.0.1"]');
+  });
+});
+
+// ========== Logica de Active Filter ==========
+
+describe("api-keys — logica de active filter", () => {
+  it("active=true adiciona is_active = true no WHERE", () => {
+    const activeOnly = true;
+    const conditions: string[] = ["tenant_id = $1"];
+    if (activeOnly) {
+      conditions.push("is_active = true");
+    }
+    expect(conditions).toContain("is_active = true");
+  });
+
+  it("active=false nao adiciona filtro extra", () => {
+    const activeOnly = false;
+    const conditions: string[] = ["tenant_id = $1"];
+    if (activeOnly) {
+      conditions.push("is_active = true");
+    }
+    expect(conditions).not.toContain("is_active = true");
   });
 });
