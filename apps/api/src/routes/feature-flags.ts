@@ -696,7 +696,10 @@ featureFlagRoute.get(
   async (c) => {
     const flagId = c.req.param("id");
     const user = c.get("user");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
 
     try {
       const result = await query(
