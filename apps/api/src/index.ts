@@ -182,13 +182,13 @@ app.use("/api/v1/auth/*", rateLimitAuth);
 app.route("/api/v1/auth", authRoute);
 
 // TV public endpoint — mounted before JWT auth (uses own token auth)
-app.route("/api/v1/tv/data", tvRoute);
+app.route("/api/v1/tv", tvRoute);
 
 // Branding public endpoint — mounted before JWT auth (public, no auth needed)
 app.route("/api/v1/branding", brandingRoute);
 
-// Billing webhook — public endpoint (Asaas calls this)
-app.route("/api/v1/billing/webhook", billingRoute);
+// Billing — mounted before JWT auth (webhook endpoint is public, others need auth)
+app.route("/api/v1/billing", billingRoute);
 
 // Status page public endpoint — mounted before JWT auth (public, no auth needed)
 app.route("/api/v1/status-page", statusPagePublicRoute);
@@ -402,10 +402,6 @@ app.route("/api/v1/sql-console", sqlConsoleRoute);
 app.use("/api/v1/apm", requireModule("module_apm"));
 app.use("/api/v1/apm/*", requireModule("module_apm"));
 app.route("/api/v1/apm", apmRoute);
-
-app.route("/api/v1/tv", tvRoute);
-
-app.route("/api/v1/billing", billingRoute);
 
 // Middleware de métricas Prometheus — registra todas as requests
 app.use("*", async (c, next) => {

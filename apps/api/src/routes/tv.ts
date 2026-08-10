@@ -272,9 +272,19 @@ tvRoute.get("/data", tvTokenAuth(), async (c) => {
     // Painel: SLA — metricas de SLA
     if (panels.includes("sla")) {
       const slaResult = await query(
-        `SELECT id, name, target_percentage, current_percentage, status
-         FROM public.sla_metrics
-         WHERE tenant_id = $1 ORDER BY priority ASC LIMIT 10`,
+        `SELECT s.id, s.name,
+                s.sla_target_percentage AS target_percentage,
+                COALESCE(
+                  (SELECT sr.uptime_percentage
+                   FROM public.sla_records sr
+                   WHERE sr.service_id = s.id
+                   ORDER BY sr.period_end DESC LIMIT 1),
+                  100.00
+                ) AS current_percentage,
+                s.status
+         FROM public.services s
+         WHERE s.tenant_id = $1 AND s.is_active = true
+         ORDER BY s.priority DESC, s.name ASC LIMIT 10`,
         [tenantId],
       );
 

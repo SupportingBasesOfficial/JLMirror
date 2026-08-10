@@ -30,11 +30,11 @@ slaRoute.get("/", httpCache(30), requirePermission("sla:read"), async (c) => {
     // Paraleliza 2 queries independentes
     const [servicesResult, incidentsResult] = await Promise.all([
       query(
-        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.sla_services WHERE tenant_id = $1",
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.services WHERE tenant_id = $1",
         [tenantId],
       ),
       query(
-        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.sla_incidents WHERE tenant_id = $1",
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.service_incidents WHERE tenant_id = $1",
         [tenantId],
       ),
     ]);

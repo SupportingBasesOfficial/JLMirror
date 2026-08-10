@@ -25,11 +25,11 @@ correlationRoute.get(
       // Paraleliza 2 queries independentes
       const [rulesResult, groupsResult] = await Promise.all([
         query(
-          "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.correlation_rules WHERE tenant_id = $1",
+          "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.event_correlation_rules WHERE tenant_id = $1",
           [tenantId],
         ),
         query(
-          "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.correlation_groups WHERE tenant_id = $1",
+          "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.event_groups WHERE tenant_id = $1",
           [tenantId],
         ),
       ]);
