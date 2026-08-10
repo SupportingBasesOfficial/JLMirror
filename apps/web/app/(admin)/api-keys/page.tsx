@@ -91,15 +91,17 @@ export default function ApiKeysPage() {
   const [fRateDay, setFRateDay] = useState(86400);
   const [fExpires, setFExpires] = useState("");
 
-  const { data: kData, mutate: mutateKeys } = useApi<{ keys: ApiKey[] }>(
-    "/api/api-keys",
-  );
+  const {
+    data: kData,
+    isLoading: kLoading,
+    mutate: mutateKeys,
+  } = useApi<{ keys: ApiKey[] }>("/api/api-keys");
   const { data: stats, mutate: mutateStats } = useApi<KeyStats>(
     "/api/api-keys/stats",
   );
 
   const keys = kData?.keys ?? [];
-  const loading = false;
+  const loading = kLoading;
 
   async function handleCreate() {
     setError(null);

@@ -608,13 +608,11 @@ patchRoute.post(
         [userId, deploymentId],
       );
 
-      // Marca patches como installing
-      for (const patchId of deployment.patch_ids) {
-        await query(
-          "UPDATE public.patches SET status = 'installing' WHERE id = $1 AND tenant_id = $2",
-          [patchId, tenantId],
-        );
-      }
+      // Marca patches como installing (batch update)
+      await query(
+        "UPDATE public.patches SET status = 'installing' WHERE id = ANY($1::uuid[]) AND tenant_id = $2",
+        [deployment.patch_ids, tenantId],
+      );
 
       if (userId) {
         try {

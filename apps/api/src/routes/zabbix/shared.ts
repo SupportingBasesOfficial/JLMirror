@@ -189,11 +189,10 @@ export async function verifyHostsOwnership(
   ctx: ZabbixClientContext,
   hostIds: string[],
 ): Promise<boolean> {
-  for (const hostId of hostIds) {
-    const belongs = await verifyHostOwnership(ctx, hostId);
-    if (!belongs) return false;
-  }
-  return true;
+  const results = await Promise.all(
+    hostIds.map((hostId) => verifyHostOwnership(ctx, hostId)),
+  );
+  return results.every((belongs) => belongs);
 }
 
 // Helper para classificar erros da API Zabbix

@@ -151,18 +151,29 @@ escalationRoute.post(
         );
       }
 
-      for (const step of data.steps) {
-        await query(
-          `INSERT INTO public.alert_escalation_steps (policy_id, tier, delay_minutes, channel_ids, template_subject, template_body)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
+      // Bulk INSERT dos steps
+      if (data.steps.length > 0) {
+        const stepValues: string[] = [];
+        const stepParams: unknown[] = [];
+        let paramIdx = 1;
+        for (const step of data.steps) {
+          stepValues.push(
+            `($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5})`,
+          );
+          stepParams.push(
             policyId,
             step.tier,
             step.delay_minutes,
             step.channel_ids,
             step.template_subject ?? null,
             step.template_body ?? null,
-          ],
+          );
+          paramIdx += 6;
+        }
+        await query(
+          `INSERT INTO public.alert_escalation_steps (policy_id, tier, delay_minutes, channel_ids, template_subject, template_body)
+           VALUES ${stepValues.join(", ")}`,
+          stepParams,
         );
       }
 
@@ -254,18 +265,29 @@ escalationRoute.put(
           "DELETE FROM public.alert_escalation_steps WHERE policy_id = $1",
           [policyId],
         );
-        for (const step of data.steps) {
-          await query(
-            `INSERT INTO public.alert_escalation_steps (policy_id, tier, delay_minutes, channel_ids, template_subject, template_body)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
+        // Bulk INSERT dos steps
+        if (data.steps.length > 0) {
+          const stepValues: string[] = [];
+          const stepParams: unknown[] = [];
+          let paramIdx = 1;
+          for (const step of data.steps) {
+            stepValues.push(
+              `($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5})`,
+            );
+            stepParams.push(
               policyId,
               step.tier,
               step.delay_minutes,
               step.channel_ids,
               step.template_subject ?? null,
               step.template_body ?? null,
-            ],
+            );
+            paramIdx += 6;
+          }
+          await query(
+            `INSERT INTO public.alert_escalation_steps (policy_id, tier, delay_minutes, channel_ids, template_subject, template_body)
+             VALUES ${stepValues.join(", ")}`,
+            stepParams,
           );
         }
       }

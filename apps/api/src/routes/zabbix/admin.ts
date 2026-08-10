@@ -26,6 +26,7 @@ import {
   validationErrorResponse,
   accessDeniedResponse,
   verifyHostOwnership,
+  verifyHostsOwnership,
   redactSensitiveFields,
   enqueueWriteJob,
 } from "./shared.js";
@@ -102,12 +103,13 @@ export function registerAdminRoutes(zabbixRoute: Hono) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
       // Verifica se os hostids informados pertencem ao tenant (IDOR protection)
-      if (Array.isArray(parsed.data.hostids)) {
-        for (const hid of parsed.data.hostids) {
-          const belongs = await verifyHostOwnership(ctx, hid);
-          if (!belongs) {
-            return c.json(accessDeniedResponse(), 403);
-          }
+      if (
+        Array.isArray(parsed.data.hostids) &&
+        parsed.data.hostids.length > 0
+      ) {
+        const belongs = await verifyHostsOwnership(ctx, parsed.data.hostids);
+        if (!belongs) {
+          return c.json(accessDeniedResponse(), 403);
         }
       }
       const jobId = await enqueueWriteJob({

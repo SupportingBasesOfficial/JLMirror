@@ -108,7 +108,11 @@ export default function WebhooksPage() {
   const [fTimeout, setFTimeout] = useState(30);
   const [fExpectedStatus, setFExpectedStatus] = useState(200);
 
-  const { data: whData, mutate: mutateWebhooks } = useApi<{
+  const {
+    data: whData,
+    isLoading: whLoading,
+    mutate: mutateWebhooks,
+  } = useApi<{
     webhooks: Webhook[];
   }>("/api/webhooks");
   const { data: stats, mutate: mutateStats } = useApi<WebhookStats>(
@@ -116,7 +120,7 @@ export default function WebhooksPage() {
   );
 
   const webhooks = whData?.webhooks ?? [];
-  const loading = false;
+  const loading = whLoading;
 
   async function handleCreate() {
     setError(null);
