@@ -582,8 +582,8 @@ slaRoute.post(
 
       const result = await query(
         `INSERT INTO public.service_incidents (tenant_id, service_id, title, description, severity, status,
-         started_at, resolved_at, root_cause, resolution_notes, affected_device_ids, ticket_id, zabbix_event_id)
-         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8, $9, $10, $11, $12, $13)
+         started_at, resolved_at, downtime_seconds, root_cause, resolution_notes, affected_device_ids, ticket_id, zabbix_event_id)
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8, $9, $10, $11, $12, $13, $14)
          RETURNING id`,
         [
           tenantId,
@@ -594,6 +594,7 @@ slaRoute.post(
           d.status,
           d.started_at ?? null,
           d.resolved_at ?? null,
+          d.downtime_seconds ?? null,
           d.root_cause ?? null,
           d.resolution_notes ?? null,
           JSON.stringify(d.affected_device_ids),
@@ -1189,7 +1190,7 @@ slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
              COUNT(*) as total_services,
              COUNT(*) FILTER (WHERE s.status = 'operational') as operational,
              COUNT(*) FILTER (WHERE s.status = 'degraded') as degraded,
-             COUNT(*) FILTER (WHERE s.status = 'down') as down,
+             COUNT(*) FILTER (WHERE s.status = 'major_outage') as down,
              COUNT(*) FILTER (WHERE s.status = 'maintenance') as maintenance
            FROM public.services s
            WHERE s.tenant_id = $1 AND s.is_active = true`,

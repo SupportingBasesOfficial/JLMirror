@@ -268,7 +268,7 @@ describe("sla schemas — createServiceIncidentSchema", () => {
   const validIncident = {
     service_id: "550e8400-e29b-41d4-a716-446655440000",
     title: "Servidor fora do ar",
-    severity: 3,
+    severity: "critical",
   };
 
   it("valida incidente minimo", () => {
@@ -279,7 +279,7 @@ describe("sla schemas — createServiceIncidentSchema", () => {
   it("rejeita sem service_id", () => {
     const result = createServiceIncidentSchema.safeParse({
       title: "Incidente",
-      severity: 3,
+      severity: "critical",
     });
     expect(result.success).toBe(false);
   });
@@ -287,17 +287,20 @@ describe("sla schemas — createServiceIncidentSchema", () => {
   it("rejeita sem title", () => {
     const result = createServiceIncidentSchema.safeParse({
       service_id: "550e8400-e29b-41d4-a716-446655440000",
-      severity: 3,
+      severity: "critical",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejeita sem severity", () => {
+  it("aplica default severity=warning quando nao informado", () => {
     const result = createServiceIncidentSchema.safeParse({
       service_id: "550e8400-e29b-41d4-a716-446655440000",
       title: "Incidente",
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.severity).toBe("warning");
+    }
   });
 
   it("rejeita service_id nao-UUID", () => {
@@ -308,43 +311,43 @@ describe("sla schemas — createServiceIncidentSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejeita severity > 5", () => {
+  it("rejeita severity invalido", () => {
     const result = createServiceIncidentSchema.safeParse({
       ...validIncident,
-      severity: 6,
+      severity: "invalid",
     });
     expect(result.success).toBe(false);
   });
 
-  it("rejeita severity < 0", () => {
+  it("rejeita severity numerico (deve ser string)", () => {
     const result = createServiceIncidentSchema.safeParse({
       ...validIncident,
-      severity: -1,
+      severity: 3,
     });
     expect(result.success).toBe(false);
   });
 
-  it("valida severity = 0", () => {
+  it("valida severity = info", () => {
     const result = createServiceIncidentSchema.safeParse({
       ...validIncident,
-      severity: 0,
+      severity: "info",
     });
     expect(result.success).toBe(true);
   });
 
-  it("valida severity = 5", () => {
+  it("valida severity = maintenance", () => {
     const result = createServiceIncidentSchema.safeParse({
       ...validIncident,
-      severity: 5,
+      severity: "maintenance",
     });
     expect(result.success).toBe(true);
   });
 
-  it("aplica default status=open", () => {
+  it("aplica default status=investigating", () => {
     const result = createServiceIncidentSchema.safeParse(validIncident);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.status).toBe("open");
+      expect(result.data.status).toBe("investigating");
     }
   });
 

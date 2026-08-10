@@ -137,12 +137,12 @@ function formatDuration(ms: number | null): string {
 }
 
 export default function ScheduledTasksPage() {
-  const { data: tData, mutate: mutateTasks } = useApi<{ tasks: Task[] }>(
+  const { data: tData, mutate: mutateTasks } = useApi<{ data: Task[] }>(
     "/api/tasks",
   );
   const { data: stats, mutate: mutateStats } =
     useApi<TaskStats>("/api/tasks/stats");
-  const tasks = tData?.tasks ?? [];
+  const tasks = tData?.data ?? [];
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);

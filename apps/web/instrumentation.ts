@@ -11,14 +11,16 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    // @vercel/otel foi removido das dependencias para reduzir o bundle.
+    // Para reativar OpenTelemetry no Vercel: pnpm add @vercel/otel e
+    // descomente o bloco abaixo.
+    /*
     try {
-      // @ts-expect-error — import opcional, @vercel/otel pode nao estar instalado
       const { registerOTel } = await import("@vercel/otel");
-      registerOTel({
-        serviceName: "jlmirror-web",
-      });
+      registerOTel({ serviceName: "jlmirror-web" });
     } catch {
-      // @vercel/otel não instalado ou não configurado — silencioso
+      // @vercel/otel não instalado — silencioso
     }
+    */
   }
 }

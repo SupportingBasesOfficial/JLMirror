@@ -622,12 +622,21 @@ export const createServiceIncidentSchema = z.object({
   service_id: z.string().uuid(),
   title: z.string().min(1).max(255),
   description: z.string().max(5000).optional(),
-  severity: z.number().int().min(0).max(5),
+  severity: z
+    .enum(["info", "warning", "major", "critical", "maintenance"])
+    .default("warning"),
   status: z
-    .enum(["open", "investigating", "resolved", "closed"])
-    .default("open"),
+    .enum([
+      "investigating",
+      "identified",
+      "monitoring",
+      "resolved",
+      "scheduled",
+    ])
+    .default("investigating"),
   started_at: z.string().optional(),
   resolved_at: z.string().optional(),
+  downtime_seconds: z.number().int().min(0).optional(),
   root_cause: z.string().max(5000).optional(),
   resolution_notes: z.string().max(5000).optional(),
   affected_device_ids: z.array(z.string()).default([]),
@@ -641,9 +650,20 @@ export type CreateServiceIncidentInput = z.infer<
 export const updateServiceIncidentSchema = z.object({
   title: z.string().min(1).max(255).optional(),
   description: z.string().max(5000).optional(),
-  severity: z.number().int().min(0).max(5).optional(),
-  status: z.enum(["open", "investigating", "resolved", "closed"]).optional(),
+  severity: z
+    .enum(["info", "warning", "major", "critical", "maintenance"])
+    .optional(),
+  status: z
+    .enum([
+      "investigating",
+      "identified",
+      "monitoring",
+      "resolved",
+      "scheduled",
+    ])
+    .optional(),
   resolved_at: z.string().optional(),
+  downtime_seconds: z.number().int().min(0).optional(),
   root_cause: z.string().max(5000).optional(),
   resolution_notes: z.string().max(5000).optional(),
   affected_device_ids: z.array(z.string()).optional(),
