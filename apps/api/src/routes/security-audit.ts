@@ -3,8 +3,11 @@
 import { Hono } from "hono";
 import { query } from "@repo/db";
 import { z } from "zod";
+import { logger } from "@repo/logger";
 import { requirePermission } from "../middleware/require-permission.js";
 import { httpCache } from "../middleware/http-cache.js";
+import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const securityAuditRoute = new Hono();
@@ -14,22 +17,33 @@ securityAuditRoute.get("/", requirePermission("compliance:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
 
-  const rulesResult = await query(
-    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.security_audit_rules WHERE tenant_id = $1",
-    [tenantId],
-  );
-  const findingsResult = await query(
-    "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.security_audit_findings WHERE tenant_id = $1",
-    [tenantId],
-  );
+  try {
+    const rulesResult = await query(
+      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM public.security_audit_rules WHERE tenant_id = $1",
+      [tenantId],
+    );
+    const findingsResult = await query(
+      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'open') as open FROM public.security_audit_findings WHERE tenant_id = $1",
+      [tenantId],
+    );
 
-  return c.json({
-    overview: {
-      rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
-      findings: findingsResult.data?.rows[0] ?? { total: "0", open: "0" },
-    },
-    endpoints: ["/rules", "/findings", "/scans", "/summary"],
-  });
+    return c.json({
+      overview: {
+        rules: rulesResult.data?.rows[0] ?? { total: "0", active: "0" },
+        findings: findingsResult.data?.rows[0] ?? { total: "0", open: "0" },
+      },
+      endpoints: ["/rules", "/findings", "/scans", "/summary"],
+    });
+  } catch (error) {
+    logger.error("Erro ao buscar overview de security-audit", {
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
+    );
+  }
 });
 
 const categorySchema = z.enum([
@@ -71,29 +85,42 @@ securityAuditRoute.get(
   requirePermission("compliance:read"),
   async (c) => {
     const user = c.get("user");
-    const category = c.req.query("category");
-    const activeOnly = c.req.query("active") === "true";
+    const tenantId = user?.tenant_id ?? null;
 
-    const conditions: string[] = ["(tenant_id = $1 OR tenant_id IS NULL)"];
-    const params: unknown[] = [user?.tenant_id ?? null];
-    let paramIdx = 2;
+    try {
+      const category = c.req.query("category");
+      const activeOnly = c.req.query("active") === "true";
 
-    if (category) {
-      conditions.push(`category = $${paramIdx++}`);
-      params.push(category);
+      const conditions: string[] = ["(tenant_id = $1 OR tenant_id IS NULL)"];
+      const params: unknown[] = [tenantId];
+      let paramIdx = 2;
+
+      if (category) {
+        conditions.push(`category = $${paramIdx++}`);
+        params.push(category);
+      }
+      if (activeOnly) {
+        conditions.push("is_active = true");
+      }
+
+      const result = await query(
+        `SELECT * FROM public.security_audit_rules WHERE ${conditions.join(" AND ")} ORDER BY
+         CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END,
+         name ASC`,
+        params,
+      );
+
+      return c.json({ rules: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao listar regras de auditoria", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
     }
-    if (activeOnly) {
-      conditions.push("is_active = true");
-    }
-
-    const result = await query(
-      `SELECT * FROM public.security_audit_rules WHERE ${conditions.join(" AND ")} ORDER BY
-       CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END,
-       name ASC`,
-      params,
-    );
-
-    return c.json({ rules: result.data?.rows ?? [] });
   },
 );
 
@@ -103,56 +130,77 @@ securityAuditRoute.post(
   requirePermission("compliance:write"),
   async (c) => {
     const user = c.get("user");
-    const body = await c.req.json();
-    const parsed = createRuleSchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
+
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = createRuleSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
           },
-        },
-        400,
+          400,
+        );
+      }
+
+      const data = parsed.data;
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.security_audit_rules (tenant_id, name, description, category, severity, check_type, check_query, check_config, expected_result, remediation, is_active, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        [
+          tenantId,
+          data.name,
+          data.description ?? null,
+          data.category,
+          data.severity,
+          data.check_type,
+          data.check_query ?? null,
+          JSON.stringify(data.check_config ?? {}),
+          data.expected_result ?? null,
+          data.remediation ?? null,
+          data.is_active,
+          userId,
+        ],
       );
-    }
 
-    const data = parsed.data;
-    const result = await query<{ id: string }>(
-      `INSERT INTO public.security_audit_rules (tenant_id, name, description, category, severity, check_type, check_query, check_config, expected_result, remediation, is_active, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-      [
-        user?.tenant_id ?? null,
-        data.name,
-        data.description ?? null,
-        data.category,
-        data.severity,
-        data.check_type,
-        data.check_query ?? null,
-        JSON.stringify(data.check_config ?? {}),
-        data.expected_result ?? null,
-        data.remediation ?? null,
-        data.is_active,
-        user.sub,
-      ],
-    );
+      if (result.error || !result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "CREATE_ERROR", message: "Erro ao criar regra" } },
+          500,
+        );
+      }
 
-    if (result.error || !result.data?.rows[0]) {
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "audit.rule.create",
+            entityType: "security_audit_rules",
+            newData: { id: result.data.rows[0].id, name: data.name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      return c.json({ id: result.data.rows[0].id }, 201);
+    } catch (error) {
+      logger.error("Erro ao criar regra de auditoria", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "CREATE_ERROR", message: "Erro ao criar regra" } },
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
         500,
       );
     }
-
-    await query(
-      "SELECT public.write_audit_log($1, NULL, 'audit.rule.create', 'security_audit_rules', NULL, $2, NULL, NULL)",
-      [
-        user.sub,
-        JSON.stringify({ id: result.data.rows[0].id, name: data.name }),
-      ],
-    );
-
-    return c.json({ id: result.data.rows[0].id }, 201);
   },
 );
 
@@ -163,55 +211,70 @@ securityAuditRoute.put(
   async (c) => {
     const ruleId = c.req.param("id");
     const user = c.get("user");
-    const body = await c.req.json();
-    const parsed = createRuleSchema.partial().safeParse(body);
-    if (!parsed.success) {
+    const tenantId = user?.tenant_id ?? null;
+
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = createRuleSchema.partial().safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        description: "description",
+        category: "category",
+        severity: "severity",
+        check_type: "check_type",
+        check_query: "check_query",
+        expected_result: "expected_result",
+        remediation: "remediation",
+        is_active: "is_active",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (data.check_config !== undefined) {
+        updateFields.push(`check_config = $${paramIdx++}`);
+        params.push(JSON.stringify(data.check_config));
+      }
+
+      if (updateFields.length === 0) {
+        return c.json({ id: ruleId });
+      }
+
+      params.push(ruleId, tenantId);
+      await query(
+        `UPDATE public.security_audit_rules SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND (tenant_id = $${paramIdx++} OR tenant_id IS NULL)`,
+        params,
+      );
+
+      return c.json({ id: ruleId, updated: true });
+    } catch (error) {
+      logger.error("Erro ao atualizar regra de auditoria", {
+        ruleId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-        400,
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
       );
     }
-
-    const data = parsed.data;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      description: "description",
-      category: "category",
-      severity: "severity",
-      check_type: "check_type",
-      check_query: "check_query",
-      expected_result: "expected_result",
-      remediation: "remediation",
-      is_active: "is_active",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (data.check_config !== undefined) {
-      updateFields.push(`check_config = $${paramIdx++}`);
-      params.push(JSON.stringify(data.check_config));
-    }
-
-    if (updateFields.length === 0) {
-      return c.json({ id: ruleId });
-    }
-
-    params.push(ruleId, user?.tenant_id ?? null);
-    await query(
-      `UPDATE public.security_audit_rules SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND (tenant_id = $${paramIdx++} OR tenant_id IS NULL)`,
-      params,
-    );
-
-    return c.json({ id: ruleId, updated: true });
   },
 );
 
@@ -222,13 +285,26 @@ securityAuditRoute.delete(
   async (c) => {
     const ruleId = c.req.param("id");
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-    await query(
-      "DELETE FROM public.security_audit_rules WHERE id = $1 AND tenant_id = $2",
-      [ruleId, user?.tenant_id ?? null],
-    );
+    try {
+      await query(
+        "DELETE FROM public.security_audit_rules WHERE id = $1 AND tenant_id = $2",
+        [ruleId, tenantId],
+      );
 
-    return c.json({ deleted: true });
+      return c.json({ deleted: true });
+    } catch (error) {
+      logger.error("Erro ao deletar regra de auditoria", {
+        ruleId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
@@ -239,13 +315,14 @@ securityAuditRoute.post(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
     const startTime = Date.now();
 
     // Cria registro de scan
     const scanResult = await query<{ id: string }>(
       `INSERT INTO public.security_audit_scans (tenant_id, status, started_at, created_by)
      VALUES ($1, 'running', timezone('utc'::text, now()), $2) RETURNING id`,
-      [tenantId, user.sub],
+      [tenantId, userId],
     );
 
     const scanId = scanResult.data?.rows[0]?.id;
@@ -286,9 +363,13 @@ securityAuditRoute.post(
             const rows = checkResult.data?.rows ?? [];
             const count =
               rows.length > 0
-                ? parseInt((rows[0].count as string) ?? String(rows.length), 10)
+                ? Number.parseInt(
+                    (rows[0].count as string) ?? String(rows.length),
+                    10,
+                  ) || 0
                 : 0;
-            const expected = parseInt(rule.expected_result ?? "0", 10);
+            const expected =
+              Number.parseInt(rule.expected_result ?? "0", 10) || 0;
 
             if (count > expected) {
               // Finding detectado
@@ -372,17 +453,23 @@ securityAuditRoute.post(
         ],
       );
 
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'audit.scan', 'security_audit_scans', NULL, $2, NULL, NULL)",
-        [
-          user.sub,
-          JSON.stringify({
-            scan_id: scanId,
-            findings: totalFindings,
-            critical: criticalFindings,
-          }),
-        ],
-      );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "audit.scan",
+            entityType: "security_audit_scans",
+            newData: {
+              scan_id: scanId,
+              findings: totalFindings,
+              critical: criticalFindings,
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
       return c.json({
         scan_id: scanId,
@@ -398,6 +485,13 @@ securityAuditRoute.post(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
       const durationMs = Date.now() - startTime;
+
+      logger.error("Erro ao executar scan de auditoria", {
+        scanId,
+        tenantId,
+        error: errorMsg,
+        durationMs,
+      });
 
       await query(
         "UPDATE public.security_audit_scans SET status = 'failed', error_message = $1, duration_ms = $2, completed_at = timezone('utc'::text, now()) WHERE id = $3",
@@ -416,37 +510,53 @@ securityAuditRoute.get(
   httpCache(30),
   async (c) => {
     const user = c.get("user");
-    const status = c.req.query("status");
-    const severity = c.req.query("severity");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 500);
+    const tenantId = user?.tenant_id ?? null;
 
-    const conditions: string[] = ["f.tenant_id = $1"];
-    const params: unknown[] = [user?.tenant_id ?? null];
-    let paramIdx = 2;
+    try {
+      const status = c.req.query("status");
+      const severity = c.req.query("severity");
+      const limit = Math.min(
+        Number.parseInt(c.req.query("limit") ?? "100", 10) || 100,
+        500,
+      );
 
-    if (status) {
-      conditions.push(`f.status = $${paramIdx++}`);
-      params.push(status);
+      const conditions: string[] = ["f.tenant_id = $1"];
+      const params: unknown[] = [tenantId];
+      let paramIdx = 2;
+
+      if (status) {
+        conditions.push(`f.status = $${paramIdx++}`);
+        params.push(status);
+      }
+      if (severity) {
+        conditions.push(`f.severity = $${paramIdx++}`);
+        params.push(severity);
+      }
+      params.push(limit);
+
+      const result = await query(
+        `SELECT f.*, r.name as rule_name, r.category as rule_category, r.remediation as rule_remediation
+       FROM public.security_audit_findings f
+       JOIN public.security_audit_rules r ON f.rule_id = r.id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY
+         CASE f.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END,
+         f.detected_at DESC
+       LIMIT $${paramIdx++}`,
+        params,
+      );
+
+      return c.json({ findings: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao listar findings", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
     }
-    if (severity) {
-      conditions.push(`f.severity = $${paramIdx++}`);
-      params.push(severity);
-    }
-    params.push(limit);
-
-    const result = await query(
-      `SELECT f.*, r.name as rule_name, r.category as rule_category, r.remediation as rule_remediation
-     FROM public.security_audit_findings f
-     JOIN public.security_audit_rules r ON f.rule_id = r.id
-     WHERE ${conditions.join(" AND ")}
-     ORDER BY
-       CASE f.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END,
-       f.detected_at DESC
-     LIMIT $${paramIdx++}`,
-      params,
-    );
-
-    return c.json({ findings: result.data?.rows ?? [] });
   },
 );
 
@@ -457,21 +567,46 @@ securityAuditRoute.post(
   async (c) => {
     const findingId = c.req.param("id");
     const user = c.get("user");
-    const body = await c.req
-      .json<{ notes?: string }>()
-      .catch(() => ({ notes: undefined }));
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
-    await query(
-      "UPDATE public.security_audit_findings SET status = 'remediated', resolved_at = timezone('utc'::text, now()), resolved_by = $1, remediation_notes = $2 WHERE id = $3 AND tenant_id = $4",
-      [user.sub, body.notes ?? null, findingId, user?.tenant_id ?? null],
-    );
+    try {
+      const body = await c.req
+        .json<{ notes?: string }>()
+        .catch(() => ({ notes: undefined }));
 
-    await query(
-      "SELECT public.write_audit_log($1, NULL, 'audit.finding.remediate', 'security_audit_findings', $2, $3, NULL, NULL)",
-      [user.sub, findingId, JSON.stringify({ notes: body.notes })],
-    );
+      await query(
+        "UPDATE public.security_audit_findings SET status = 'remediated', resolved_at = timezone('utc'::text, now()), resolved_by = $1, remediation_notes = $2 WHERE id = $3 AND tenant_id = $4",
+        [userId, body.notes ?? null, findingId, tenantId],
+      );
 
-    return c.json({ remediated: true });
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "audit.finding.remediate",
+            entityType: "security_audit_findings",
+            entityId: findingId,
+            newData: { notes: body.notes },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      return c.json({ remediated: true });
+    } catch (error) {
+      logger.error("Erro ao remediar finding", {
+        findingId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
@@ -482,13 +617,27 @@ securityAuditRoute.post(
   async (c) => {
     const findingId = c.req.param("id");
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
-    await query(
-      "UPDATE public.security_audit_findings SET status = 'false_positive', resolved_at = timezone('utc'::text, now()), resolved_by = $1 WHERE id = $2 AND tenant_id = $3",
-      [user.sub, findingId, user?.tenant_id ?? null],
-    );
+    try {
+      await query(
+        "UPDATE public.security_audit_findings SET status = 'false_positive', resolved_at = timezone('utc'::text, now()), resolved_by = $1 WHERE id = $2 AND tenant_id = $3",
+        [userId, findingId, tenantId],
+      );
 
-    return c.json({ updated: true });
+      return c.json({ updated: true });
+    } catch (error) {
+      logger.error("Erro ao marcar falso positivo", {
+        findingId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
@@ -498,13 +647,25 @@ securityAuditRoute.get(
   requirePermission("compliance:read"),
   async (c) => {
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
 
-    const result = await query(
-      "SELECT * FROM public.security_audit_scans WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20",
-      [user?.tenant_id ?? null],
-    );
+    try {
+      const result = await query(
+        "SELECT * FROM public.security_audit_scans WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20",
+        [tenantId],
+      );
 
-    return c.json({ scans: result.data?.rows ?? [] });
+      return c.json({ scans: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao listar scans", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
