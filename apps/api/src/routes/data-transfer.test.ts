@@ -30,60 +30,20 @@ describe("data-transfer — createExportTemplateSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejeita sem source_table", () => {
+  it.each([
+    ["", false],
+    ["tickets; DROP TABLE users; --", false],
+    ["my table", false],
+    ["my-table", false],
+    ["workflow_steps", true],
+    ["table123", true],
+    ["123table", false],
+  ] as const)("source_table=%j → success=%s", (sourceTable, expected) => {
     const result = createExportTemplateSchema.safeParse({
       ...validTemplate,
-      source_table: "",
+      source_table: sourceTable,
     });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejeita source_table com SQL injection", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "tickets; DROP TABLE users; --",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejeita source_table com espacos", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "my table",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejeita source_table com hifen", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "my-table",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("valida source_table com underscore", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "workflow_steps",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida source_table com numeros", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "table123",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejeita source_table comecando com numero", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      source_table: "123table",
-    });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(expected);
   });
 
   it("aplica default format=csv", () => {
@@ -94,28 +54,16 @@ describe("data-transfer — createExportTemplateSchema", () => {
     }
   });
 
-  it("valida format=json", () => {
+  it.each([
+    ["json", true],
+    ["sql", true],
+    ["xml", false],
+  ] as const)("export template format=%j → success=%s", (format, expected) => {
     const result = createExportTemplateSchema.safeParse({
       ...validTemplate,
-      format: "json",
+      format,
     });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida format=sql", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      format: "sql",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejeita format invalido", () => {
-    const result = createExportTemplateSchema.safeParse({
-      ...validTemplate,
-      format: "xml",
-    });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(expected);
   });
 
   it("aplica default columns=[]", () => {
@@ -358,68 +306,33 @@ describe("data-transfer — createDataImportSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejeita sem target_table", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      target_table: "",
-    });
-    expect(result.success).toBe(false);
-  });
+  it.each([
+    ["", false],
+    ["tickets; DROP TABLE users; --", false],
+    ["my table", false],
+    ["workflow_steps", true],
+  ] as const)(
+    "import target_table=%j → success=%s",
+    (targetTable, expected) => {
+      const result = createDataImportSchema.safeParse({
+        ...validImport,
+        target_table: targetTable,
+      });
+      expect(result.success).toBe(expected);
+    },
+  );
 
-  it("rejeita target_table com SQL injection", () => {
+  it.each([
+    ["csv", true],
+    ["json", true],
+    ["xml", true],
+    ["yaml", false],
+  ] as const)("import format=%j → success=%s", (format, expected) => {
     const result = createDataImportSchema.safeParse({
       ...validImport,
-      target_table: "tickets; DROP TABLE users; --",
+      format,
     });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejeita target_table com espacos", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      target_table: "my table",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("valida target_table com underscore", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      target_table: "workflow_steps",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida format=csv", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      format: "csv",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida format=json", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      format: "json",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida format=xml", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      format: "xml",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejeita format invalido", () => {
-    const result = createDataImportSchema.safeParse({
-      ...validImport,
-      format: "yaml",
-    });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(expected);
   });
 
   it("aplica default merge=false", () => {
@@ -529,44 +442,20 @@ describe("data-transfer — logica de status de import", () => {
 // ========== Logica de CSV Escape ==========
 
 describe("data-transfer — logica de CSV escape", () => {
-  it("escapa valores com virgula", () => {
-    const val = "hello,world";
-    const escaped =
-      typeof val === "string" &&
+  function csvEscape(val: string): string {
+    return typeof val === "string" &&
       (val.includes(",") || val.includes('"') || val.includes("\n"))
-        ? `"${val.replace(/"/g, '""')}"`
-        : val;
-    expect(escaped).toBe('"hello,world"');
-  });
+      ? `"${val.replace(/"/g, '""')}"`
+      : val;
+  }
 
-  it("escapa valores com aspas", () => {
-    const val = 'hello "world"';
-    const escaped =
-      typeof val === "string" &&
-      (val.includes(",") || val.includes('"') || val.includes("\n"))
-        ? `"${val.replace(/"/g, '""')}"`
-        : val;
-    expect(escaped).toBe('"hello ""world"""');
-  });
-
-  it("escapa valores com nova linha", () => {
-    const val = "hello\nworld";
-    const escaped =
-      typeof val === "string" &&
-      (val.includes(",") || val.includes('"') || val.includes("\n"))
-        ? `"${val.replace(/"/g, '""')}"`
-        : val;
-    expect(escaped).toBe('"hello\nworld"');
-  });
-
-  it("nao escapa valores simples", () => {
-    const val = "hello";
-    const escaped =
-      typeof val === "string" &&
-      (val.includes(",") || val.includes('"') || val.includes("\n"))
-        ? `"${val.replace(/"/g, '""')}"`
-        : val;
-    expect(escaped).toBe("hello");
+  it.each([
+    ["hello,world", '"hello,world"'],
+    ['hello "world"', '"hello ""world"""'],
+    ["hello\nworld", '"hello\nworld"'],
+    ["hello", "hello"],
+  ] as const)("CSV escape %j → %j", (input, expected) => {
+    expect(csvEscape(input)).toBe(expected);
   });
 
   it("escapa valores nulos como vazio", () => {
@@ -591,49 +480,22 @@ describe("data-transfer — logica de SQL escape", () => {
     expect(result).toBe("NULL");
   });
 
-  it("number vira string em SQL", () => {
-    const v = 42;
+  it.each([
+    [42, "42"],
+    [true, "true"],
+    [false, "false"],
+  ] as const)("SQL escape %j → %j", (input, expected) => {
     const result =
-      v === null
+      input === null
         ? "NULL"
-        : typeof v === "number"
-          ? String(v)
-          : typeof v === "boolean"
-            ? v
+        : typeof input === "number"
+          ? String(input)
+          : typeof input === "boolean"
+            ? input
               ? "true"
               : "false"
-            : `'${String(v).replace(/'/g, "''")}'`;
-    expect(result).toBe("42");
-  });
-
-  it("boolean true vira true em SQL", () => {
-    const v = true;
-    const result =
-      v === null
-        ? "NULL"
-        : typeof v === "number"
-          ? String(v)
-          : typeof v === "boolean"
-            ? v
-              ? "true"
-              : "false"
-            : `'${String(v).replace(/'/g, "''")}'`;
-    expect(result).toBe("true");
-  });
-
-  it("boolean false vira false em SQL", () => {
-    const v = false;
-    const result =
-      v === null
-        ? "NULL"
-        : typeof v === "number"
-          ? String(v)
-          : typeof v === "boolean"
-            ? v
-              ? "true"
-              : "false"
-            : `'${String(v).replace(/'/g, "''")}'`;
-    expect(result).toBe("false");
+            : `'${String(input).replace(/'/g, "''")}'`;
+    expect(result).toBe(expected);
   });
 });
 

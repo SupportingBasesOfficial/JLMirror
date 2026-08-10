@@ -201,38 +201,16 @@ describe("compliance — createScanSchema", () => {
 // ========== updateViolationSchema ==========
 
 describe("compliance — updateViolationSchema", () => {
-  it("valida status open", () => {
-    const result = updateViolationSchema.safeParse({ status: "open" });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida status acknowledged", () => {
-    const result = updateViolationSchema.safeParse({
-      status: "acknowledged",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida status remediated", () => {
-    const result = updateViolationSchema.safeParse({ status: "remediated" });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida status false_positive", () => {
-    const result = updateViolationSchema.safeParse({
-      status: "false_positive",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("valida status wont_fix", () => {
-    const result = updateViolationSchema.safeParse({ status: "wont_fix" });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejeita status invalido", () => {
-    const result = updateViolationSchema.safeParse({ status: "closed" });
-    expect(result.success).toBe(false);
+  it.each([
+    ["open", true],
+    ["acknowledged", true],
+    ["remediated", true],
+    ["false_positive", true],
+    ["wont_fix", true],
+    ["closed", false],
+  ] as const)("valida status %s → success=%s", (status, expected) => {
+    const result = updateViolationSchema.safeParse({ status });
+    expect(result.success).toBe(expected);
   });
 
   it("rejeita sem status", () => {
