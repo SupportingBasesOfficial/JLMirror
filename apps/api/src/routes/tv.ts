@@ -4,8 +4,10 @@ import { Hono } from "hono";
 import { query } from "@repo/db";
 import { z } from "zod";
 import crypto from "node:crypto";
+import { logger } from "@repo/logger";
 import { requirePermission } from "../middleware/require-permission.js";
 import { safeRows, safeFirstRow } from "../lib/query-helpers.js";
+import { safeJsonBody } from "../lib/safe-json.js";
 import "../types.js";
 
 export const tvRoute = new Hono();
@@ -32,45 +34,76 @@ const createTvTokenSchema = z.object({
 // POST /api/v1/tv/tokens — cria novo token de TV
 tvRoute.post("/tokens", requirePermission("tv:tokens:manage"), async (c) => {
   const user = c.get("user");
-  const body = await c.req.json();
-  const parsed = createTvTokenSchema.safeParse(body);
-  if (!parsed.success) {
+  const tenantId = user?.tenant_id ?? null;
+  const userId = user?.sub ?? null;
+
+  try {
+    const bodyResult = await safeJsonBody(c);
+    if (!bodyResult.success) return bodyResult.response;
+    const parsed = createTvTokenSchema.safeParse(bodyResult.data);
+    if (!parsed.success) {
+      return c.json(
+        { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
+        400,
+      );
+    }
+
+    const data = parsed.data;
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    const result = await query<{ id: string }>(
+      `INSERT INTO public.tv_tokens (tenant_id, token_hash, label, rotation_interval_seconds, panels, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [
+        tenantId,
+        tokenHash,
+        data.label,
+        data.rotation_interval_seconds,
+        data.panels,
+        userId,
+      ],
+    );
+
+    const id = safeFirstRow(result)?.id;
+    return c.json({ id, token: rawToken, created: true });
+  } catch (error) {
+    logger.error("Erro ao criar token de TV", {
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return c.json(
-      { error: { code: "VALIDATION_ERROR", message: "Dados inválidos" } },
-      400,
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
     );
   }
-
-  const data = parsed.data;
-  const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-
-  const result = await query<{ id: string }>(
-    `INSERT INTO public.tv_tokens (tenant_id, token_hash, label, rotation_interval_seconds, panels, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [
-      user.tenant_id,
-      tokenHash,
-      data.label,
-      data.rotation_interval_seconds,
-      data.panels,
-      user.sub,
-    ],
-  );
-
-  const id = safeFirstRow(result)?.id;
-  return c.json({ id, token: rawToken, created: true });
 });
 
 // GET /api/v1/tv/tokens — lista tokens de TV do tenant
 tvRoute.get("/tokens", requirePermission("tv:tokens:read"), async (c) => {
   const user = c.get("user");
-  const result = await query(
-    `SELECT id, label, is_active, rotation_interval_seconds, panels, created_at, last_used_at, revoked_at
-     FROM public.tv_tokens WHERE tenant_id = $1 ORDER BY created_at DESC`,
-    [user.tenant_id],
-  );
-  return c.json({ tokens: safeRows(result) });
+  const tenantId = user?.tenant_id ?? null;
+
+  try {
+    const result = await query(
+      `SELECT id, label, is_active, rotation_interval_seconds, panels, created_at, last_used_at, revoked_at
+       FROM public.tv_tokens WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      [tenantId],
+    );
+    return c.json({ tokens: safeRows(result) });
+  } catch (error) {
+    logger.error("Erro ao listar tokens de TV", {
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
+    );
+  }
 });
 
 // DELETE /api/v1/tv/tokens/:tokenId — revoga token
@@ -79,15 +112,28 @@ tvRoute.delete(
   requirePermission("tv:tokens:manage"),
   async (c) => {
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
     const tokenId = c.req.param("tokenId");
 
-    await query(
-      `UPDATE public.tv_tokens SET is_active = false, revoked_at = timezone('utc'::text, now())
-     WHERE id = $1 AND tenant_id = $2`,
-      [tokenId, user.tenant_id],
-    );
+    try {
+      await query(
+        `UPDATE public.tv_tokens SET is_active = false, revoked_at = timezone('utc'::text, now())
+       WHERE id = $1 AND tenant_id = $2`,
+        [tokenId, tenantId],
+      );
 
-    return c.json({ revoked: true });
+      return c.json({ revoked: true });
+    } catch (error) {
+      logger.error("Erro ao revogar token de TV", {
+        tokenId,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
+    }
   },
 );
 
@@ -161,97 +207,109 @@ tvRoute.get("/data", tvTokenAuth(), async (c) => {
   const tenantId = tvToken.tenant_id;
   const panels = tvToken.panels;
 
-  const response: Record<string, unknown> = {
-    rotation_interval_seconds: tvToken.rotation_interval_seconds,
-    panels,
-  };
-
-  // Painel: Devices — resumo de dispositivos
-  if (panels.includes("devices")) {
-    const devicesResult = await query(
-      `SELECT status, COUNT(*) as count FROM public.devices WHERE tenant_id = $1 GROUP BY status`,
-      [tenantId],
-    );
-    const deviceStats = safeRows(devicesResult);
-    const total = deviceStats.reduce(
-      (sum, r) => sum + parseInt(String(r.count), 10),
-      0,
-    );
-    const active = deviceStats.find((r) => r.status === "active")?.count ?? "0";
-    const inactive =
-      deviceStats.find((r) => r.status === "inactive")?.count ?? "0";
-
-    // Ultimos dispositivos atualizados
-    const recentResult = await query(
-      `SELECT hostname, ip, type, status, last_seen_at
-       FROM public.devices WHERE tenant_id = $1
-       ORDER BY last_seen_at DESC NULLS LAST LIMIT 10`,
-      [tenantId],
-    );
-
-    response.devices = {
-      total,
-      active: parseInt(String(active), 10),
-      inactive: parseInt(String(inactive), 10),
-      recent: safeRows(recentResult),
+  try {
+    const response: Record<string, unknown> = {
+      rotation_interval_seconds: tvToken.rotation_interval_seconds,
+      panels,
     };
+
+    // Painel: Devices — resumo de dispositivos
+    if (panels.includes("devices")) {
+      const devicesResult = await query(
+        `SELECT status, COUNT(*) as count FROM public.devices WHERE tenant_id = $1 GROUP BY status`,
+        [tenantId],
+      );
+      const deviceStats = safeRows(devicesResult);
+      const total = deviceStats.reduce(
+        (sum, r) => sum + (Number.parseInt(String(r.count), 10) || 0),
+        0,
+      );
+      const active =
+        deviceStats.find((r) => r.status === "active")?.count ?? "0";
+      const inactive =
+        deviceStats.find((r) => r.status === "inactive")?.count ?? "0";
+
+      // Ultimos dispositivos atualizados
+      const recentResult = await query(
+        `SELECT hostname, ip, type, status, last_seen_at
+         FROM public.devices WHERE tenant_id = $1
+         ORDER BY last_seen_at DESC NULLS LAST LIMIT 10`,
+        [tenantId],
+      );
+
+      response.devices = {
+        total,
+        active: Number.parseInt(String(active), 10) || 0,
+        inactive: Number.parseInt(String(inactive), 10) || 0,
+        recent: safeRows(recentResult),
+      };
+    }
+
+    // Painel: Alerts — alertas ativos
+    if (panels.includes("alerts")) {
+      const alertsResult = await query(
+        `SELECT id, title, severity, status, created_at
+         FROM public.service_incidents
+         WHERE tenant_id = $1 AND status NOT IN ('resolved')
+         ORDER BY severity DESC, created_at DESC LIMIT 20`,
+        [tenantId],
+      );
+
+      const statsResult = await query(
+        `SELECT severity, COUNT(*) as count FROM public.service_incidents
+         WHERE tenant_id = $1 AND status NOT IN ('resolved')
+         GROUP BY severity`,
+        [tenantId],
+      );
+
+      response.alerts = {
+        active_count: safeRows(alertsResult).length,
+        alerts: safeRows(alertsResult),
+        by_severity: safeRows(statsResult),
+      };
+    }
+
+    // Painel: SLA — metricas de SLA
+    if (panels.includes("sla")) {
+      const slaResult = await query(
+        `SELECT id, name, target_percentage, current_percentage, status
+         FROM public.sla_metrics
+         WHERE tenant_id = $1 ORDER BY priority ASC LIMIT 10`,
+        [tenantId],
+      );
+
+      const servicesResult = await query(
+        `SELECT status, COUNT(*) as count FROM public.services
+         WHERE tenant_id = $1 AND is_active = true GROUP BY status`,
+        [tenantId],
+      );
+
+      const serviceStats = safeRows(servicesResult);
+      const operational =
+        serviceStats.find((r) => r.status === "operational")?.count ?? "0";
+      const degraded =
+        serviceStats.find((r) => r.status === "degraded")?.count ?? "0";
+      const down = serviceStats.find((r) => r.status === "down")?.count ?? "0";
+
+      response.sla = {
+        metrics: safeRows(slaResult),
+        services: {
+          operational: Number.parseInt(String(operational), 10) || 0,
+          degraded: Number.parseInt(String(degraded), 10) || 0,
+          down: Number.parseInt(String(down), 10) || 0,
+        },
+      };
+    }
+
+    return c.json(response);
+  } catch (error) {
+    logger.error("Erro ao buscar dados de TV", {
+      tenantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
+    );
   }
-
-  // Painel: Alerts — alertas ativos
-  if (panels.includes("alerts")) {
-    const alertsResult = await query(
-      `SELECT id, title, severity, status, created_at
-       FROM public.service_incidents
-       WHERE tenant_id = $1 AND status NOT IN ('resolved')
-       ORDER BY severity DESC, created_at DESC LIMIT 20`,
-      [tenantId],
-    );
-
-    const statsResult = await query(
-      `SELECT severity, COUNT(*) as count FROM public.service_incidents
-       WHERE tenant_id = $1 AND status NOT IN ('resolved')
-       GROUP BY severity`,
-      [tenantId],
-    );
-
-    response.alerts = {
-      active_count: safeRows(alertsResult).length,
-      alerts: safeRows(alertsResult),
-      by_severity: safeRows(statsResult),
-    };
-  }
-
-  // Painel: SLA — metricas de SLA
-  if (panels.includes("sla")) {
-    const slaResult = await query(
-      `SELECT id, name, target_percentage, current_percentage, status
-       FROM public.sla_metrics
-       WHERE tenant_id = $1 ORDER BY priority ASC LIMIT 10`,
-      [tenantId],
-    );
-
-    const servicesResult = await query(
-      `SELECT status, COUNT(*) as count FROM public.services
-       WHERE tenant_id = $1 AND is_active = true GROUP BY status`,
-      [tenantId],
-    );
-
-    const serviceStats = safeRows(servicesResult);
-    const operational =
-      serviceStats.find((r) => r.status === "operational")?.count ?? "0";
-    const degraded =
-      serviceStats.find((r) => r.status === "degraded")?.count ?? "0";
-    const down = serviceStats.find((r) => r.status === "down")?.count ?? "0";
-
-    response.sla = {
-      metrics: safeRows(slaResult),
-      services: {
-        operational: parseInt(String(operational), 10),
-        degraded: parseInt(String(degraded), 10),
-        down: parseInt(String(down), 10),
-      },
-    };
-  }
-
-  return c.json(response);
 });

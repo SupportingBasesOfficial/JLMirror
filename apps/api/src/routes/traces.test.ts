@@ -6,32 +6,38 @@ import { describe, it, expect } from "vitest";
 
 describe("traces — parseInt com NaN guard", () => {
   it("retorna default 50 quando limit e invalido", () => {
-    const limit = Math.min(Number.parseInt("abc" ?? "50", 10) || 50, 200);
+    const raw: string | undefined = "abc";
+    const limit = Math.min(Number.parseInt(raw ?? "50", 10) || 50, 200);
     expect(limit).toBe(50);
   });
 
   it("retorna default 50 quando limit e vazio", () => {
-    const limit = Math.min(Number.parseInt("" ?? "50", 10) || 50, 200);
+    const raw: string | undefined = "";
+    const limit = Math.min(Number.parseInt(raw ?? "50", 10) || 50, 200);
     expect(limit).toBe(50);
   });
 
   it("limita a 200 quando valor excede", () => {
-    const limit = Math.min(Number.parseInt("500" ?? "50", 10) || 50, 200);
+    const raw: string | undefined = "500";
+    const limit = Math.min(Number.parseInt(raw ?? "50", 10) || 50, 200);
     expect(limit).toBe(200);
   });
 
   it("aceita valor valido", () => {
-    const limit = Math.min(Number.parseInt("100" ?? "50", 10) || 50, 200);
+    const raw: string | undefined = "100";
+    const limit = Math.min(Number.parseInt(raw ?? "50", 10) || 50, 200);
     expect(limit).toBe(100);
   });
 
   it("offset default 0 quando invalido", () => {
-    const offset = Number.parseInt("xyz" ?? "0", 10) || 0;
+    const raw: string | undefined = "xyz";
+    const offset = Number.parseInt(raw ?? "0", 10) || 0;
     expect(offset).toBe(0);
   });
 
   it("offset aceita valor valido", () => {
-    const offset = Number.parseInt("50" ?? "0", 10) || 0;
+    const raw: string | undefined = "50";
+    const offset = Number.parseInt(raw ?? "0", 10) || 0;
     expect(offset).toBe(50);
   });
 });
