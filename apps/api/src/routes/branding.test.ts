@@ -136,7 +136,7 @@ describe("branding — logica de optional chaining", () => {
   });
 
   it("result.data?.rows?.[0] retorna undefined quando data undefined", () => {
-    const result = { data: undefined };
+    const result: { data?: { rows?: unknown[] } } = { data: undefined };
     const branding = result.data?.rows?.[0];
     expect(branding).toBeUndefined();
   });

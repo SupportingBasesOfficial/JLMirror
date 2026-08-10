@@ -351,7 +351,8 @@ chatopsRoute.get(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100);
     const source = c.req.query("source");
 
     let sql = `SELECT id, source, chat_user_name, chat_channel_name, command, arguments, response_text, status, error_message, response_time_ms, created_at
@@ -427,7 +428,9 @@ chatopsRoute.get(
         data?: { rows?: Array<Record<string, unknown>> } | null;
       }): number => {
         const row = r.data?.rows?.[0];
-        return row ? parseInt((row.count as string) ?? "0", 10) : 0;
+        if (!row) return 0;
+        const parsed = Number.parseInt((row.count as string) ?? "0", 10);
+        return Number.isNaN(parsed) ? 0 : parsed;
       };
 
       return c.json({
