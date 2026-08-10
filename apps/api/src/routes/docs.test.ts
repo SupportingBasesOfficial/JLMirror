@@ -110,60 +110,30 @@ describe("docs — checkDocsAuth", () => {
 });
 
 describe("docs — escapeHtml", () => {
-  it("escapa &", () => {
-    expect(escapeHtml("a&b")).toBe("a&amp;b");
-  });
-
-  it("escapa <", () => {
-    expect(escapeHtml("a<b")).toBe("a&lt;b");
-  });
-
-  it("escapa >", () => {
-    expect(escapeHtml("a>b")).toBe("a&gt;b");
-  });
-
-  it("escapa aspas duplas", () => {
-    expect(escapeHtml('a"b')).toBe("a&quot;b");
-  });
-
-  it("escapa aspas simples", () => {
-    expect(escapeHtml("a'b")).toBe("a&#39;b");
-  });
-
-  it("escapa todos os caracteres especiais juntos", () => {
-    expect(escapeHtml(`<script>alert("xss")</script>`)).toBe(
+  it.each([
+    ["a&b", "a&amp;b"],
+    ["a<b", "a&lt;b"],
+    ["a>b", "a&gt;b"],
+    ['a"b', "a&quot;b"],
+    ["a'b", "a&#39;b"],
+    [
+      `<script>alert("xss")</script>`,
       "&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;",
-    );
+    ],
+    ["x' onclick='alert(1)", "x&#39; onclick=&#39;alert(1)"],
+    ["", ""],
+    ["hello world", "hello world"],
+    ["<&>", "&lt;&amp;&gt;"],
+  ] as const)("escapeHtml(%j) → %j", (input, expected) => {
+    expect(escapeHtml(input)).toBe(expected);
   });
 
-  it("escapa payload XSS com aspa simples em atributo", () => {
-    expect(escapeHtml("x' onclick='alert(1)")).toBe(
-      "x&#39; onclick=&#39;alert(1)",
-    );
-  });
-
-  it("retorna string vazia para input vazio", () => {
-    expect(escapeHtml("")).toBe("");
-  });
-
-  it("converte nao-string para string", () => {
-    expect(escapeHtml(123)).toBe("123");
-  });
-
-  it("converte null para string", () => {
-    expect(escapeHtml(null)).toBe("null");
-  });
-
-  it("converte undefined para string", () => {
-    expect(escapeHtml(undefined)).toBe("undefined");
-  });
-
-  it("nao altera string sem caracteres especiais", () => {
-    expect(escapeHtml("hello world")).toBe("hello world");
-  });
-
-  it("escapa & antes de outros (ordem importa)", () => {
-    expect(escapeHtml("<&>")).toBe("&lt;&amp;&gt;");
+  it.each([
+    [123, "123"],
+    [null, "null"],
+    [undefined, "undefined"],
+  ] as const)("escapeHtml(%s) → %j", (input, expected) => {
+    expect(escapeHtml(input)).toBe(expected);
   });
 });
 
