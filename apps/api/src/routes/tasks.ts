@@ -1040,7 +1040,10 @@ taskRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const status = c.req.query("status");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
 
     const conditions: string[] = ["task_id = $1", "tenant_id = $2"];
     const params: unknown[] = [taskId, tenantId];
