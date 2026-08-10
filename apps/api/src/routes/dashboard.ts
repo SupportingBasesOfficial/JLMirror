@@ -205,8 +205,14 @@ dashboardRoute.get("/overview", httpCache(30), async (c) => {
       total: "0",
       passed: "0",
     };
-    const complianceTotal = parseInt(String(complianceRow.total ?? "0"), 10);
-    const compliancePassed = parseInt(String(complianceRow.passed ?? "0"), 10);
+    const complianceTotal = Number.parseInt(
+      String(complianceRow.total ?? "0"),
+      10,
+    );
+    const compliancePassed = Number.parseInt(
+      String(complianceRow.passed ?? "0"),
+      10,
+    );
     const complianceRate =
       complianceTotal > 0
         ? Math.round((compliancePassed / complianceTotal) * 100)
@@ -312,36 +318,36 @@ dashboardRoute.post("/sync-devices", rateLimitWrite, async (c) => {
     );
   }
 
-  // Busca config do Zabbix para o tenant
-  const configResult = await query<{
-    zabbix_api_url: string;
-    zabbix_encrypted_token: string;
-    zabbix_token_iv: string;
-    zabbix_token_tag: string;
-    zabbix_host_group_id: string;
-  }>(
-    `SELECT zabbix_api_url, zabbix_encrypted_token, zabbix_token_iv, zabbix_token_tag, zabbix_host_group_id
-     FROM public.tenant_routes
-     WHERE tenant_id = $1 AND status = 'active'
-       AND zabbix_encrypted_token IS NOT NULL
-       AND zabbix_token_iv IS NOT NULL
-       AND zabbix_token_tag IS NOT NULL`,
-    [tenantId],
-  );
-
-  if (!configResult.data?.rows[0]) {
-    return c.json(
-      {
-        error: {
-          code: "NO_ZABBIX_CONFIG",
-          message: "Integração Zabbix não configurada",
-        },
-      },
-      404,
-    );
-  }
-
   try {
+    // Busca config do Zabbix para o tenant
+    const configResult = await query<{
+      zabbix_api_url: string;
+      zabbix_encrypted_token: string;
+      zabbix_token_iv: string;
+      zabbix_token_tag: string;
+      zabbix_host_group_id: string;
+    }>(
+      `SELECT zabbix_api_url, zabbix_encrypted_token, zabbix_token_iv, zabbix_token_tag, zabbix_host_group_id
+       FROM public.tenant_routes
+       WHERE tenant_id = $1 AND status = 'active'
+         AND zabbix_encrypted_token IS NOT NULL
+         AND zabbix_token_iv IS NOT NULL
+         AND zabbix_token_tag IS NOT NULL`,
+      [tenantId],
+    );
+
+    if (!configResult.data?.rows[0]) {
+      return c.json(
+        {
+          error: {
+            code: "NO_ZABBIX_CONFIG",
+            message: "Integração Zabbix não configurada",
+          },
+        },
+        404,
+      );
+    }
+
     const result = await syncTenantDevices({
       tenant_id: tenantId,
       ...configResult.data.rows[0],
