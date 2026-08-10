@@ -3,8 +3,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { query } from "@repo/db";
+import { logger } from "@repo/logger";
 import { encryptTokenParts, decryptTokenParts } from "@repo/zabbix";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import "../types.js";
 
@@ -78,70 +80,88 @@ sqlConsoleRoute.post(
   requirePermission("admin:tenants:write"),
   async (c) => {
     const user = c.get("user");
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
-    const parsed = createConnectionSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados invalidos",
-            details: parsed.error.flatten(),
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createConnectionSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados invalidos",
+              details: parsed.error.flatten(),
+            },
           },
-        },
-        400,
+          400,
+        );
+      }
+
+      const d = parsed.data;
+      const tokenParts = encryptTokenParts(d.password);
+
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.sql_connections
+          (tenant_id, name, db_engine, host, port, database_name, username,
+           encrypted_password, password_iv, password_tag, ssl_mode,
+           is_read_only, max_rows, timeout_seconds, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
+         RETURNING id`,
+        [
+          d.tenant_id ?? null,
+          d.name,
+          d.db_engine,
+          d.host,
+          d.port,
+          d.database_name,
+          d.username,
+          tokenParts.encrypted,
+          tokenParts.iv,
+          tokenParts.tag,
+          d.ssl_mode,
+          d.is_read_only,
+          d.max_rows,
+          d.timeout_seconds,
+        ],
       );
-    }
 
-    const d = parsed.data;
-    const tokenParts = encryptTokenParts(d.password);
+      if (!result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "CREATE_ERROR", message: "Erro ao criar conexao" } },
+          500,
+        );
+      }
 
-    const result = await query<{ id: string }>(
-      `INSERT INTO public.sql_connections
-        (tenant_id, name, db_engine, host, port, database_name, username,
-         encrypted_password, password_iv, password_tag, ssl_mode,
-         is_read_only, max_rows, timeout_seconds, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
-       RETURNING id`,
-      [
-        d.tenant_id ?? null,
-        d.name,
-        d.db_engine,
-        d.host,
-        d.port,
-        d.database_name,
-        d.username,
-        tokenParts.encrypted,
-        tokenParts.iv,
-        tokenParts.tag,
-        d.ssl_mode,
-        d.is_read_only,
-        d.max_rows,
-        d.timeout_seconds,
-      ],
-    );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "sql_connection.create",
+            entityType: "sql_connection",
+            entityId: result.data.rows[0].id,
+            newData: { name: d.name, host: d.host },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
 
-    if (!result.data?.rows[0]) {
+      return c.json({ id: result.data.rows[0].id }, 201);
+    } catch (error) {
+      logger.error("Erro ao criar conexao SQL", {
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "CREATE_ERROR", message: "Erro ao criar conexao" } },
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
         500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'sql_connection.create', 'sql_connection', $2, $3, NULL, NULL)",
-        [
-          user.sub,
-          result.data.rows[0].id,
-          JSON.stringify({ name: d.name, host: d.host }),
-        ],
-      );
-    }
-
-    return c.json({ id: result.data.rows[0].id }, 201);
   },
 );
 
@@ -152,84 +172,110 @@ sqlConsoleRoute.put(
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
-    const parsed = updateConnectionSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
-        400,
-      );
-    }
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
 
-    const d = parsed.data;
-    const fields: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      db_engine: "db_engine",
-      host: "host",
-      port: "port",
-      database_name: "database_name",
-      username: "username",
-      ssl_mode: "ssl_mode",
-      is_read_only: "is_read_only",
-      max_rows: "max_rows",
-      timeout_seconds: "timeout_seconds",
-      is_active: "is_active",
-    };
-
-    for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in d) {
-        fields.push(`${col} = $${idx++}`);
-        params.push(d[key as keyof typeof d]);
+      const parsed = updateConnectionSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+          400,
+        );
       }
-    }
 
-    // Se password foi fornecido, re-criptografa
-    if (d.password) {
-      const tokenParts = encryptTokenParts(d.password);
-      fields.push(`encrypted_password = $${idx++}`);
-      params.push(tokenParts.encrypted);
-      fields.push(`password_iv = $${idx++}`);
-      params.push(tokenParts.iv);
-      fields.push(`password_tag = $${idx++}`);
-      params.push(tokenParts.tag);
-    }
+      const d = parsed.data;
+      const fields: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
 
-    if (fields.length === 0) {
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        db_engine: "db_engine",
+        host: "host",
+        port: "port",
+        database_name: "database_name",
+        username: "username",
+        ssl_mode: "ssl_mode",
+        is_read_only: "is_read_only",
+        max_rows: "max_rows",
+        timeout_seconds: "timeout_seconds",
+        is_active: "is_active",
+      };
+
+      for (const [key, col] of Object.entries(fieldMap)) {
+        if (key in d) {
+          fields.push(`${col} = $${idx++}`);
+          params.push(d[key as keyof typeof d]);
+        }
+      }
+
+      // Se password foi fornecido, re-criptografa
+      if (d.password) {
+        const tokenParts = encryptTokenParts(d.password);
+        fields.push(`encrypted_password = $${idx++}`);
+        params.push(tokenParts.encrypted);
+        fields.push(`password_iv = $${idx++}`);
+        params.push(tokenParts.iv);
+        fields.push(`password_tag = $${idx++}`);
+        params.push(tokenParts.tag);
+      }
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "NO_FIELDS",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      params.push(id);
+      const result = await query(
+        `UPDATE public.sql_connections SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id`,
+        params,
+      );
+
+      if (!result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Conexao nao encontrada" } },
+          404,
+        );
+      }
+
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "sql_connection.update",
+            entityType: "sql_connection",
+            entityId: id,
+            newData: { name: d.name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      return c.json({ id, updated: true });
+    } catch (error) {
+      logger.error("Erro ao atualizar conexao SQL", {
+        id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        {
-          error: { code: "NO_FIELDS", message: "Nenhum campo para atualizar" },
-        },
-        400,
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
       );
     }
-
-    params.push(id);
-    const result = await query(
-      `UPDATE public.sql_connections SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id`,
-      params,
-    );
-
-    if (!result.data?.rows[0]) {
-      return c.json(
-        { error: { code: "NOT_FOUND", message: "Conexao nao encontrada" } },
-        404,
-      );
-    }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'sql_connection.update', 'sql_connection', $2, $3, NULL, NULL)",
-        [user.sub, id, JSON.stringify({ name: d.name })],
-      );
-    }
-
-    return c.json({ id, updated: true });
   },
 );
 
@@ -240,27 +286,48 @@ sqlConsoleRoute.delete(
   async (c) => {
     const id = c.req.param("id");
     const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
 
-    const result = await query(
-      `UPDATE public.sql_connections SET is_active = false WHERE id = $1 RETURNING id`,
-      [id],
-    );
+    try {
+      const result = await query(
+        `UPDATE public.sql_connections SET is_active = false WHERE id = $1 RETURNING id`,
+        [id],
+      );
 
-    if (!result.data?.rows[0]) {
+      if (!result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Conexao nao encontrada" } },
+          404,
+        );
+      }
+
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId,
+            action: "sql_connection.deactivate",
+            entityType: "sql_connection",
+            entityId: id,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
+      }
+
+      return c.json({ id, deactivated: true });
+    } catch (error) {
+      logger.error("Erro ao desativar conexao SQL", {
+        id,
+        tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "NOT_FOUND", message: "Conexao nao encontrada" } },
-        404,
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
       );
     }
-
-    if (user?.sub) {
-      await query(
-        "SELECT public.write_audit_log($1, NULL, 'sql_connection.deactivate', 'sql_connection', $2, NULL, NULL, NULL)",
-        [user.sub, id],
-      );
-    }
-
-    return c.json({ id, deactivated: true });
   },
 );
 
@@ -271,26 +338,36 @@ sqlConsoleRoute.get(
   "/templates",
   requirePermission("admin:tenants:read"),
   async (c) => {
-    const category = c.req.query("category");
-    const dbEngine = c.req.query("engine");
+    try {
+      const category = c.req.query("category");
+      const dbEngine = c.req.query("engine");
 
-    let sql = `SELECT * FROM public.sql_templates WHERE 1=1`;
-    const params: unknown[] = [];
-    let idx = 1;
+      let sql = `SELECT * FROM public.sql_templates WHERE 1=1`;
+      const params: unknown[] = [];
+      let idx = 1;
 
-    if (category) {
-      sql += ` AND category = $${idx++}`;
-      params.push(category);
+      if (category) {
+        sql += ` AND category = $${idx++}`;
+        params.push(category);
+      }
+      if (dbEngine) {
+        sql += ` AND (db_engine = $${idx++} OR db_engine IS NULL)`;
+        params.push(dbEngine);
+      }
+
+      sql += ` ORDER BY name`;
+      const result = await query(sql, params);
+
+      return c.json({ templates: result.data?.rows ?? [] });
+    } catch (error) {
+      logger.error("Erro ao listar templates SQL", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
+      );
     }
-    if (dbEngine) {
-      sql += ` AND (db_engine = $${idx++} OR db_engine IS NULL)`;
-      params.push(dbEngine);
-    }
-
-    sql += ` ORDER BY name`;
-    const result = await query(sql, params);
-
-    return c.json({ templates: result.data?.rows ?? [] });
   },
 );
 
@@ -300,42 +377,56 @@ sqlConsoleRoute.post(
   requirePermission("admin:tenants:write"),
   async (c) => {
     const user = c.get("user");
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
+    const userId = user?.sub ?? null;
 
-    const parsed = createTemplateSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
-        400,
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+
+      const parsed = createTemplateSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+          400,
+        );
+      }
+
+      const d = parsed.data;
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.sql_templates
+          (name, description, sql_text, category, db_engine, created_by, is_global, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, true, $7)
+         RETURNING id`,
+        [
+          d.name,
+          d.description ?? null,
+          d.sql_text,
+          d.category ?? null,
+          d.db_engine ?? null,
+          userId,
+          d.tags,
+        ],
       );
-    }
 
-    const d = parsed.data;
-    const result = await query<{ id: string }>(
-      `INSERT INTO public.sql_templates
-        (name, description, sql_text, category, db_engine, created_by, is_global, tags)
-       VALUES ($1, $2, $3, $4, $5, $6, true, $7)
-       RETURNING id`,
-      [
-        d.name,
-        d.description ?? null,
-        d.sql_text,
-        d.category ?? null,
-        d.db_engine ?? null,
-        user?.sub ?? null,
-        d.tags,
-      ],
-    );
+      if (!result.data?.rows[0]) {
+        return c.json(
+          {
+            error: { code: "CREATE_ERROR", message: "Erro ao criar template" },
+          },
+          500,
+        );
+      }
 
-    if (!result.data?.rows[0]) {
+      return c.json({ id: result.data.rows[0].id }, 201);
+    } catch (error) {
+      logger.error("Erro ao criar template SQL", {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        { error: { code: "CREATE_ERROR", message: "Erro ao criar template" } },
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
         500,
       );
     }
-
-    return c.json({ id: result.data.rows[0].id }, 201);
   },
 );
 
@@ -345,61 +436,76 @@ sqlConsoleRoute.put(
   requirePermission("admin:tenants:write"),
   async (c) => {
     const id = c.req.param("id");
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
 
-    const parsed = updateTemplateSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
-        400,
-      );
-    }
+    try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
 
-    const d = parsed.data;
-    const fields: string[] = [];
-    const params: unknown[] = [];
-    let idx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      description: "description",
-      sql_text: "sql_text",
-      category: "category",
-      db_engine: "db_engine",
-      tags: "tags",
-    };
-
-    for (const [key, col] of Object.entries(fieldMap)) {
-      if (key in d) {
-        fields.push(`${col} = $${idx++}`);
-        params.push(d[key as keyof typeof d]);
+      const parsed = updateTemplateSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          { error: { code: "VALIDATION_ERROR", message: "Dados invalidos" } },
+          400,
+        );
       }
-    }
 
-    if (fields.length === 0) {
+      const d = parsed.data;
+      const fields: string[] = [];
+      const params: unknown[] = [];
+      let idx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        description: "description",
+        sql_text: "sql_text",
+        category: "category",
+        db_engine: "db_engine",
+        tags: "tags",
+      };
+
+      for (const [key, col] of Object.entries(fieldMap)) {
+        if (key in d) {
+          fields.push(`${col} = $${idx++}`);
+          params.push(d[key as keyof typeof d]);
+        }
+      }
+
+      if (fields.length === 0) {
+        return c.json(
+          {
+            error: {
+              code: "NO_FIELDS",
+              message: "Nenhum campo para atualizar",
+            },
+          },
+          400,
+        );
+      }
+
+      params.push(id);
+      const result = await query(
+        `UPDATE public.sql_templates SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id`,
+        params,
+      );
+
+      if (!result.data?.rows[0]) {
+        return c.json(
+          { error: { code: "NOT_FOUND", message: "Template nao encontrado" } },
+          404,
+        );
+      }
+
+      return c.json({ id, updated: true });
+    } catch (error) {
+      logger.error("Erro ao atualizar template SQL", {
+        id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return c.json(
-        {
-          error: { code: "NO_FIELDS", message: "Nenhum campo para atualizar" },
-        },
-        400,
+        { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+        500,
       );
     }
-
-    params.push(id);
-    const result = await query(
-      `UPDATE public.sql_templates SET ${fields.join(", ")} WHERE id = $${idx} RETURNING id`,
-      params,
-    );
-
-    if (!result.data?.rows[0]) {
-      return c.json(
-        { error: { code: "NOT_FOUND", message: "Template nao encontrado" } },
-        404,
-      );
-    }
-
-    return c.json({ id, updated: true });
   },
 );
 
@@ -595,17 +701,21 @@ sqlConsoleRoute.post(
       );
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'sql.execute', 'sql_query_log', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "sql.execute",
+            entityType: "sql_query_log",
+            newData: {
               connection: conn.host,
               rows: rows.length,
               ms: executionMs,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({
