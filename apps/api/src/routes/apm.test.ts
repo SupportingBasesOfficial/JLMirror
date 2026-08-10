@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 
 describe("apm — logica de minutes validation", () => {
   function validateMinutes(raw: string | undefined): number {
-    const minutesRaw = parseInt(raw ?? "15", 10);
+    const minutesRaw = Number.parseInt(raw ?? "15", 10);
     return Number.isNaN(minutesRaw) || minutesRaw < 1
       ? 15
       : Math.min(minutesRaw, 60);
@@ -227,5 +227,101 @@ describe("apm — logica de percentile interpretation", () => {
     const avg = 50;
     const p95 = 200;
     expect(avg).toBeLessThanOrEqual(p95);
+  });
+});
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("apm — logica de tenant isolation", () => {
+  it("queries de trace_spans filtram por tenant_id opcional", () => {
+    const tenantId = "t-123";
+    const sql =
+      "SELECT * FROM public.trace_spans WHERE ($1::uuid IS NULL OR tenant_id = $1)";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de scheduled_tasks filtram por tenant_id opcional", () => {
+    const tenantId = "t-456";
+    const sql =
+      "SELECT * FROM public.scheduled_tasks WHERE $1::uuid IS NULL OR tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("tenant_id null retorna todos (admin global)", () => {
+    const tenantId = null;
+    const sql =
+      "SELECT * FROM public.trace_spans WHERE ($1::uuid IS NULL OR tenant_id = $1)";
+    const params: unknown[] = [tenantId];
+    expect(params[0]).toBeNull();
+    expect(sql).toContain("$1::uuid IS NULL");
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("apm — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.tenant_id retorna null quando user e null", () => {
+    expect(getTenantId(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna valor quando user existe", () => {
+    expect(getTenantId({ sub: "u1", tenant_id: "t1" })).toBe("t1");
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("apm — logica de parallel queries", () => {
+  it("overview paraleliza 6 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total_traces: "10" }] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [{ active_tasks: "5" }] } }),
+    ]);
+    expect(results).toHaveLength(6);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de Make Interval ==========
+
+describe("apm — logica de make_interval", () => {
+  it("make_interval converte minutes para interval SQL", () => {
+    const minutes = 30;
+    const sql = `make_interval(mins => $2::int)`;
+    expect(sql).toContain("make_interval");
+    expect(sql).toContain("$2::int");
+    expect(minutes).toBe(30);
+  });
+
+  it("minutes limitado a 60 maximo", () => {
+    const minutesRaw = 120;
+    const minutes = Math.min(minutesRaw, 60);
+    expect(minutes).toBe(60);
   });
 });

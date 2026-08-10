@@ -177,7 +177,7 @@ apmRoute.get(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const minutesRaw = parseInt(c.req.query("minutes") ?? "15", 10);
+    const minutesRaw = Number.parseInt(c.req.query("minutes") ?? "15", 10);
     // Valida minutes — fallback para 15 se NaN ou invalido
     const minutes =
       Number.isNaN(minutesRaw) || minutesRaw < 1
