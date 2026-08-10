@@ -503,7 +503,10 @@ profileRoute.get("/security/log", httpCache(15), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const userId = user?.sub ?? null;
-  const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 100);
+  const limit = Math.min(
+    Number.parseInt(c.req.query("limit") ?? "20", 10) || 20,
+    100,
+  );
 
   try {
     const result = await query(
