@@ -449,13 +449,30 @@ dataTransferRoute.post(
       const startTime = Date.now();
 
       try {
+        // Verifica whitelist antes de exportar
+        const wlResult = await query(
+          "SELECT allowed_export FROM public.data_transfer_whitelist WHERE table_name = $1 AND allowed_export = true",
+          [data.source_table],
+        );
+        if (!wlResult.data?.rows[0]) {
+          return c.json(
+            {
+              error: {
+                code: "FORBIDDEN_TABLE",
+                message: `Tabela ${data.source_table} não permite exportação`,
+              },
+            },
+            403,
+          );
+        }
+
         // Constrói query — colunas e tabela já validadas pelo Zod regex (apenas [a-zA-Z_][a-zA-Z0-9_]*)
         const columns =
           Array.isArray(data.columns) && data.columns.length > 0
             ? data.columns.join(", ")
             : "*";
 
-        // Query com limite de linhas — source_table validado pelo Zod regex
+        // Query com limite de linhas — source_table validado pelo Zod regex + whitelist
         const sql = `SELECT ${columns} FROM public.${data.source_table} WHERE tenant_id = $1 LIMIT $2`;
         const dataResult = await query(sql, [user?.tenant_id ?? null, maxRows]);
 

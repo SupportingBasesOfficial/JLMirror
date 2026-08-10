@@ -3,41 +3,47 @@
 import { createMiddleware } from "hono/factory";
 import { logger } from "@repo/logger";
 
-export const errorHandler = createMiddleware(
-  async (c, next) => {
-    try {
-      await next();
-    } catch (error) {
-      // Detecta erros de parse JSON e retorna 400 em vez de 500
-      const msg = error instanceof Error ? error.message : "";
-      if (
-        msg.includes("Unexpected token") ||
-        msg.includes("JSON") ||
-        msg.includes("json") ||
-        (error instanceof SyntaxError && msg.includes("JSON"))
-      ) {
-        return c.json(
-          {
-            error: {
-              code: "INVALID_JSON",
-              message: "Body nao e um JSON valido",
-            },
-          },
-          400,
-        );
-      }
-
-      logger.error("Erro nao tratado", { error: error instanceof Error ? error.message : String(error) });
+export const errorHandler = createMiddleware(async (c, next) => {
+  try {
+    await next();
+  } catch (error) {
+    // Detecta erros de parse JSON e retorna 400 em vez de 500
+    const msg = error instanceof Error ? error.message : "";
+    if (
+      msg.includes("Unexpected token") ||
+      msg.includes("JSON") ||
+      msg.includes("json") ||
+      (error instanceof SyntaxError && msg.includes("JSON"))
+    ) {
       return c.json(
         {
           error: {
-            code: "INTERNAL_ERROR",
-            message:
-              error instanceof Error ? error.message : "Erro interno do servidor",
+            code: "INVALID_JSON",
+            message: "Body nao e um JSON valido",
           },
         },
-        500,
+        400,
       );
     }
-  },
-);
+
+    logger.error("Erro nao tratado", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    // Em producao, nao expoe detalhes do erro interno ao cliente
+    const isProd = process.env.NODE_ENV === "production";
+    return c.json(
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: isProd
+            ? "Erro interno do servidor"
+            : error instanceof Error
+              ? error.message
+              : "Erro interno do servidor",
+        },
+      },
+      500,
+    );
+  }
+});

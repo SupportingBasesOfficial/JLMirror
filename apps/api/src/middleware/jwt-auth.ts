@@ -1,11 +1,12 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
-import { verifyToken } from "@repo/auth";
+import { verifyToken, isTokenRevoked } from "@repo/auth";
 import "../types.js";
 
 // Middleware de autenticação JWT para Hono.
 // Sempre exige token Bearer válido, em qualquer ambiente.
+// Verifica revogação de access tokens via Redis (jti blacklist).
 export const jwtAuth = createMiddleware(async (c, next) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -26,6 +27,17 @@ export const jwtAuth = createMiddleware(async (c, next) => {
       );
     }
 
+    // Verifica revogação (logout/session revoke) — skip em testes para nao exigir Redis
+    if (process.env.NODE_ENV !== "test" && payload.jti) {
+      const revoked = await isTokenRevoked(payload.jti);
+      if (revoked) {
+        return c.json(
+          { error: { code: "TOKEN_REVOKED", message: "Token revogado" } },
+          401,
+        );
+      }
+    }
+
     c.set("user", {
       sub: payload.sub,
       tenant_id: payload.tenant_id,
@@ -37,7 +49,9 @@ export const jwtAuth = createMiddleware(async (c, next) => {
     await next();
   } catch {
     return c.json(
-      { error: { code: "INVALID_TOKEN", message: "Token inválido ou expirado" } },
+      {
+        error: { code: "INVALID_TOKEN", message: "Token inválido ou expirado" },
+      },
       401,
     );
   }

@@ -27,9 +27,14 @@ function getClientIdentifier(
   if (tenantOnly) {
     return tenant;
   }
+  // Usuario autenticado: usa sub (user id) como identificador — mais confiavel que IP
+  if (user?.sub) {
+    return `${tenant}:u:${user.sub}`;
+  }
+  // Usuario anonimo: usa IP (x-forwarded-for do reverse proxy)
   const forwarded = c.req.header("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
-  return `${tenant}:${ip}`;
+  return `${tenant}:ip:${ip}`;
 }
 
 // Fallback in-memory para dev sem Redis

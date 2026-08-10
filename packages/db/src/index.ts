@@ -41,11 +41,16 @@ export async function query<T extends QueryResultRow = Record<string, unknown>>(
   try {
     const tenantId = tenantStorage.getStore();
     if (tenantId) {
+      // Valida que tenantId é um UUID antes de interpolar em SET LOCAL
+      // (SET LOCAL não aceita parâmetros $1, mas validamos o formato)
+      const UUID_REGEX =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!UUID_REGEX.test(tenantId)) {
+        throw new Error("tenant_id inválido: deve ser um UUID");
+      }
       // SET LOCAL requer transacao explicita e nao aceita parametros $1
       await client.query("BEGIN");
-      await client.query(
-        `SET LOCAL app.current_tenant_id = '${tenantId.replace(/'/g, "''")}'`,
-      );
+      await client.query(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
       const data = await client.query<T>(text, params as never[]);
       await client.query("COMMIT");
       return { data, error: null };

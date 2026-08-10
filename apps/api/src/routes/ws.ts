@@ -1,7 +1,6 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { Hono } from "hono";
-import { query } from "@repo/db";
 import { verifyToken } from "@repo/auth";
 import { logger } from "@repo/logger";
 import { publish, psubscribe } from "@repo/cache";
@@ -87,18 +86,8 @@ export function setupWebSocket(server: Server): void {
         const msg = JSON.parse(data.toString());
         if (msg.type === "ping") {
           ws.send(JSON.stringify({ type: "pong" }));
-        } else if (msg.type === "mark_read") {
-          await query(
-            "UPDATE public.notification_log SET status = 'read' WHERE id = $1 AND tenant_id = $2",
-            [msg.notification_id, tenantId],
-          );
-          ws.send(
-            JSON.stringify({
-              type: "marked_read",
-              notification_id: msg.notification_id,
-            }),
-          );
         }
+        // mark_read removido: notification_log nao tem user_id nem status 'read' no CHECK constraint
       } catch {
         // Ignora mensagens inválidas
       }

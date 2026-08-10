@@ -20,9 +20,12 @@ export function requirePermission(permission: string) {
       );
     }
 
-    // Bypass apenas para testes automatizados — flag explicita em vez de NODE_ENV
-    // Evita bypass acidental se NODE_ENV for mal configurado em producao
-    if (process.env.BYPASS_PERMISSIONS === "true") {
+    // Bypass apenas para testes automatizados — exige NODE_ENV=test E flag explicita
+    // Evita bypass acidental se BYPASS_PERMISSIONS vazar para producao
+    if (
+      process.env.BYPASS_PERMISSIONS === "true" &&
+      process.env.NODE_ENV === "test"
+    ) {
       await next();
       return;
     }
