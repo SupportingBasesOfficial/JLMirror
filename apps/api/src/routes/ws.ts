@@ -30,8 +30,12 @@ export function setupWebSocket(server: Server): void {
 
   // Subscreve canais Redis uma única vez por instância via PSUBSCRIBE (pattern matching)
   if (!redisSubscribed) {
-    psubscribe(CHANNEL_TENANT_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
-    psubscribe(CHANNEL_USER_PREFIX + "*", (_channel, message) => handleRedisMessage(message));
+    psubscribe(CHANNEL_TENANT_PREFIX + "*", (_channel, message) =>
+      handleRedisMessage(message),
+    );
+    psubscribe(CHANNEL_USER_PREFIX + "*", (_channel, message) =>
+      handleRedisMessage(message),
+    );
     redisSubscribed = true;
     logger.info("Redis Pub/Sub subscreveu canais de notificacao (PSUBSCRIBE)");
   }
@@ -70,7 +74,13 @@ export function setupWebSocket(server: Server): void {
     }
     localConnections.get(key)!.add(ws);
 
-    ws.send(JSON.stringify({ type: "connected", user_id: userId, tenant_id: tenantId }));
+    ws.send(
+      JSON.stringify({
+        type: "connected",
+        user_id: userId,
+        tenant_id: tenantId,
+      }),
+    );
 
     ws.on("message", async (data) => {
       try {
@@ -82,7 +92,12 @@ export function setupWebSocket(server: Server): void {
             "UPDATE public.notification_log SET status = 'read' WHERE id = $1 AND tenant_id = $2",
             [msg.notification_id, tenantId],
           );
-          ws.send(JSON.stringify({ type: "marked_read", notification_id: msg.notification_id }));
+          ws.send(
+            JSON.stringify({
+              type: "marked_read",
+              notification_id: msg.notification_id,
+            }),
+          );
         }
       } catch {
         // Ignora mensagens inválidas
@@ -128,7 +143,11 @@ function handleRedisMessage(message: string): void {
 
 // Envia notificação push para um usuário específico via Redis Pub/Sub
 // A instancia que retém a conexão TCP entrega o frame via PSUBSCRIBE handler
-export async function pushNotificationToUser(tenantId: string, userId: string, notification: Record<string, unknown>): Promise<void> {
+export async function pushNotificationToUser(
+  tenantId: string,
+  userId: string,
+  notification: Record<string, unknown>,
+): Promise<void> {
   const targetKey = `${tenantId}:${userId}`;
   const payload = JSON.stringify({ type: "notification", ...notification });
   const envelope = JSON.stringify({
@@ -141,7 +160,10 @@ export async function pushNotificationToUser(tenantId: string, userId: string, n
 
 // Envia notificação broadcast para todos os usuários de um tenant via Redis Pub/Sub
 // A instancia que retém as conexões TCP entrega os frames via PSUBSCRIBE handler
-export async function pushNotificationToTenant(tenantId: string, notification: Record<string, unknown>): Promise<void> {
+export async function pushNotificationToTenant(
+  tenantId: string,
+  notification: Record<string, unknown>,
+): Promise<void> {
   const payload = JSON.stringify({ type: "notification", ...notification });
   const envelope = JSON.stringify({
     channel: "tenant",
@@ -155,9 +177,19 @@ export async function pushNotificationToTenant(tenantId: string, notification: R
 export const wsRoute = new Hono();
 
 wsRoute.get("/health", (c) => {
-  let totalConnections = 0;
-  for (const conns of localConnections.values()) {
-    totalConnections += conns.size;
+  try {
+    let totalConnections = 0;
+    for (const conns of localConnections.values()) {
+      totalConnections += conns.size;
+    }
+    return c.json({ status: "ok", connections: totalConnections });
+  } catch (error) {
+    logger.error("Erro no health check do WebSocket", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json(
+      { error: { code: "INTERNAL_ERROR", message: "Erro interno" } },
+      500,
+    );
   }
-  return c.json({ status: "ok", connections: totalConnections });
 });
