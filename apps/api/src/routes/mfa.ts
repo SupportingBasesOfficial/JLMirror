@@ -599,11 +599,10 @@ mfaRoute.get(
       return c.json({
         totp_enabled: result.data?.rows[0]?.is_enabled ?? false,
         webauthn_enabled:
-          parseInt(webauthnResult.data?.rows[0]?.count ?? "0", 10) > 0,
-        webauthn_credentials: parseInt(
-          webauthnResult.data?.rows[0]?.count ?? "0",
-          10,
-        ),
+          (Number.parseInt(webauthnResult.data?.rows[0]?.count ?? "0", 10) ||
+            0) > 0,
+        webauthn_credentials:
+          Number.parseInt(webauthnResult.data?.rows[0]?.count ?? "0", 10) || 0,
       });
     } catch (error) {
       logger.error("Erro ao buscar status MFA", {
