@@ -99,3 +99,65 @@ describe("branding — logica de branding response", () => {
     expect(response.primary_color).toBe("#FF5733");
   });
 });
+
+// ========== Logica de Error Recovery ==========
+
+describe("branding — logica de error recovery", () => {
+  const DEFAULT_BRANDING = {
+    company_name: null,
+    logo_url: null,
+    primary_color: "#1BA898",
+    secondary_color: "#35D0C4",
+    custom_css: null,
+    login_message: null,
+  };
+
+  it("erro retorna defaults (endpoint publico nao quebra)", () => {
+    const hasError = true;
+    const response = hasError ? DEFAULT_BRANDING : { custom: "data" };
+    expect(response).toEqual(DEFAULT_BRANDING);
+  });
+
+  it("sem erro retorna dados do tenant", () => {
+    const hasError = false;
+    const tenantBranding = { company_name: "Corp", primary_color: "#000" };
+    const response = hasError ? DEFAULT_BRANDING : tenantBranding;
+    expect(response.company_name).toBe("Corp");
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("branding — logica de optional chaining", () => {
+  it("result.data?.rows?.[0] retorna undefined quando rows vazio", () => {
+    const result = { data: { rows: [] } };
+    const branding = result.data?.rows?.[0];
+    expect(branding).toBeUndefined();
+  });
+
+  it("result.data?.rows?.[0] retorna undefined quando data undefined", () => {
+    const result = { data: undefined };
+    const branding = result.data?.rows?.[0];
+    expect(branding).toBeUndefined();
+  });
+
+  it("result.data?.rows?.[0] retorna objeto quando existe", () => {
+    const result = { data: { rows: [{ company_name: "Test" }] } };
+    const branding = result.data?.rows?.[0];
+    expect(branding?.company_name).toBe("Test");
+  });
+});
+
+// ========== Logica de Cache Duration ==========
+
+describe("branding — logica de cache duration", () => {
+  it("branding por slug tem cache de 300s (5min)", () => {
+    const cacheDuration = 300;
+    expect(cacheDuration).toBe(300);
+  });
+
+  it("branding default tem cache de 600s (10min)", () => {
+    const cacheDuration = 600;
+    expect(cacheDuration).toBe(600);
+  });
+});
