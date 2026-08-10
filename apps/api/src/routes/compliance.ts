@@ -630,24 +630,33 @@ complianceRoute.post(
         ),
       ]);
 
-      // Cria violacoes reais para checks falhados
-      for (const check of checks) {
-        if (!check.passed) {
-          await query(
-            `INSERT INTO public.compliance_violations (tenant_id, scan_id, policy_id, check_name, check_description, severity, status, remediation_steps)
-             VALUES ($1, $2, $3, $4, $5, $6, 'open', $7)`,
-            [
-              tenantId,
-              scanId,
-              parsed.data.policy_id,
-              check.name,
-              check.description,
-              policy.severity,
-              check.remediation ??
-                "Revise a configuracao e aplique as correcoes necessarias.",
-            ],
+      // Bulk INSERT das violacoes para checks falhados
+      const failedCheckList = checks.filter((c) => !c.passed);
+      if (failedCheckList.length > 0) {
+        const vValues: string[] = [];
+        const vParams: unknown[] = [];
+        let vIdx = 1;
+        for (const check of failedCheckList) {
+          vValues.push(
+            `($${vIdx},$${vIdx + 1},$${vIdx + 2},$${vIdx + 3},$${vIdx + 4},$${vIdx + 5},'open',$${vIdx + 6})`,
           );
+          vParams.push(
+            tenantId,
+            scanId,
+            parsed.data.policy_id,
+            check.name,
+            check.description,
+            policy.severity,
+            check.remediation ??
+              "Revise a configuracao e aplique as correcoes necessarias.",
+          );
+          vIdx += 7;
         }
+        await query(
+          `INSERT INTO public.compliance_violations (tenant_id, scan_id, policy_id, check_name, check_description, severity, status, remediation_steps)
+           VALUES ${vValues.join(",")}`,
+          vParams,
+        );
       }
 
       if (userId) {

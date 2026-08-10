@@ -273,14 +273,16 @@ workflowRoute.post(
       const workflowId = wfResult.data.rows[0].id;
 
       // Insere steps
-      for (const step of data.steps) {
-        await query(
-          `INSERT INTO public.workflow_steps
-           (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
-            condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
-            output_variables, requires_approval)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-          [
+      // Bulk INSERT dos steps
+      if (data.steps.length > 0) {
+        const stepValues: string[] = [];
+        const stepParams: unknown[] = [];
+        let pIdx = 1;
+        for (const step of data.steps) {
+          stepValues.push(
+            `($${pIdx},$${pIdx + 1},$${pIdx + 2},$${pIdx + 3},$${pIdx + 4},$${pIdx + 5},$${pIdx + 6},$${pIdx + 7},$${pIdx + 8},$${pIdx + 9},$${pIdx + 10},$${pIdx + 11},$${pIdx + 12},$${pIdx + 13},$${pIdx + 14})`,
+          );
+          stepParams.push(
             workflowId,
             user?.tenant_id ?? null,
             step.step_order,
@@ -296,7 +298,16 @@ workflowRoute.post(
             step.timeout_seconds,
             step.output_variables,
             step.requires_approval,
-          ],
+          );
+          pIdx += 15;
+        }
+        await query(
+          `INSERT INTO public.workflow_steps
+           (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
+            condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
+            output_variables, requires_approval)
+           VALUES ${stepValues.join(",")}`,
+          stepParams,
         );
       }
 
@@ -413,14 +424,16 @@ workflowRoute.put(
           "DELETE FROM public.workflow_steps WHERE workflow_id = $1",
           [workflowId],
         );
-        for (const step of data.steps) {
-          await query(
-            `INSERT INTO public.workflow_steps
-             (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
-              condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
-              output_variables, requires_approval)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-            [
+        // Bulk INSERT dos steps
+        if (data.steps.length > 0) {
+          const stepValues: string[] = [];
+          const stepParams: unknown[] = [];
+          let pIdx = 1;
+          for (const step of data.steps) {
+            stepValues.push(
+              `($${pIdx},$${pIdx + 1},$${pIdx + 2},$${pIdx + 3},$${pIdx + 4},$${pIdx + 5},$${pIdx + 6},$${pIdx + 7},$${pIdx + 8},$${pIdx + 9},$${pIdx + 10},$${pIdx + 11},$${pIdx + 12},$${pIdx + 13},$${pIdx + 14})`,
+            );
+            stepParams.push(
               workflowId,
               user?.tenant_id ?? null,
               step.step_order,
@@ -436,7 +449,16 @@ workflowRoute.put(
               step.timeout_seconds,
               step.output_variables,
               step.requires_approval,
-            ],
+            );
+            pIdx += 15;
+          }
+          await query(
+            `INSERT INTO public.workflow_steps
+             (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
+              condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
+              output_variables, requires_approval)
+             VALUES ${stepValues.join(",")}`,
+            stepParams,
           );
         }
       }
@@ -603,14 +625,17 @@ workflowRoute.post(
         [workflowId],
       );
 
-      for (const step of stepsResult.data?.rows ?? []) {
-        await query(
-          `INSERT INTO public.workflow_steps
-           (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
-            condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
-            output_variables, requires_approval)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-          [
+      // Bulk INSERT dos steps clonados
+      const cloneSteps = stepsResult.data?.rows ?? [];
+      if (cloneSteps.length > 0) {
+        const stepValues: string[] = [];
+        const stepParams: unknown[] = [];
+        let pIdx = 1;
+        for (const step of cloneSteps) {
+          stepValues.push(
+            `($${pIdx},$${pIdx + 1},$${pIdx + 2},$${pIdx + 3},$${pIdx + 4},$${pIdx + 5},$${pIdx + 6},$${pIdx + 7},$${pIdx + 8},$${pIdx + 9},$${pIdx + 10},$${pIdx + 11},$${pIdx + 12},$${pIdx + 13},$${pIdx + 14})`,
+          );
+          stepParams.push(
             cloneId,
             user?.tenant_id ?? null,
             step.step_order,
@@ -626,7 +651,16 @@ workflowRoute.post(
             step.timeout_seconds,
             step.output_variables,
             step.requires_approval,
-          ],
+          );
+          pIdx += 15;
+        }
+        await query(
+          `INSERT INTO public.workflow_steps
+           (workflow_id, tenant_id, step_order, name, description, step_type, content, language,
+            condition_expression, on_failure, retry_count, retry_delay_seconds, timeout_seconds,
+            output_variables, requires_approval)
+           VALUES ${stepValues.join(",")}`,
+          stepParams,
         );
       }
 
@@ -765,19 +799,31 @@ workflowRoute.post(
         [workflowId],
       );
 
-      for (const step of stepsResult.data?.rows ?? []) {
-        await query(
-          `INSERT INTO public.workflow_step_executions
-           (execution_id, step_id, tenant_id, step_order, step_name, step_type, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-          [
+      // Bulk INSERT das step_executions
+      const execSteps = stepsResult.data?.rows ?? [];
+      if (execSteps.length > 0) {
+        const stepValues: string[] = [];
+        const stepParams: unknown[] = [];
+        let pIdx = 1;
+        for (const step of execSteps) {
+          stepValues.push(
+            `($${pIdx},$${pIdx + 1},$${pIdx + 2},$${pIdx + 3},$${pIdx + 4},$${pIdx + 5},'pending')`,
+          );
+          stepParams.push(
             executionId,
             step.id,
             user?.tenant_id ?? null,
             step.step_order,
             step.name,
             step.step_type,
-          ],
+          );
+          pIdx += 6;
+        }
+        await query(
+          `INSERT INTO public.workflow_step_executions
+           (execution_id, step_id, tenant_id, step_order, step_name, step_type, status)
+           VALUES ${stepValues.join(",")}`,
+          stepParams,
         );
       }
 

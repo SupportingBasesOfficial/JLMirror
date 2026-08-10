@@ -834,13 +834,33 @@ notificationRoute.post(
         }
       }
 
-      for (const rule of rules) {
-        // Verifica cooldown
-        const cooldownOk = await query<{ check_rule_cooldown: boolean }>(
-          "SELECT public.check_rule_cooldown($1) as check_rule_cooldown",
-          [rule.id],
-        );
-        if (!cooldownOk.data?.rows[0]?.check_rule_cooldown) {
+      // Cooldown checks em paralelo para todas as regras
+      const cooldownResults = await Promise.all(
+        rules.map((rule) =>
+          query<{ check_rule_cooldown: boolean }>(
+            "SELECT public.check_rule_cooldown($1) as check_rule_cooldown",
+            [rule.id],
+          ),
+        ),
+      );
+
+      // Coleta regras ativas (sem cooldown) para batch update
+      const activeRuleIds: string[] = [];
+      const logEntries: Array<{
+        rule_id: string;
+        channel_id: string;
+        status: string;
+        subject: string;
+        body: string;
+        duration_ms: number;
+      }> = [];
+      const usedChannelIds: string[] = [];
+
+      for (let i = 0; i < rules.length; i++) {
+        const rule = rules[i];
+        const cooldownOk =
+          cooldownResults[i].data?.rows[0]?.check_rule_cooldown;
+        if (!cooldownOk) {
           results.push({
             rule_id: rule.id,
             channel_id: "—",
@@ -852,12 +872,7 @@ notificationRoute.post(
 
         const subject = rule.template_subject ?? data.subject;
         const bodyText = rule.template_body ?? data.body;
-
-        // Atualiza trigger count e last_triggered_at
-        await query(
-          "UPDATE public.notification_rules SET last_triggered_at = timezone('utc'::text, now()), trigger_count = trigger_count + 1 WHERE id = $1",
-          [rule.id],
-        );
+        activeRuleIds.push(rule.id);
 
         // Envia para cada canal
         for (const channelId of rule.channel_ids ?? []) {
@@ -885,30 +900,16 @@ notificationRoute.post(
           const success = deliveryResult.success;
           const durationMs = Date.now() - startTime;
 
-          // Registra no log
-          await query(
-            `INSERT INTO public.notification_log (tenant_id, rule_id, channel_id, event_source, event_category, severity, subject, body, payload, status, sent_at, duration_ms)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, timezone('utc'::text, now()), $11)`,
-            [
-              tenantId,
-              rule.id,
-              channelId,
-              data.event_source,
-              data.event_category,
-              data.severity,
-              subject,
-              bodyText,
-              JSON.stringify(data.payload ?? {}),
-              success ? "sent" : "failed",
-              durationMs,
-            ],
-          );
-
-          // Atualiza last_used_at do canal
-          await query(
-            "UPDATE public.notification_channels SET last_used_at = timezone('utc'::text, now()) WHERE id = $1",
-            [channelId],
-          );
+          // Coleta para batch INSERT e UPDATE
+          logEntries.push({
+            rule_id: rule.id,
+            channel_id: channelId,
+            status: success ? "sent" : "failed",
+            subject,
+            body: bodyText,
+            duration_ms: durationMs,
+          });
+          usedChannelIds.push(channelId);
 
           results.push({
             rule_id: rule.id,
@@ -917,6 +918,53 @@ notificationRoute.post(
             error: success ? null : deliveryResult.error,
           });
         }
+      }
+
+      // Batch UPDATE das regras ativas
+      if (activeRuleIds.length > 0) {
+        await query(
+          "UPDATE public.notification_rules SET last_triggered_at = timezone('utc'::text, now()), trigger_count = trigger_count + 1 WHERE id = ANY($1::uuid[])",
+          [activeRuleIds],
+        );
+      }
+
+      // Bulk INSERT dos logs
+      if (logEntries.length > 0) {
+        const logValues: string[] = [];
+        const logParams: unknown[] = [];
+        let lIdx = 1;
+        for (const entry of logEntries) {
+          logValues.push(
+            `($${lIdx},$${lIdx + 1},$${lIdx + 2},$${lIdx + 3},$${lIdx + 4},$${lIdx + 5},$${lIdx + 6},$${lIdx + 7},$${lIdx + 8},$${lIdx + 9},timezone('utc'::text, now()),$${lIdx + 10})`,
+          );
+          logParams.push(
+            tenantId,
+            entry.rule_id,
+            entry.channel_id,
+            data.event_source,
+            data.event_category,
+            data.severity,
+            entry.subject,
+            entry.body,
+            JSON.stringify(data.payload ?? {}),
+            entry.status,
+            entry.duration_ms,
+          );
+          lIdx += 11;
+        }
+        await query(
+          `INSERT INTO public.notification_log (tenant_id, rule_id, channel_id, event_source, event_category, severity, subject, body, payload, status, sent_at, duration_ms)
+           VALUES ${logValues.join(",")}`,
+          logParams,
+        );
+      }
+
+      // Batch UPDATE last_used_at dos canais usados
+      if (usedChannelIds.length > 0) {
+        await query(
+          "UPDATE public.notification_channels SET last_used_at = timezone('utc'::text, now()) WHERE id = ANY($1::uuid[])",
+          [usedChannelIds],
+        );
       }
 
       if (user?.sub) {

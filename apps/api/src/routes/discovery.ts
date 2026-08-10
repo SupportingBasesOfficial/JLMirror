@@ -255,6 +255,16 @@ discoveryRoute.post(
       const linksFound = 0;
 
       try {
+        // Coleta todos os devices descobertos para bulk INSERT
+        const allDevices: Array<{
+          ip: string;
+          hostname: string | null;
+          sys_descr: string | null;
+          device_type: string | null;
+          vendor: string | null;
+          discovered_via: string;
+        }> = [];
+
         for (const range of ipRanges) {
           const devices = await simulateDiscovery(
             range,
@@ -262,29 +272,41 @@ discoveryRoute.post(
             session.use_snmp ?? true,
             session.use_lldp ?? true,
           );
+          allDevices.push(...devices);
+          devicesFound += devices.length;
+        }
 
-          for (const dev of devices) {
-            await query(
-              `INSERT INTO public.discovered_devices (tenant_id, session_id, ip_address, hostname, sys_descr, device_type, vendor, discovered_via)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-               ON CONFLICT (session_id, ip_address) DO UPDATE SET
-                 hostname = EXCLUDED.hostname,
-                 sys_descr = EXCLUDED.sys_descr,
-                 device_type = EXCLUDED.device_type,
-                 vendor = EXCLUDED.vendor`,
-              [
-                tenantId,
-                sessionId,
-                dev.ip,
-                dev.hostname,
-                dev.sys_descr,
-                dev.device_type,
-                dev.vendor,
-                dev.discovered_via,
-              ],
+        // Bulk INSERT com ON CONFLICT
+        if (allDevices.length > 0) {
+          const dValues: string[] = [];
+          const dParams: unknown[] = [];
+          let dIdx = 1;
+          for (const dev of allDevices) {
+            dValues.push(
+              `($${dIdx},$${dIdx + 1},$${dIdx + 2},$${dIdx + 3},$${dIdx + 4},$${dIdx + 5},$${dIdx + 6},$${dIdx + 7})`,
             );
-            devicesFound++;
+            dParams.push(
+              tenantId,
+              sessionId,
+              dev.ip,
+              dev.hostname,
+              dev.sys_descr,
+              dev.device_type,
+              dev.vendor,
+              dev.discovered_via,
+            );
+            dIdx += 8;
           }
+          await query(
+            `INSERT INTO public.discovered_devices (tenant_id, session_id, ip_address, hostname, sys_descr, device_type, vendor, discovered_via)
+             VALUES ${dValues.join(",")}
+             ON CONFLICT (session_id, ip_address) DO UPDATE SET
+               hostname = EXCLUDED.hostname,
+               sys_descr = EXCLUDED.sys_descr,
+               device_type = EXCLUDED.device_type,
+               vendor = EXCLUDED.vendor`,
+            dParams,
+          );
         }
 
         // Atualiza sessao como completed

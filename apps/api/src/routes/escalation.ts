@@ -459,37 +459,56 @@ escalationRoute.post(
       const subject = step.template_subject ?? body.subject;
       const messageBody = step.template_body ?? body.body;
 
-      for (const channelId of step.channel_ids) {
-        const channelResult = await query<{
-          channel_type: string;
-          config: Record<string, unknown>;
-        }>(
-          "SELECT channel_type, config FROM public.notification_channels WHERE id = $1 AND tenant_id = $2 AND is_active = true",
-          [channelId, tenantId],
-        );
+      // Busca todos os canais ativos de uma vez
+      const channelsResult = await query<{
+        id: string;
+        channel_type: string;
+        config: Record<string, unknown>;
+      }>(
+        "SELECT id, channel_type, config FROM public.notification_channels WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND is_active = true",
+        [step.channel_ids, tenantId],
+      );
 
-        if (channelResult.data?.rows[0]) {
-          const channel = channelResult.data.rows[0];
+      const activeChannels = channelsResult.data?.rows ?? [];
+      const sentChannelIds: string[] = [];
+
+      // Entrega em paralelo
+      await Promise.all(
+        activeChannels.map(async (channel) => {
           await deliverNotification(
             channel.channel_type,
             channel.config ?? {},
             subject,
             messageBody,
           );
+          sentChannelIds.push(channel.id);
+        }),
+      );
 
-          await query(
-            `INSERT INTO public.notification_log (tenant_id, channel_id, event_source, event_category, severity, subject, body, status, sent_at)
-           VALUES ($1, $2, $3, 'custom', $4, $5, $6, 'sent', timezone('utc'::text, now()))`,
-            [
-              tenantId,
-              channelId,
-              body.source,
-              body.severity ?? "critical",
-              subject,
-              messageBody,
-            ],
+      // Bulk INSERT dos logs
+      if (sentChannelIds.length > 0) {
+        const logValues = sentChannelIds
+          .map(
+            (_, idx) =>
+              `($${idx * 6 + 1},$${idx * 6 + 2},$${idx * 6 + 3},'custom',$${idx * 6 + 4},$${idx * 6 + 5},$${idx * 6 + 6},'sent',timezone('utc'::text, now()))`,
+          )
+          .join(",");
+        const logParams: unknown[] = [];
+        for (const cid of sentChannelIds) {
+          logParams.push(
+            tenantId,
+            cid,
+            body.source,
+            body.severity ?? "critical",
+            subject,
+            messageBody,
           );
         }
+        await query(
+          `INSERT INTO public.notification_log (tenant_id, channel_id, event_source, event_category, severity, subject, body, status, sent_at)
+           VALUES ${logValues}`,
+          logParams,
+        );
       }
 
       if (userId) {
