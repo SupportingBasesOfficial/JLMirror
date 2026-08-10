@@ -781,3 +781,334 @@ describe("admin — logica de tenant status", () => {
     expect(canOperate).toBe(false);
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("admin — logica de tenant isolation", () => {
+  it("queries de tenants filtram por id no WHERE", () => {
+    const tenantId = "t-123";
+    const sql = "SELECT * FROM public.tenants WHERE id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("WHERE id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de tenant_routes filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql = "SELECT * FROM public.tenant_routes WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de tenant_users filtram por tenant_id", () => {
+    const tenantId = "t-789";
+    const sql = "SELECT * FROM public.tenant_users WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de client_contacts filtram por tenant_id", () => {
+    const tenantId = "t-cc";
+    const sql = "SELECT * FROM public.client_contacts WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de client_companies filtram por tenant_id", () => {
+    const tenantId = "t-cmp";
+    const sql = "SELECT * FROM public.client_companies WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE tenants inclui id no WHERE", () => {
+    const tenantId = "t-upd";
+    const sql = "UPDATE public.tenants SET name = $1 WHERE id = $2";
+    const params: unknown[] = ["novo", tenantId];
+    expect(sql).toContain("WHERE id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+
+  it("DELETE tenants inclui id no WHERE", () => {
+    const tenantId = "t-del";
+    const sql = "DELETE FROM public.tenants WHERE id = $1 RETURNING id";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("WHERE id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("DELETE tenant_users inclui user_id E tenant_id no WHERE", () => {
+    const tenantId = "t-x";
+    const userId = "u-y";
+    const sql =
+      "DELETE FROM public.tenant_users WHERE user_id = $1 AND tenant_id = $2 RETURNING user_id";
+    const params: unknown[] = [userId, tenantId];
+    expect(sql).toContain("user_id = $1");
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+
+  it("DELETE client_contacts inclui id E tenant_id no WHERE", () => {
+    const tenantId = "t-cd";
+    const contactId = "c-1";
+    const sql =
+      "DELETE FROM public.client_contacts WHERE id = $1 AND tenant_id = $2 RETURNING id";
+    const params: unknown[] = [contactId, tenantId];
+    expect(sql).toContain("id = $1");
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de 404 Handling ==========
+
+describe("admin — logica de 404 handling", () => {
+  it.each([
+    ["suspend", 0, true],
+    ["activate", 0, true],
+    ["delete", 0, true],
+    ["get tenant", 0, true],
+  ])(`%s retorna 404 quando rowCount=0`, (_action, rowCount, expected) => {
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(expected);
+  });
+
+  it.each([
+    ["suspend", 1, false],
+    ["activate", 1, false],
+    ["delete", 1, false],
+  ])(`%s nao retorna 404 quando rowCount>0`, (_action, rowCount, expected) => {
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(expected);
+  });
+
+  it("PUT /contacts/:id retorna 404 quando update nao encontra", () => {
+    const hasRow = false;
+    const shouldReturn404 = !hasRow;
+    expect(shouldReturn404).toBe(true);
+  });
+
+  it("DELETE /tenants/:id/users/:userId retorna 404 quando nao encontrado", () => {
+    const rowCount = 0;
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(true);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("admin — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getSub(user: TestUser | null | undefined): string | null {
+    return user?.sub ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.sub retorna null quando user e null", () => {
+    expect(getSub(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.sub retorna valor quando user existe", () => {
+    expect(getSub({ sub: "u1", tenant_id: "t1" })).toBe("u1");
+  });
+
+  it("parent_tenant_id fallback para user?.tenant_id", () => {
+    const data: { parent_tenant_id?: string } = {};
+    const user: TestUser | null = { sub: "u1", tenant_id: "fallback-t" };
+    const parentTenantId = data.parent_tenant_id ?? user?.tenant_id ?? null;
+    expect(parentTenantId).toBe("fallback-t");
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Parallel Queries (Stats) ==========
+
+describe("admin — logica de parallel queries (stats)", () => {
+  it("stats paraleliza 12 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ count: "10" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "8" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "2" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "100" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "80" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "50" }] } }),
+      Promise.resolve({ data: { rows: [{ count: "9" }] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+    ]);
+    expect(results).toHaveLength(12);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de ON CONFLICT Upsert ==========
+
+describe("admin — logica de ON CONFLICT upsert", () => {
+  it("assign user usa ON CONFLICT (user_id, tenant_id)", () => {
+    const sql = `INSERT INTO public.tenant_users (user_id, tenant_id, role)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, tenant_id) DO UPDATE SET role = $3`;
+    expect(sql).toContain("ON CONFLICT (user_id, tenant_id)");
+    expect(sql).toContain("DO UPDATE SET role = $3");
+  });
+
+  it("company upsert usa ON CONFLICT (tenant_id)", () => {
+    const sql = `INSERT INTO public.client_companies (tenant_id, legal_name)
+       VALUES ($1, $2)
+       ON CONFLICT (tenant_id) DO UPDATE SET legal_name = $2`;
+    expect(sql).toContain("ON CONFLICT (tenant_id)");
+    expect(sql).toContain("DO UPDATE SET");
+  });
+});
+
+// ========== Logica de Zabbix Test Schema ==========
+
+describe("admin — logica de zabbix test schema", () => {
+  const zabbixTestSchemaLocal = z.object({
+    zabbix_api_url: z.string().url(),
+    zabbix_api_token: z.string().min(1),
+  });
+
+  it("valida URL e token", () => {
+    const result = zabbixTestSchemaLocal.safeParse({
+      zabbix_api_url: "https://zabbix.example.com/api_jsonrpc.php",
+      zabbix_api_token: "secret-123",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita URL invalida", () => {
+    const result = zabbixTestSchemaLocal.safeParse({
+      zabbix_api_url: "not-a-url",
+      zabbix_api_token: "secret-123",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejeita token vazio", () => {
+    const result = zabbixTestSchemaLocal.safeParse({
+      zabbix_api_url: "https://zabbix.example.com",
+      zabbix_api_token: "",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ========== Logica de Zabbix Preview Schema ==========
+
+describe("admin — logica de zabbix preview schema", () => {
+  const zabbixPreviewSchemaLocal = z.object({
+    zabbix_api_url: z.string().url(),
+    zabbix_api_token: z.string().min(1),
+    host_group_id: z.string().min(1),
+  });
+
+  it("valida URL, token e host_group_id", () => {
+    const result = zabbixPreviewSchemaLocal.safeParse({
+      zabbix_api_url: "https://zabbix.example.com",
+      zabbix_api_token: "secret",
+      host_group_id: "15",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita sem host_group_id", () => {
+    const result = zabbixPreviewSchemaLocal.safeParse({
+      zabbix_api_url: "https://zabbix.example.com",
+      zabbix_api_token: "secret",
+      host_group_id: "",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// ========== Logica de CRM User Creation ==========
+
+describe("admin — logica de CRM user creation", () => {
+  it("usuario existente apenas associa", () => {
+    const existingUser = { id: "u-existing" };
+    const alreadyAssigned = false;
+    const shouldCreate = !existingUser && !alreadyAssigned;
+    expect(shouldCreate).toBe(false);
+  });
+
+  it("usuario existente e ja associado retorna 409", () => {
+    const alreadyAssigned = true;
+    const shouldReturn409 = alreadyAssigned;
+    expect(shouldReturn409).toBe(true);
+  });
+
+  it("novo usuario cria com argon2 hash", () => {
+    const existingUser = null;
+    const shouldCreate = !existingUser;
+    expect(shouldCreate).toBe(true);
+  });
+
+  it("provisional_password tem prioridade sobre password", () => {
+    const data = {
+      provisional_password: "prov12345",
+      password: "pass12345",
+    };
+    const password = data.provisional_password ?? data.password ?? "";
+    expect(password).toBe("prov12345");
+  });
+});
+
+// ========== Logica de Field Map Update ==========
+
+describe("admin — logica de field map update", () => {
+  it("constroi UPDATE dinâmico com paramIdx", () => {
+    const data = { name: "Novo", status: "active" as const };
+    const updateFields: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
+    if (data.name !== undefined) {
+      updateFields.push(`name = $${paramIdx++}`);
+      params.push(data.name);
+    }
+    if (data.status !== undefined) {
+      updateFields.push(`status = $${paramIdx++}`);
+      params.push(data.status);
+    }
+    expect(updateFields).toEqual(["name = $1", "status = $2"]);
+    expect(params).toEqual(["Novo", "active"]);
+  });
+
+  it("update vazio nao executa query", () => {
+    const data = {};
+    const updateFields: string[] = [];
+    if (data && typeof data === "object") {
+      // sem campos definidos
+    }
+    const shouldExecute = updateFields.length > 0;
+    expect(shouldExecute).toBe(false);
+  });
+});

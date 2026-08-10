@@ -19,6 +19,7 @@ import {
 } from "@repo/shared-validation";
 import { safeJsonBody } from "../lib/safe-json.js";
 import { safeRows, safeCount } from "../lib/query-helpers.js";
+import { writeAuditLog } from "../lib/audit.js";
 import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
@@ -199,26 +200,28 @@ adminRoute.post(
   rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createTenantSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
     const user = c.get("user");
+    const userId = user?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createTenantSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       // Define parent_tenant_id: se informado usa o valor, senao usa o tenant_id do admin logado
       const parentTenantId = data.parent_tenant_id ?? user?.tenant_id ?? null;
 
@@ -278,11 +281,19 @@ adminRoute.post(
         ],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.create', 'tenants', NULL, $2, NULL, NULL)",
-          [user.sub, JSON.stringify({ id: tenantId, name: data.name })],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId: null,
+            action: "admin.tenant.create",
+            entityType: "tenants",
+            entityId: tenantId,
+            newData: { id: tenantId, name: data.name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Tenant criado", {
@@ -294,7 +305,6 @@ adminRoute.post(
       return c.json({ id: tenantId, schema: schemaName, created: true });
     } catch (error) {
       logger.error("Erro inesperado ao criar tenant", {
-        name: data.name,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -314,25 +324,27 @@ adminRoute.put(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateTenantSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data;
+    const userId = user?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateTenantSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data;
+
       const updateFields: string[] = [];
       const params: unknown[] = [];
       let paramIdx = 1;
@@ -399,11 +411,19 @@ adminRoute.put(
         await invalidateZabbixConfigCache(tenantId);
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.update', 'tenants', $2, $3, NULL, NULL)",
-          [user.sub, tenantId, JSON.stringify(data)],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId: null,
+            action: "admin.tenant.update",
+            entityType: "tenants",
+            entityId: tenantId,
+            newData: data,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Tenant atualizado", { tenantId });
@@ -433,6 +453,7 @@ adminRoute.post(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
 
     try {
       const result = await query(
@@ -450,11 +471,18 @@ adminRoute.post(
         [tenantId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.suspend', 'tenants', $2, NULL, NULL, NULL)",
-          [user.sub, tenantId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId: null,
+            action: "admin.tenant.suspend",
+            entityType: "tenants",
+            entityId: tenantId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Tenant suspenso", { tenantId });
@@ -484,6 +512,7 @@ adminRoute.delete(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
 
     try {
       // Busca schema_name antes de remover
@@ -522,11 +551,18 @@ adminRoute.delete(
         await query("SELECT public.drop_tenant_schema($1)", [slug]);
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.delete', 'tenants', $2, NULL, NULL, NULL)",
-          [user.sub, tenantId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId: null,
+            action: "admin.tenant.delete",
+            entityType: "tenants",
+            entityId: tenantId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Tenant deletado", { tenantId, schemaName });
@@ -552,6 +588,7 @@ adminRoute.post(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const user = c.get("user");
+    const userId = user?.sub ?? null;
 
     try {
       const result = await query(
@@ -569,11 +606,18 @@ adminRoute.post(
         [tenantId],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.activate', 'tenants', $2, NULL, NULL, NULL)",
-          [user.sub, tenantId],
-        );
+      if (userId) {
+        try {
+          await writeAuditLog({
+            userId,
+            tenantId: null,
+            action: "admin.tenant.activate",
+            entityType: "tenants",
+            entityId: tenantId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Tenant ativado", { tenantId });
@@ -617,24 +661,26 @@ adminRoute.post(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = assignUserSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const { user_id: userId, role } = parsed.data;
+    const adminUserId = user?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = assignUserSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const { user_id: userId, role } = parsed.data;
+
       await query(
         `INSERT INTO public.tenant_users (user_id, tenant_id, role)
        VALUES ($1, $2, $3)
@@ -642,21 +688,24 @@ adminRoute.post(
         [userId, tenantId, role],
       );
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.assign_user', 'tenant_users', NULL, $2, NULL, NULL)",
-          [
-            user.sub,
-            JSON.stringify({ tenant_id: tenantId, user_id: userId, role }),
-          ],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.tenant.assign_user",
+            entityType: "tenant_users",
+            newData: { tenant_id: tenantId, user_id: userId, role },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ assigned: true });
     } catch (error) {
       logger.error("Erro ao associar usuario ao tenant", {
         tenantId,
-        userId,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -677,6 +726,7 @@ adminRoute.delete(
     const tenantId = c.req.param("tenantId");
     const userId = c.req.param("userId");
     const user = c.get("user");
+    const adminUserId = user?.sub ?? null;
 
     try {
       const result = await query(
@@ -692,11 +742,18 @@ adminRoute.delete(
         );
       }
 
-      if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.tenant.remove_user', 'tenant_users', $2, NULL, NULL, NULL)",
-          [user.sub, JSON.stringify({ tenant_id: tenantId, user_id: userId })],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.tenant.remove_user",
+            entityType: "tenant_users",
+            entityId: JSON.stringify({ tenant_id: tenantId, user_id: userId }),
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ removed: true });
@@ -808,24 +865,26 @@ adminRoute.post(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const adminUser = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createClientUserSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateClientUserInput;
+    const adminUserId = adminUser?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createClientUserSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateClientUserInput;
+
       // Verifica se email já existe
       const existingUser = await query<{ id: string }>(
         "SELECT id FROM public.users WHERE email = $1",
@@ -895,20 +954,24 @@ adminRoute.post(
       );
 
       // Log de auditoria
-      if (adminUser?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.client_user.create', 'users', NULL, $2, NULL, NULL)",
-          [
-            adminUser.sub,
-            JSON.stringify({
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.client_user.create",
+            entityType: "users",
+            newData: {
               tenant_id: tenantId,
               user_id: userId,
               email: data.email,
               role: data.role,
               must_change_password: data.must_change_password,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Usuario cliente criado", {
@@ -928,7 +991,6 @@ adminRoute.post(
     } catch (error) {
       logger.error("Erro ao criar usuario cliente", {
         tenantId,
-        email: data.email,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -1007,27 +1069,29 @@ adminRoute.post(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const adminUser = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createClientContactSchema.safeParse({
-      ...parsedBody.data,
-      tenant_id: tenantId,
-    });
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateClientContactInput;
+    const adminUserId = adminUser?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createClientContactSchema.safeParse({
+        ...parsedBody.data,
+        tenant_id: tenantId,
+      });
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateClientContactInput;
+
       // Se is_primary, desmarca outros primários
       if (data.is_primary) {
         await query(
@@ -1058,18 +1122,19 @@ adminRoute.post(
         );
       }
 
-      if (adminUser?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.contact.create', 'client_contacts', NULL, $2, NULL, NULL)",
-          [
-            adminUser.sub,
-            JSON.stringify({
-              tenant_id: tenantId,
-              contact_id: result.data.rows[0].id,
-              name: data.name,
-            }),
-          ],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.contact.create",
+            entityType: "client_contacts",
+            entityId: result.data.rows[0].id,
+            newData: { tenant_id: tenantId, name: data.name },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ id: result.data.rows[0].id, created: true }, 201);
@@ -1094,24 +1159,26 @@ adminRoute.put(
     const tenantId = c.req.param("tenantId");
     const contactId = c.req.param("contactId");
     const adminUser = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateClientContactSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdateClientContactInput;
+    const adminUserId = adminUser?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateClientContactSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdateClientContactInput;
+
       // Se is_primary, desmarca outros primários
       if (data.is_primary) {
         await query(
@@ -1171,11 +1238,19 @@ adminRoute.put(
         }
       }
 
-      if (adminUser?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.contact.update', 'client_contacts', $2, $3, NULL, NULL)",
-          [adminUser.sub, contactId, JSON.stringify(data)],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.contact.update",
+            entityType: "client_contacts",
+            entityId: contactId,
+            newData: data,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ updated: true });
@@ -1203,6 +1278,7 @@ adminRoute.delete(
     const tenantId = c.req.param("tenantId");
     const contactId = c.req.param("contactId");
     const adminUser = c.get("user");
+    const adminUserId = adminUser?.sub ?? null;
 
     try {
       const result = await query(
@@ -1216,11 +1292,18 @@ adminRoute.delete(
         );
       }
 
-      if (adminUser?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.contact.delete', 'client_contacts', $2, NULL, NULL, NULL)",
-          [adminUser.sub, contactId],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.contact.delete",
+            entityType: "client_contacts",
+            entityId: contactId,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       return c.json({ deleted: true });
@@ -1274,24 +1357,26 @@ adminRoute.put(
   async (c) => {
     const tenantId = c.req.param("tenantId");
     const adminUser = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = upsertClientCompanySchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpsertClientCompanyInput;
+    const adminUserId = adminUser?.sub ?? null;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = upsertClientCompanySchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpsertClientCompanyInput;
+
       // Filtra apenas campos definidos (não undefined)
       const definedEntries = Object.entries(data).filter(
         ([, v]) => v !== undefined,
@@ -1313,11 +1398,19 @@ adminRoute.put(
         );
       }
 
-      if (adminUser?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'admin.company.update', 'client_companies', $2, $3, NULL, NULL)",
-          [adminUser.sub, tenantId, JSON.stringify(data)],
-        );
+      if (adminUserId) {
+        try {
+          await writeAuditLog({
+            userId: adminUserId,
+            tenantId: null,
+            action: "admin.company.update",
+            entityType: "client_companies",
+            entityId: tenantId,
+            newData: data,
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Company upserted", { tenantId });
@@ -1381,22 +1474,22 @@ adminRoute.post(
   rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-    const parsed = zabbixTestSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "URL e Token são obrigatórios",
-          },
-        },
-        400,
-      );
-    }
-
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = zabbixTestSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "URL e Token são obrigatórios",
+            },
+          },
+          400,
+        );
+      }
+
       const client = new BlindedZabbixClient({
         apiUrl: parsed.data.zabbix_api_url,
         apiToken: parsed.data.zabbix_api_token,
@@ -1426,22 +1519,22 @@ adminRoute.post(
   rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-    const parsed = zabbixTestSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "URL e Token são obrigatórios",
-          },
-        },
-        400,
-      );
-    }
-
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = zabbixTestSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "URL e Token são obrigatórios",
+            },
+          },
+          400,
+        );
+      }
+
       const client = new BlindedZabbixClient({
         apiUrl: parsed.data.zabbix_api_url,
         apiToken: parsed.data.zabbix_api_token,
@@ -1478,22 +1571,22 @@ adminRoute.post(
   rateLimitWrite,
   requirePermission("admin:tenants:write"),
   async (c) => {
-    const bodyResult = await safeJsonBody(c);
-    if (!bodyResult.success) return bodyResult.response;
-    const parsed = zabbixPreviewSchema.safeParse(bodyResult.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "URL, Token e Host Group ID são obrigatórios",
-          },
-        },
-        400,
-      );
-    }
-
     try {
+      const bodyResult = await safeJsonBody(c);
+      if (!bodyResult.success) return bodyResult.response;
+      const parsed = zabbixPreviewSchema.safeParse(bodyResult.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "URL, Token e Host Group ID são obrigatórios",
+            },
+          },
+          400,
+        );
+      }
+
       const client = new BlindedZabbixClient({
         apiUrl: parsed.data.zabbix_api_url,
         apiToken: parsed.data.zabbix_api_token,
