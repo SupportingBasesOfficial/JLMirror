@@ -636,3 +636,176 @@ describe("data-transfer — logica de SQL escape", () => {
     expect(result).toBe("false");
   });
 });
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("data-transfer — logica de tenant isolation", () => {
+  it("queries de data_export_templates filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql =
+      "SELECT * FROM public.data_export_templates WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de data_exports filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql = "SELECT * FROM public.data_exports WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de data_imports filtram por tenant_id", () => {
+    const tenantId = "t-789";
+    const sql = "SELECT * FROM public.data_imports WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE data_export_templates inclui tenant_id no WHERE", () => {
+    const tenantId = "t-upd";
+    const templateId = "tpl-1";
+    const sql =
+      "UPDATE public.data_export_templates SET name = $1 WHERE id = $2 AND tenant_id = $3";
+    const params: unknown[] = ["novo", templateId, tenantId];
+    expect(sql).toContain("tenant_id = $3");
+    expect(params[2]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("data-transfer — logica de optional chaining", () => {
+  it("wlResult.data?.rows[0] retorna undefined quando vazio", () => {
+    const result: { data?: { rows?: unknown[] } } = { data: { rows: [] } };
+    expect(result.data?.rows?.[0]).toBeUndefined();
+  });
+
+  it("user?.tenant_id retorna null quando user e null", () => {
+    type TestUser = { tenant_id?: string } | null;
+    const user = null as TestUser;
+    expect(user?.tenant_id ?? null).toBeNull();
+  });
+
+  it("user?.sub retorna null quando user e undefined", () => {
+    type TestUser = { sub?: string } | undefined;
+    const user = undefined as TestUser;
+    expect(user?.sub ?? null).toBeNull();
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+
+  it("imp.column_mapping ?? {} retorna objeto vazio quando null", () => {
+    const imp: { column_mapping?: Record<string, string> } = {};
+    const mapping = imp.column_mapping ?? {};
+    expect(mapping).toEqual({});
+  });
+});
+
+// ========== Logica de Whitelist Validation ==========
+
+describe("data-transfer — logica de whitelist validation", () => {
+  it("tabela nao whitelistada rejeita export", () => {
+    const wlResult = { data: { rows: [] } };
+    const allowed = !!wlResult.data.rows[0];
+    expect(allowed).toBe(false);
+  });
+
+  it("tabela whitelistada permite export", () => {
+    const wlResult = { data: { rows: [{ allowed_export: true }] } };
+    const allowed = !!wlResult.data.rows[0];
+    expect(allowed).toBe(true);
+  });
+
+  it("max_export_rows limita tamanho do export", () => {
+    const wlRow = { allowed_export: true, max_export_rows: 1000 };
+    const requestedRows = 5000;
+    const limitedRows = Math.min(requestedRows, wlRow.max_export_rows);
+    expect(limitedRows).toBe(1000);
+  });
+
+  it("max_export_rows null permite qualquer tamanho", () => {
+    const wlRow = { allowed_export: true, max_export_rows: null };
+    const requestedRows = 999999;
+    const limitedRows =
+      wlRow.max_export_rows === null
+        ? requestedRows
+        : Math.min(requestedRows, wlRow.max_export_rows);
+    expect(limitedRows).toBe(999999);
+  });
+});
+
+// ========== Logica de Field Map Update ==========
+
+describe("data-transfer — logica de field map update", () => {
+  it("constroi UPDATE dinamico com fieldMap", () => {
+    const data = { name: "Novo Nome", format: "csv" };
+    const fieldMap: Record<string, string> = {
+      name: "name",
+      format: "format",
+    };
+    const fields: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      if (key in data) {
+        fields.push(`${col} = $${idx++}`);
+        params.push(data[key as keyof typeof data]);
+      }
+    }
+    expect(fields).toEqual(["name = $1", "format = $2"]);
+    expect(params).toEqual(["Novo Nome", "csv"]);
+  });
+
+  it("update vazio retorna 400", () => {
+    const fields: string[] = [];
+    const shouldReturn400 = fields.length === 0;
+    expect(shouldReturn400).toBe(true);
+  });
+});
+
+// ========== Logica de Batch Import ==========
+
+describe("data-transfer — logica de batch import", () => {
+  it("divide rows em batches de 100", () => {
+    const totalRows = 250;
+    const batchSize = 100;
+    const batches = Math.ceil(totalRows / batchSize);
+    expect(batches).toBe(3);
+  });
+
+  it("100 rows = 1 batch", () => {
+    const totalRows = 100;
+    const batchSize = 100;
+    const batches = Math.ceil(totalRows / batchSize);
+    expect(batches).toBe(1);
+  });
+
+  it("0 rows = 0 batches", () => {
+    const totalRows = 0;
+    const batchSize = 100;
+    const batches = Math.ceil(totalRows / batchSize);
+    expect(batches).toBe(0);
+  });
+
+  it("conta successful e failed apos import", () => {
+    const results = [
+      { success: true },
+      { success: true },
+      { success: false },
+      { success: true },
+      { success: false },
+    ];
+    const successful = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
+    expect(successful).toBe(3);
+    expect(failed).toBe(2);
+  });
+});

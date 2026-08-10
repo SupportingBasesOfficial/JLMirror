@@ -18,6 +18,7 @@ import { requirePermission } from "../middleware/require-permission.js";
 import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
+import { writeAuditLog } from "../lib/audit.js";
 import "../types.js";
 
 export const dataTransferRoute = new Hono();
@@ -121,25 +122,26 @@ dataTransferRoute.post(
   requirePermission("data_transfer:write"),
   async (c) => {
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createExportTemplateSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateExportTemplateInput;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createExportTemplateSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateExportTemplateInput;
+
       // Verifica whitelist
       const wlResult = await query(
         "SELECT allowed_export FROM public.data_transfer_whitelist WHERE table_name = $1 AND allowed_export = true",
@@ -194,7 +196,6 @@ dataTransferRoute.post(
       return c.json({ id: result.data.rows[0].id }, 201);
     } catch (error) {
       logger.error("Erro ao criar template", {
-        name: data.name,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -212,25 +213,26 @@ dataTransferRoute.put(
   async (c) => {
     const templateId = c.req.param("id");
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateExportTemplateSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdateExportTemplateInput;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateExportTemplateSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdateExportTemplateInput;
+
       const updateFields: string[] = [];
       const params: unknown[] = [];
       let paramIdx = 1;
@@ -380,25 +382,26 @@ dataTransferRoute.post(
   requirePermission("data_transfer:write"),
   async (c) => {
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createDataExportSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateDataExportInput;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createDataExportSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateDataExportInput;
+
       // Verifica whitelist
       const wlResult = await query(
         "SELECT allowed_export, max_export_rows FROM public.data_transfer_whitelist WHERE table_name = $1 AND allowed_export = true",
@@ -516,18 +519,22 @@ dataTransferRoute.post(
         );
 
         if (user?.sub) {
-          await query(
-            "SELECT public.write_audit_log($1, NULL, 'data.export', 'data_export', $2, $3, NULL, NULL)",
-            [
-              user.sub,
-              exportId,
-              JSON.stringify({
+          try {
+            await writeAuditLog({
+              userId: user.sub,
+              tenantId: user?.tenant_id ?? null,
+              action: "data.export",
+              entityType: "data_export",
+              entityId: exportId,
+              newData: {
                 table: data.source_table,
                 format: data.format,
                 rows: rows.length,
-              }),
-            ],
-          );
+              },
+            });
+          } catch {
+            // Audit log falhou — nao bloqueia
+          }
         }
 
         logger.info("Export concluído", {
@@ -570,7 +577,6 @@ dataTransferRoute.post(
       }
     } catch (error) {
       logger.error("Erro ao iniciar export", {
-        name: data.name,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -698,25 +704,26 @@ dataTransferRoute.post(
   requirePermission("data_transfer:write"),
   async (c) => {
     const user = c.get("user");
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createDataImportSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateDataImportInput;
 
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createDataImportSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateDataImportInput;
+
       // Verifica whitelist
       const wlResult = await query(
         "SELECT allowed_import FROM public.data_transfer_whitelist WHERE table_name = $1 AND allowed_import = true",
@@ -764,7 +771,6 @@ dataTransferRoute.post(
       return c.json({ id: result.data.rows[0].id }, 201);
     } catch (error) {
       logger.error("Erro ao criar import", {
-        targetTable: data.target_table,
         error: error instanceof Error ? error.message : String(error),
       });
       return c.json(
@@ -897,19 +903,23 @@ dataTransferRoute.post(
       );
 
       if (user?.sub) {
-        await query(
-          "SELECT public.write_audit_log($1, NULL, 'data.import', 'data_import', $2, $3, NULL, NULL)",
-          [
-            user.sub,
-            importId,
-            JSON.stringify({
+        try {
+          await writeAuditLog({
+            userId: user.sub,
+            tenantId: user?.tenant_id ?? null,
+            action: "data.import",
+            entityType: "data_import",
+            entityId: importId,
+            newData: {
               table: imp.target_table,
               total: rows.length,
               success: successful,
               failed,
-            }),
-          ],
-        );
+            },
+          });
+        } catch {
+          // Audit log falhou — nao bloqueia
+        }
       }
 
       logger.info("Import executado", {
