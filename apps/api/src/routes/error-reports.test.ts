@@ -249,7 +249,10 @@ describe("error-reports — logica de field map update", () => {
   });
 
   it("update com apenas resolution", () => {
-    const data = { resolution: "Fix aplicado" };
+    const data: { root_cause?: string; resolution?: string; status?: string } =
+      {
+        resolution: "Fix aplicado",
+      };
     const updates: string[] = [];
     const params: unknown[] = [];
     let idx = 1;
@@ -289,9 +292,11 @@ describe("error-reports — logica de ticket number fallback", () => {
   });
 
   it("fallback quando DB retorna vazio", () => {
-    const result = { data: { rows: [] } };
+    const result: {
+      data?: { rows?: { generate_ticket_number?: string }[] };
+    } = { data: { rows: [] } };
     const ticketNumber =
-      result.data?.rows[0]?.generate_ticket_number ?? `ERR-${Date.now()}`;
+      result.data?.rows?.[0]?.generate_ticket_number ?? `ERR-${Date.now()}`;
     expect(ticketNumber).toMatch(/^ERR-\d+$/);
   });
 });
