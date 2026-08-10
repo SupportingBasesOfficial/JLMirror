@@ -450,7 +450,10 @@ itsmRoute.get(
   async (c) => {
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 100);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      100,
+    );
     const connectorId = c.req.query("connector_id");
 
     let sql = `SELECT l.*, cn.name as connector_name
@@ -529,7 +532,7 @@ itsmRoute.get(
         data?: { rows?: Array<Record<string, unknown>> } | null;
       }): number => {
         const row = r.data?.rows?.[0];
-        return row ? parseInt((row.count as string) ?? "0", 10) : 0;
+        return row ? Number.parseInt((row.count as string) ?? "0", 10) || 0 : 0;
       };
 
       return c.json({
