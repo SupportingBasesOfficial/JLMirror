@@ -80,10 +80,11 @@ capacityRoute.get(
     const tenantId = user?.tenant_id ?? null;
     const resourceName = c.req.query("resource_name");
     const metricType = c.req.query("metric_type");
-    const hoursRaw = parseInt(c.req.query("hours") ?? "24", 10);
+    const hoursRaw = Number.parseInt(c.req.query("hours") ?? "24", 10);
     const hours =
       Number.isNaN(hoursRaw) || hoursRaw < 1 ? 24 : Math.min(hoursRaw, 720);
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "500", 10), 5000);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "500", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 500 : parsedLimit, 5000);
 
     const conditions: string[] = [
       "tenant_id = $1",
@@ -141,34 +142,34 @@ capacityRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = ingestMetricSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as IngestMetricInput;
-    const labels: Record<string, unknown> = {
-      resource_type: data.resource_type,
-    };
-    if (data.resource_id) labels.resource_id = data.resource_id;
-    if (data.max_capacity !== undefined)
-      labels.max_capacity = data.max_capacity;
-    if (data.utilization_pct !== undefined)
-      labels.utilization_pct = data.utilization_pct;
-    if (data.metadata) Object.assign(labels, data.metadata);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = ingestMetricSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as IngestMetricInput;
+      const labels: Record<string, unknown> = {
+        resource_type: data.resource_type,
+      };
+      if (data.resource_id) labels.resource_id = data.resource_id;
+      if (data.max_capacity !== undefined)
+        labels.max_capacity = data.max_capacity;
+      if (data.utilization_pct !== undefined)
+        labels.utilization_pct = data.utilization_pct;
+      if (data.metadata) Object.assign(labels, data.metadata);
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.capacity_metrics (tenant_id, resource_name, metric_type, value, unit, labels, recorded_at)
        VALUES ($1, $2, $3, $4, $5, $6, timezone('utc'::text, now()))
@@ -214,25 +215,25 @@ capacityRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = ingestMetricsBatchSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const metrics = parsed.data;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = ingestMetricsBatchSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const metrics = parsed.data;
+
       // Usa multi-value INSERT (VALUES ($1,$2,...), ($N,$N+1,...)) em vez de loop serial
       // Limita a 100 por batch para evitar queries muito grandes
       const BATCH_SIZE = 100;
@@ -255,7 +256,6 @@ capacityRoute.post(
             labels.utilization_pct = m.utilization_pct;
           if (m.metadata) Object.assign(labels, m.metadata);
 
-          const offset = (paramIdx - 1) * 7;
           values.push(
             `($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, timezone('utc'::text, now()))`,
           );
@@ -267,7 +267,6 @@ capacityRoute.post(
             m.metric_unit,
             JSON.stringify(labels),
           );
-          void offset;
         }
 
         const result = await query(
@@ -335,25 +334,25 @@ capacityRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createThresholdSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateThresholdInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createThresholdSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateThresholdInput;
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.capacity_thresholds (tenant_id, resource_type, resource_name, warning_pct, critical_pct, is_active)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -421,50 +420,52 @@ capacityRoute.put(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateThresholdSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdateThresholdInput;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      warning_pct: "warning_pct",
-      critical_pct: "critical_pct",
-      is_active: "is_active",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (updateFields.length === 0) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" } },
-        400,
-      );
-    }
-
-    params.push(thresholdId, tenantId);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateThresholdSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdateThresholdInput;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        warning_pct: "warning_pct",
+        critical_pct: "critical_pct",
+        is_active: "is_active",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (updateFields.length === 0) {
+        return c.json(
+          {
+            error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" },
+          },
+          400,
+        );
+      }
+
+      params.push(thresholdId, tenantId);
+
       const result = await query(
         `UPDATE public.capacity_thresholds SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
@@ -695,25 +696,25 @@ capacityRoute.post(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createReportSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreateReportInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createReportSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreateReportInput;
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.capacity_reports (tenant_id, name, report_type, date_range_start, date_range_end, status, is_scheduled, cron_expression, generated_by)
        VALUES ($1, $2, $3, $4, $5, 'generating', $6, $7, $8)

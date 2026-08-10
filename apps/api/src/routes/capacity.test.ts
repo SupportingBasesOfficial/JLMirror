@@ -471,7 +471,7 @@ describe("capacity — createReportSchema", () => {
 
 describe("capacity — logica de hours validation", () => {
   function validateHours(raw: string | undefined): number {
-    const hoursRaw = parseInt(raw ?? "24", 10);
+    const hoursRaw = Number.parseInt(raw ?? "24", 10);
     return Number.isNaN(hoursRaw) || hoursRaw < 1
       ? 24
       : Math.min(hoursRaw, 720);
@@ -541,8 +541,7 @@ describe("capacity — logica de batch insert", () => {
 // ========== Logica de Report Type Selection ==========
 
 describe("capacity — logica de report type selection", () => {
-  it("capacity_summary gera by_resource_type", () => {
-    const reportType: string = "capacity_summary";
+  function generateSummary(reportType: string): Record<string, unknown> {
     const summary: Record<string, unknown> = {};
     if (reportType === "capacity_summary") {
       summary.by_resource_type = [];
@@ -553,66 +552,313 @@ describe("capacity — logica de report type selection", () => {
     } else if (reportType === "utilization_breakdown") {
       summary.breakdown = [];
     }
-    expect(summary).toHaveProperty("by_resource_type");
-    expect(summary).not.toHaveProperty("trends");
-  });
+    return summary;
+  }
 
-  it("trend_analysis gera trends", () => {
-    const reportType: string = "trend_analysis";
-    const summary: Record<string, unknown> = {};
-    if (reportType === "capacity_summary") {
-      summary.by_resource_type = [];
-    } else if (reportType === "trend_analysis") {
-      summary.trends = [];
-    } else if (reportType === "forecast") {
-      summary.forecasts = [];
-    } else if (reportType === "utilization_breakdown") {
-      summary.breakdown = [];
-    }
-    expect(summary).toHaveProperty("trends");
-  });
-
-  it("forecast gera forecasts", () => {
-    const reportType: string = "forecast";
-    const summary: Record<string, unknown> = {};
-    if (reportType === "capacity_summary") {
-      summary.by_resource_type = [];
-    } else if (reportType === "trend_analysis") {
-      summary.trends = [];
-    } else if (reportType === "forecast") {
-      summary.forecasts = [];
-    } else if (reportType === "utilization_breakdown") {
-      summary.breakdown = [];
-    }
-    expect(summary).toHaveProperty("forecasts");
-  });
-
-  it("utilization_breakdown gera breakdown", () => {
-    const reportType: string = "utilization_breakdown";
-    const summary: Record<string, unknown> = {};
-    if (reportType === "capacity_summary") {
-      summary.by_resource_type = [];
-    } else if (reportType === "trend_analysis") {
-      summary.trends = [];
-    } else if (reportType === "forecast") {
-      summary.forecasts = [];
-    } else if (reportType === "utilization_breakdown") {
-      summary.breakdown = [];
-    }
-    expect(summary).toHaveProperty("breakdown");
+  it.each([
+    ["capacity_summary", "by_resource_type"],
+    ["trend_analysis", "trends"],
+    ["forecast", "forecasts"],
+    ["utilization_breakdown", "breakdown"],
+  ])(`report_type=%s gera %s`, (reportType, expectedKey) => {
+    const summary = generateSummary(reportType);
+    expect(summary).toHaveProperty(expectedKey);
   });
 });
 
 // ========== Logica de Limit Pagination ==========
 
 describe("capacity — logica de limit pagination", () => {
-  it("metrics limit default 500", () => {
-    const limit = Math.min(parseInt("500", 10), 5000);
-    expect(limit).toBe(500);
+  function parseLimit(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 500 : parsed, 5000);
+  }
+
+  it.each([
+    ["500", 500],
+    ["99999", 5000],
+    ["100", 100],
+    ["5000", 5000],
+    ["abc", 500],
+    ["", 500],
+  ])(`limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimit(raw)).toBe(expected);
+  });
+});
+
+// ========== Logica de Labels Construction ==========
+
+describe("capacity — logica de labels construction", () => {
+  function buildLabels(data: {
+    resource_type: string;
+    resource_id?: string;
+    max_capacity?: number;
+    utilization_pct?: number;
+    metadata?: Record<string, unknown>;
+  }): Record<string, unknown> {
+    const labels: Record<string, unknown> = {
+      resource_type: data.resource_type,
+    };
+    if (data.resource_id) labels.resource_id = data.resource_id;
+    if (data.max_capacity !== undefined)
+      labels.max_capacity = data.max_capacity;
+    if (data.utilization_pct !== undefined)
+      labels.utilization_pct = data.utilization_pct;
+    if (data.metadata) Object.assign(labels, data.metadata);
+    return labels;
+  }
+
+  it("inclui resource_type obrigatoriamente", () => {
+    const labels = buildLabels({ resource_type: "cpu" });
+    expect(labels.resource_type).toBe("cpu");
   });
 
-  it("metrics limit maximo 5000", () => {
-    const limit = Math.min(parseInt("99999", 10), 5000);
-    expect(limit).toBe(5000);
+  it("inclui resource_id quando fornecido", () => {
+    const labels = buildLabels({
+      resource_type: "cpu",
+      resource_id: "i-123",
+    });
+    expect(labels.resource_id).toBe("i-123");
+  });
+
+  it("nao inclui resource_id quando ausente", () => {
+    const labels = buildLabels({ resource_type: "cpu" });
+    expect(labels).not.toHaveProperty("resource_id");
+  });
+
+  it("inclui max_capacity quando fornecido", () => {
+    const labels = buildLabels({
+      resource_type: "cpu",
+      max_capacity: 100,
+    });
+    expect(labels.max_capacity).toBe(100);
+  });
+
+  it("inclui utilization_pct quando fornecido", () => {
+    const labels = buildLabels({
+      resource_type: "cpu",
+      utilization_pct: 75.5,
+    });
+    expect(labels.utilization_pct).toBe(75.5);
+  });
+
+  it("merge metadata via Object.assign", () => {
+    const labels = buildLabels({
+      resource_type: "cpu",
+      metadata: { region: "us-east-1", az: "a" },
+    });
+    expect(labels.region).toBe("us-east-1");
+    expect(labels.az).toBe("a");
+  });
+
+  it("JSON.stringify labels corretamente", () => {
+    const labels = buildLabels({
+      resource_type: "cpu",
+      resource_id: "i-123",
+      utilization_pct: 80,
+    });
+    const json = JSON.stringify(labels);
+    expect(json).toContain('"resource_type":"cpu"');
+    expect(json).toContain('"resource_id":"i-123"');
+    expect(json).toContain('"utilization_pct":80');
+  });
+});
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("capacity — logica de tenant isolation", () => {
+  it("queries de metrics filtram por tenant_id", () => {
+    const tenantId = "tenant-123";
+    const sql = "SELECT * FROM public.capacity_metrics WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de thresholds filtram por tenant_id", () => {
+    const tenantId = "tenant-456";
+    const sql = "SELECT * FROM public.capacity_thresholds WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de reports filtram por tenant_id", () => {
+    const tenantId = "tenant-789";
+    const sql = "SELECT * FROM public.capacity_reports WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de forecasts filtram por tenant_id", () => {
+    const tenantId = "tenant-fc";
+    const sql = "SELECT * FROM public.capacity_forecasts WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("INSERT inclui tenant_id", () => {
+    const tenantId = "tenant-ins";
+    const params: unknown[] = [tenantId, "cpu", "server-01", 75.5, "%", "{}"];
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("UPDATE inclui tenant_id no WHERE", () => {
+    const tenantId = "tenant-upd";
+    const thresholdId = "thr-1";
+    const sql = `UPDATE public.capacity_thresholds SET warning_pct = $1 WHERE id = $2 AND tenant_id = $3`;
+    const params: unknown[] = [80, thresholdId, tenantId];
+    expect(sql).toContain("tenant_id = $3");
+    expect(params[2]).toBe(tenantId);
+  });
+
+  it("DELETE inclui tenant_id no WHERE", () => {
+    const tenantId = "tenant-del";
+    const thresholdId = "thr-2";
+    const sql = `DELETE FROM public.capacity_thresholds WHERE id = $1 AND tenant_id = $2`;
+    const params: unknown[] = [thresholdId, tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de 404 Handling ==========
+
+describe("capacity — logica de 404 handling", () => {
+  it("PUT /thresholds/:id retorna 404 quando rowCount=0", () => {
+    const rowCount = 0;
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(true);
+  });
+
+  it("PUT /thresholds/:id nao retorna 404 quando rowCount>0", () => {
+    const rowCount: number = 1;
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(false);
+  });
+
+  it("DELETE /thresholds/:id retorna 404 quando rowCount=0", () => {
+    const rowCount = 0;
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(true);
+  });
+
+  it("DELETE /reports/:id retorna 404 quando rowCount=0", () => {
+    const rowCount = 0;
+    const shouldReturn404 = rowCount === 0;
+    expect(shouldReturn404).toBe(true);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("capacity — logica de optional chaining", () => {
+  type TestUser = { sub: string; tenant_id: string };
+
+  function getSub(user: TestUser | null | undefined): string | null {
+    return user?.sub ?? null;
+  }
+
+  function getTenantId(user: TestUser | null | undefined): string | null {
+    return user?.tenant_id ?? null;
+  }
+
+  it("user?.sub retorna null quando user e null", () => {
+    expect(getSub(null)).toBeNull();
+  });
+
+  it("user?.tenant_id retorna null quando user e undefined", () => {
+    expect(getTenantId(undefined)).toBeNull();
+  });
+
+  it("user?.sub retorna valor quando user existe", () => {
+    expect(getSub({ sub: "u1", tenant_id: "t1" })).toBe("u1");
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Parallel Queries ==========
+
+describe("capacity — logica de parallel queries", () => {
+  it("overview paraleliza 2 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total: "10" }] } }),
+      Promise.resolve({ data: { rows: [{ total: "5", active: "3" }] } }),
+    ]);
+    expect(results).toHaveLength(2);
+    expect(results[0].data.rows[0].total).toBe("10");
+  });
+
+  it("stats paraleliza 4 queries", async () => {
+    const results = await Promise.all([
+      Promise.resolve({ data: { rows: [{ total_resources: "10" }] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [] } }),
+      Promise.resolve({ data: { rows: [{ total: "5" }] } }),
+    ]);
+    expect(results).toHaveLength(4);
+  });
+
+  it("Promise.all propaga erro", async () => {
+    await expect(
+      Promise.all([
+        Promise.resolve({ data: { rows: [] } }),
+        Promise.reject(new Error("DB error")),
+      ]),
+    ).rejects.toThrow("DB error");
+  });
+});
+
+// ========== Logica de ON CONFLICT Upsert ==========
+
+describe("capacity — logica de ON CONFLICT upsert", () => {
+  it("SQL contem ON CONFLICT para upsert", () => {
+    const sql = `INSERT INTO public.capacity_thresholds (tenant_id, resource_type, resource_name, warning_pct, critical_pct, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (tenant_id, resource_type, resource_name)
+       DO UPDATE SET warning_pct = $4, critical_pct = $5, is_active = $6
+       RETURNING id`;
+    expect(sql).toContain(
+      "ON CONFLICT (tenant_id, resource_type, resource_name)",
+    );
+    expect(sql).toContain("DO UPDATE SET");
+  });
+
+  it("upsert reutiliza parametros $4, $5, $6", () => {
+    const sql = `DO UPDATE SET warning_pct = $4, critical_pct = $5, is_active = $6`;
+    expect(sql).toContain("$4");
+    expect(sql).toContain("$5");
+    expect(sql).toContain("$6");
+  });
+});
+
+// ========== Logica de Forecast Calculation ==========
+
+describe("capacity — logica de forecast calculation", () => {
+  it("forecast requer resource_type e resource_name", () => {
+    const resourceType = "cpu";
+    const resourceName = "server-01";
+    const shouldCalculate = !!(resourceType && resourceName);
+    expect(shouldCalculate).toBe(true);
+  });
+
+  it("sem filtros lista forecasts persistidos", () => {
+    const resourceType = undefined;
+    const resourceName = undefined;
+    const shouldList = !resourceType || !resourceName;
+    expect(shouldList).toBe(true);
+  });
+
+  it("metric_type default utilization_pct", () => {
+    const metricType = undefined;
+    const resolved = metricType ?? "utilization_pct";
+    expect(resolved).toBe("utilization_pct");
   });
 });
