@@ -830,8 +830,11 @@ firewallRoute.get(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
     const host = c.req.query("host");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
-    const offset = parseInt(c.req.query("offset") ?? "0", 10);
+    const limit = Math.min(
+      Number.parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      200,
+    );
+    const offset = Number.parseInt(c.req.query("offset") ?? "0", 10) || 0;
 
     const conditions: string[] = ["tenant_id = $1"];
     const params: unknown[] = [tenantId];
