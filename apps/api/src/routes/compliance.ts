@@ -20,6 +20,12 @@ import "../types.js";
 
 export const complianceRoute = new Hono();
 
+// Helper: converte string de COUNT(*) para number seguro
+function safeCount(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "0", 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 // GET /api/v1/compliance — overview do modulo
 complianceRoute.get(
   "/",
@@ -125,25 +131,25 @@ complianceRoute.post(
     const tenantId = user?.tenant_id ?? null;
     const userId = user?.sub ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createPolicySchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as CreatePolicyInput;
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createPolicySchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as CreatePolicyInput;
+
       const result = await query<{ id: string }>(
         `INSERT INTO public.compliance_policies (tenant_id, name, description, framework, policy_category, severity, rule_type, rule_config, check_interval_hours, is_active, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -213,60 +219,62 @@ complianceRoute.put(
     const user = c.get("user");
     const tenantId = user?.tenant_id ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updatePolicySchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const data = parsed.data as UpdatePolicyInput;
-    const updateFields: string[] = [];
-    const params: unknown[] = [];
-    let paramIdx = 1;
-
-    const fieldMap: Record<string, string> = {
-      name: "name",
-      description: "description",
-      framework: "framework",
-      policy_category: "policy_category",
-      severity: "severity",
-      rule_type: "rule_type",
-      check_interval_hours: "check_interval_hours",
-      is_active: "is_active",
-    };
-
-    for (const [key, dbField] of Object.entries(fieldMap)) {
-      if (data[key as keyof typeof data] !== undefined) {
-        updateFields.push(`${dbField} = $${paramIdx++}`);
-        params.push(data[key as keyof typeof data]);
-      }
-    }
-
-    if (data.rule_config !== undefined) {
-      updateFields.push(`rule_config = $${paramIdx++}`);
-      params.push(JSON.stringify(data.rule_config));
-    }
-
-    if (updateFields.length === 0) {
-      return c.json(
-        { error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" } },
-        400,
-      );
-    }
-
-    params.push(policyId, tenantId);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updatePolicySchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const data = parsed.data as UpdatePolicyInput;
+      const updateFields: string[] = [];
+      const params: unknown[] = [];
+      let paramIdx = 1;
+
+      const fieldMap: Record<string, string> = {
+        name: "name",
+        description: "description",
+        framework: "framework",
+        policy_category: "policy_category",
+        severity: "severity",
+        rule_type: "rule_type",
+        check_interval_hours: "check_interval_hours",
+        is_active: "is_active",
+      };
+
+      for (const [key, dbField] of Object.entries(fieldMap)) {
+        if (data[key as keyof typeof data] !== undefined) {
+          updateFields.push(`${dbField} = $${paramIdx++}`);
+          params.push(data[key as keyof typeof data]);
+        }
+      }
+
+      if (data.rule_config !== undefined) {
+        updateFields.push(`rule_config = $${paramIdx++}`);
+        params.push(JSON.stringify(data.rule_config));
+      }
+
+      if (updateFields.length === 0) {
+        return c.json(
+          {
+            error: { code: "VALIDATION_ERROR", message: "Nada para atualizar" },
+          },
+          400,
+        );
+      }
+
+      params.push(policyId, tenantId);
+
       const result = await query(
         `UPDATE public.compliance_policies SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,
@@ -357,7 +365,8 @@ complianceRoute.get(
   async (c) => {
     const user = c.get("user");
     const policyId = c.req.query("policy_id");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10), 200);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
     const conditions: string[] = ["tenant_id = $1"];
     const params: unknown[] = [user?.tenant_id ?? null];
@@ -402,23 +411,23 @@ complianceRoute.post(
     const tenantId = user?.tenant_id ?? null;
     const userId = user?.sub ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = createScanSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = createScanSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
       const policyResult = await query(
         "SELECT * FROM public.compliance_policies WHERE id = $1 AND tenant_id = $2 AND is_active = true",
         [parsed.data.policy_id, tenantId],
@@ -482,9 +491,8 @@ complianceRoute.post(
               "SELECT COUNT(*) as count FROM public.users WHERE mfa_enabled = false AND tenant_id = $1",
               [tenantId],
             );
-            const usersWithoutMfa = parseInt(
-              mfaResult.data?.rows[0]?.count ?? "0",
-              10,
+            const usersWithoutMfa = safeCount(
+              mfaResult.data?.rows[0]?.count as string | undefined,
             );
             checks.push({
               name: "MFA enabled for all users",
@@ -506,9 +514,8 @@ complianceRoute.post(
               "SELECT COUNT(*) as count FROM public.ssl_certificates_with_status WHERE tenant_id = $1 AND status IN ('expired', 'expiring_soon')",
               [tenantId],
             );
-            const expiredSsl = parseInt(
-              sslResult.data?.rows[0]?.count ?? "0",
-              10,
+            const expiredSsl = safeCount(
+              sslResult.data?.rows[0]?.count as string | undefined,
             );
             checks.push({
               name: "SSL certificates valid",
@@ -530,9 +537,8 @@ complianceRoute.post(
               "SELECT COUNT(*) as count FROM public.firewall_rules WHERE tenant_id = $1 AND is_enabled = true",
               [tenantId],
             );
-            const activeRules = parseInt(
-              fwResult.data?.rows[0]?.count ?? "0",
-              10,
+            const activeRules = safeCount(
+              fwResult.data?.rows[0]?.count as string | undefined,
             );
             checks.push({
               name: "Firewall rules active",
@@ -554,9 +560,8 @@ complianceRoute.post(
               "SELECT COUNT(*) as count FROM public.backup_snapshots WHERE tenant_id = $1 AND status = 'completed' AND created_at > timezone('utc'::text, now()) - interval '7 days'",
               [tenantId],
             );
-            const recentBackups = parseInt(
-              backupResult.data?.rows[0]?.count ?? "0",
-              10,
+            const recentBackups = safeCount(
+              backupResult.data?.rows[0]?.count as string | undefined,
             );
             checks.push({
               name: "Recent backup exists",
@@ -578,9 +583,8 @@ complianceRoute.post(
             "SELECT COUNT(*) as count FROM public.audit_log WHERE tenant_id = $1 AND created_at > timezone('utc'::text, now()) - interval '24 hours'",
             [tenantId],
           );
-          const recentAuditLogs = parseInt(
-            auditResult.data?.rows[0]?.count ?? "0",
-            10,
+          const recentAuditLogs = safeCount(
+            auditResult.data?.rows[0]?.count as string | undefined,
           );
           checks.push({
             name: "Audit logging active",
@@ -707,7 +711,8 @@ complianceRoute.get(
     const status = c.req.query("status");
     const severity = c.req.query("severity");
     const policyId = c.req.query("policy_id");
-    const limit = Math.min(parseInt(c.req.query("limit") ?? "100", 10), 500);
+    const parsedLimit = Number.parseInt(c.req.query("limit") ?? "100", 10);
+    const limit = Math.min(Number.isNaN(parsedLimit) ? 100 : parsedLimit, 500);
 
     const conditions: string[] = ["v.tenant_id = $1"];
     const params: unknown[] = [user?.tenant_id ?? null];
@@ -764,43 +769,43 @@ complianceRoute.put(
     const tenantId = user?.tenant_id ?? null;
     const userId = user?.sub ?? null;
 
-    const parsedBody = await safeJsonBody(c);
-    if (!parsedBody.success) return parsedBody.response;
-    const parsed = updateViolationSchema.safeParse(parsedBody.data);
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: parsed.error.issues[0]?.message ?? "Dados inválidos",
-            details: parsed.error.flatten(),
-          },
-        },
-        400,
-      );
-    }
-
-    const updateFields: string[] = ["status = $1"];
-    const params: unknown[] = [parsed.data.status];
-    let paramIdx = 2;
-
-    if (parsed.data.status === "acknowledged") {
-      updateFields.push(
-        `acknowledged_by = $${paramIdx++}`,
-        `acknowledged_at = timezone('utc'::text, now())`,
-      );
-      params.push(userId);
-    } else if (parsed.data.status === "remediated") {
-      updateFields.push(
-        `remediated_by = $${paramIdx++}`,
-        `remediated_at = timezone('utc'::text, now())`,
-      );
-      params.push(userId);
-    }
-
-    params.push(violationId, tenantId);
-
     try {
+      const parsedBody = await safeJsonBody(c);
+      if (!parsedBody.success) return parsedBody.response;
+      const parsed = updateViolationSchema.safeParse(parsedBody.data);
+      if (!parsed.success) {
+        return c.json(
+          {
+            error: {
+              code: "VALIDATION_ERROR",
+              message: parsed.error.issues[0]?.message ?? "Dados inválidos",
+              details: parsed.error.flatten(),
+            },
+          },
+          400,
+        );
+      }
+
+      const updateFields: string[] = ["status = $1"];
+      const params: unknown[] = [parsed.data.status];
+      let paramIdx = 2;
+
+      if (parsed.data.status === "acknowledged") {
+        updateFields.push(
+          `acknowledged_by = $${paramIdx++}`,
+          `acknowledged_at = timezone('utc'::text, now())`,
+        );
+        params.push(userId);
+      } else if (parsed.data.status === "remediated") {
+        updateFields.push(
+          `remediated_by = $${paramIdx++}`,
+          `remediated_at = timezone('utc'::text, now())`,
+        );
+        params.push(userId);
+      }
+
+      params.push(violationId, tenantId);
+
       const result = await query(
         `UPDATE public.compliance_violations SET ${updateFields.join(", ")} WHERE id = $${paramIdx++} AND tenant_id = $${paramIdx++}`,
         params,

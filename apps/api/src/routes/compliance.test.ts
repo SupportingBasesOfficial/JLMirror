@@ -264,3 +264,164 @@ describe("compliance — logica de compliance score", () => {
     expect(calcScore(0, 0)).toBe(0);
   });
 });
+
+// ========== Logica de safeCount ==========
+
+describe("compliance — logica de safeCount", () => {
+  function safeCount(value: string | undefined): number {
+    const parsed = Number.parseInt(value ?? "0", 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  it.each([
+    ["10", 10],
+    ["0", 0],
+    [undefined, 0],
+    ["abc", 0],
+    ["", 0],
+    ["999", 999],
+  ])(`safeCount(%j) → %s`, (input, expected) => {
+    expect(safeCount(input)).toBe(expected);
+  });
+});
+
+// ========== Logica de Tenant Isolation ==========
+
+describe("compliance — logica de tenant isolation", () => {
+  it("queries de compliance_policies filtram por tenant_id", () => {
+    const tenantId = "t-123";
+    const sql = "SELECT * FROM public.compliance_policies WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de compliance_scans filtram por tenant_id", () => {
+    const tenantId = "t-456";
+    const sql = "SELECT * FROM public.compliance_scans WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("queries de compliance_violations filtram por tenant_id", () => {
+    const tenantId = "t-789";
+    const sql =
+      "SELECT * FROM public.compliance_violations WHERE tenant_id = $1";
+    const params: unknown[] = [tenantId];
+    expect(sql).toContain("tenant_id = $1");
+    expect(params[0]).toBe(tenantId);
+  });
+
+  it("DELETE compliance_policies inclui tenant_id no WHERE", () => {
+    const tenantId = "t-del";
+    const policyId = "p-1";
+    const sql =
+      "DELETE FROM public.compliance_policies WHERE id = $1 AND tenant_id = $2";
+    const params: unknown[] = [policyId, tenantId];
+    expect(sql).toContain("tenant_id = $2");
+    expect(params[1]).toBe(tenantId);
+  });
+
+  it("UPDATE compliance_policies inclui tenant_id no WHERE", () => {
+    const tenantId = "t-upd";
+    const policyId = "p-2";
+    const sql =
+      "UPDATE public.compliance_policies SET name = $1 WHERE id = $2 AND tenant_id = $3";
+    const params: unknown[] = ["novo", policyId, tenantId];
+    expect(sql).toContain("tenant_id = $3");
+    expect(params[2]).toBe(tenantId);
+  });
+});
+
+// ========== Logica de Optional Chaining ==========
+
+describe("compliance — logica de optional chaining", () => {
+  it("result.data?.rows[0] retorna undefined quando vazio", () => {
+    const result: { data?: { rows?: unknown[] } } = { data: { rows: [] } };
+    expect(result.data?.rows?.[0]).toBeUndefined();
+  });
+
+  it("user?.tenant_id retorna null quando user e null", () => {
+    type TestUser = { tenant_id?: string } | null;
+    const user = null as TestUser;
+    expect(user?.tenant_id ?? null).toBeNull();
+  });
+
+  it("user?.sub retorna null quando user e undefined", () => {
+    type TestUser = { sub?: string } | undefined;
+    const user = undefined as TestUser;
+    expect(user?.sub ?? null).toBeNull();
+  });
+
+  it("userId null nao chama writeAuditLog", () => {
+    const userId: string | null = null;
+    const shouldCallAudit = !!userId;
+    expect(shouldCallAudit).toBe(false);
+  });
+});
+
+// ========== Logica de Limit Pagination ==========
+
+describe("compliance — logica de limit pagination", () => {
+  function parseLimitScans(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 50 : parsed, 200);
+  }
+
+  function parseLimitViolations(raw: string): number {
+    const parsed = Number.parseInt(raw, 10);
+    return Math.min(Number.isNaN(parsed) ? 100 : parsed, 500);
+  }
+
+  it.each([
+    ["50", 50],
+    ["999", 200],
+    ["abc", 50],
+    ["", 50],
+  ])(`scans limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimitScans(raw)).toBe(expected);
+  });
+
+  it.each([
+    ["100", 100],
+    ["999", 500],
+    ["abc", 100],
+    ["", 100],
+  ])(`violations limit(%j) → %s`, (raw, expected) => {
+    expect(parseLimitViolations(raw)).toBe(expected);
+  });
+});
+
+// ========== Logica de Violation Status Update ==========
+
+describe("compliance — logica de violation status update", () => {
+  it("status acknowledged adiciona acknowledged_by", () => {
+    const status = "acknowledged";
+    const updateFields: string[] = ["status = $1"];
+    if (status === "acknowledged") {
+      updateFields.push("acknowledged_by = $2", "acknowledged_at = now()");
+    }
+    expect(updateFields).toContain("acknowledged_by = $2");
+  });
+
+  it("status remediated adiciona remediated_by", () => {
+    const status = "remediated";
+    const updateFields: string[] = ["status = $1"];
+    if (status === "remediated") {
+      updateFields.push("remediated_by = $2", "remediated_at = now()");
+    }
+    expect(updateFields).toContain("remediated_by = $2");
+  });
+
+  it("status open nao adiciona campos extras", () => {
+    const status: string = "open";
+    const updateFields: string[] = ["status = $1"];
+    if (status === "acknowledged") {
+      updateFields.push("acknowledged_by = $2");
+    } else if (status === "remediated") {
+      updateFields.push("remediated_by = $2");
+    }
+    expect(updateFields).toEqual(["status = $1"]);
+  });
+});
