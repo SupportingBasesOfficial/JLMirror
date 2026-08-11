@@ -2,7 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   GitBranch,
   ChevronRight,
@@ -100,6 +100,11 @@ export default function ServiceTreePage() {
       setLoading(false);
     }
   }, []);
+
+  // Carrega services ao montar a pagina
+  useEffect(() => {
+    void fetchServices();
+  }, [fetchServices]);
 
   const toggleNode = useCallback(async (nodeId: string) => {
     setExpanded((prev) => {
