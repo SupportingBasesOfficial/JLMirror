@@ -686,7 +686,7 @@ export function UnifiedSidebar() {
         break;
       }
     }
-  }, [pathname, rolesLoading, collapsed]);
+  }, [pathname, rolesLoading, collapsed, filteredModules, isSearching]);
 
   // Single-expand: ao expandir um modulo, fecha os outros
   function handleModuleToggle(moduleId: string) {
