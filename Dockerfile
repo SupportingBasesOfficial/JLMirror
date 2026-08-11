@@ -2,7 +2,7 @@
 # Dockerfile multi-stage para o apps/web (Next.js) JLMIRROR
 
 # --- Estágio de build ---
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 RUN apk add --no-cache dumb-init && corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
@@ -67,7 +67,7 @@ ENV NEXT_PUBLIC_WS_URL=ws://localhost:3001/ws
 RUN pnpm --filter @jlmirror/web build
 
 # --- Estágio de produção ---
-FROM node:22-alpine AS runner
+FROM node:26-alpine AS runner
 RUN apk add --no-cache dumb-init
 WORKDIR /app
 
