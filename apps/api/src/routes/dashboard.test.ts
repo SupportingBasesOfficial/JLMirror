@@ -84,8 +84,8 @@ describe("dashboard helpers — safeRows", () => {
       },
     };
     const rows = safeRows(result);
-    expect(rows[0].subject).toBe("Ticket 1");
-    expect(rows[1].priority).toBe("low");
+    expect(rows[0]!.subject).toBe("Ticket 1");
+    expect(rows[1]!.priority).toBe("low");
   });
 });
 
@@ -350,7 +350,7 @@ describe("dashboard — logica de parallel queries", () => {
     );
     const results = await Promise.all(queries);
     expect(results).toHaveLength(20);
-    expect(results[19].index).toBe(19);
+    expect(results[19]!.index).toBe(19);
   });
 });
 

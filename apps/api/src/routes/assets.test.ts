@@ -399,7 +399,7 @@ describe("assets — logica de warranty", () => {
 
   it("warranty expirando em 15 dias", () => {
     const future = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
-    expect(classifyWarranty(future.toISOString().split("T")[0])).toBe(
+    expect(classifyWarranty(future.toISOString().split("T")[0]!)).toBe(
       "expiring_soon",
     );
   });

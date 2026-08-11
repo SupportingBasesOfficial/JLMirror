@@ -41,7 +41,7 @@ export function downsamplePoints(
     // Usa o ponto medio do bucket como timestamp representativo
     const midIdx = Math.floor(bucket.length / 2);
     result.push({
-      clock: bucket[midIdx].clock,
+      clock: bucket[midIdx]!.clock,
       value: avg.toFixed(4),
       min: min.toFixed(4),
       max: max.toFixed(4),

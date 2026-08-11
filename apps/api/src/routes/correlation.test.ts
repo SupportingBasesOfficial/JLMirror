@@ -872,8 +872,8 @@ describe("correlation — logica de parallel queries", () => {
       data: { rows: [{ total: "10" }] },
     });
     const [r1, r2] = await Promise.all([mockQuery1, mockQuery2]);
-    expect(r1.data.rows[0].total).toBe("5");
-    expect(r2.data.rows[0].total).toBe("10");
+    expect(r1.data.rows[0]!.total).toBe("5");
+    expect(r2.data.rows[0]!.total).toBe("10");
   });
 
   it("Promise.all resolve 3 queries em paralelo", async () => {
@@ -881,9 +881,9 @@ describe("correlation — logica de parallel queries", () => {
     const q2 = Promise.resolve({ data: { rows: [{ b: 2 }] } });
     const q3 = Promise.resolve({ data: { rows: [{ c: 3 }] } });
     const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
-    expect(r1.data.rows[0].a).toBe(1);
-    expect(r2.data.rows[0].b).toBe(2);
-    expect(r3.data.rows[0].c).toBe(3);
+    expect(r1.data.rows[0]!.a).toBe(1);
+    expect(r2.data.rows[0]!.b).toBe(2);
+    expect(r3.data.rows[0]!.c).toBe(3);
   });
 
   it("Promise.all propaga erro de qualquer query", async () => {

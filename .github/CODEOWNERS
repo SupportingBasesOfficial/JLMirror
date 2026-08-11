@@ -1,31 +1,26 @@
-# CODEOWNERS — define revisores automáticos por path.
-#
-# Cada entrada no formato: <path> <owner1> <owner2>
-# O GitHub solicita review automaticamente dos owners quando um PR altera arquivos no path.
+# Code Owners — JLMIRROR
+# Define quem é responsável por cada área do código.
+# Combinado com branch protection, PRs precisam de review do owner.
 
 # Default — todo o repositório
-* @JLInformatica
+*                              @SupportingBasesOfficial
 
-# Infraestrutura e CI/CD
-/.github/ @JLInformatica
-/turbo.json @JLInformatica
-/package.json @JLInformatica
-/docker-compose.yml @JLInformatica
+# Áreas críticas — mudanças exigem review explícito
+/apps/api/src/routes/          @SupportingBasesOfficial
+/apps/api/src/middleware/      @SupportingBasesOfficial
+/apps/api/src/lib/             @SupportingBasesOfficial
+/migrations/                   @SupportingBasesOfficial
+/packages/                     @SupportingBasesOfficial
 
-# Banco de dados e migrations
-/migrations/ @JLInformatica
-/packages/db/ @JLInformatica
+# Infraestrutura e governança — mudanças exigem review explícito
+/.zero-error/                  @SupportingBasesOfficial
+/.github/                      @SupportingBasesOfficial
+/.husky/                       @SupportingBasesOfficial
+/docs/                         @SupportingBasesOfficial
 
-# API
-/apps/api/ @JLInformatica
-
-# Frontend
-/apps/web/ @JLInformatica
-
-# Packages compartilhados
-/packages/ @JLInformatica
-
-# Documentação
-/docs/ @JLInformatica
-/README.md @JLInformatica
-/CONTRIBUTING.md @JLInformatica
+# Configuração de build e deploy
+/docker-compose.yml            @SupportingBasesOfficial
+/Dockerfile                    @SupportingBasesOfficial
+/apps/api/Dockerfile           @SupportingBasesOfficial
+/turbo.json                    @SupportingBasesOfficial
+/package.json                  @SupportingBasesOfficial

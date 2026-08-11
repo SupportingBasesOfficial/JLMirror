@@ -661,7 +661,7 @@ export default function UsersManagementPage() {
           users: TenantUser[];
         }) {
           const cfg =
-            TENANT_TYPE_CONFIG[group.tenant_type] ?? TENANT_TYPE_CONFIG.client;
+            TENANT_TYPE_CONFIG[group.tenant_type] ?? TENANT_TYPE_CONFIG.client!;
           return (
             <div
               key={group.tenant_name + group.tenant_type}

@@ -219,8 +219,8 @@ authRoute.post("/login", async (c) => {
     }
 
     const roles = tenantsResult.data.rows.map((r) => r.role);
-    const primaryTenantId = tenantsResult.data.rows[0].tenant_id;
-    const userScope = tenantsResult.data.rows[0].scope as "global" | "tenant";
+    const primaryTenantId = tenantsResult.data.rows[0]!.tenant_id;
+    const userScope = tenantsResult.data.rows[0]!.scope as "global" | "tenant";
     const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
 
     // Verifica se usuário tem MFA TOTP habilitado

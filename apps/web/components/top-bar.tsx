@@ -92,7 +92,7 @@ function getBreadcrumbs(pathname: string | null): BreadcrumbPart[] {
   const crumbs: BreadcrumbPart[] = [];
   let currentPath = "";
   for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i];
+    const seg = segments[i]!;
     currentPath += `/${seg}`;
     const label = labelMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
     const isLast = i === segments.length - 1;

@@ -85,7 +85,7 @@ describe("apm — logica de throughput data structure", () => {
     };
     expect(response.data).toHaveLength(2);
     expect(response.minutes).toBe(15);
-    expect(response.data[0].count).toBe("100");
+    expect(response.data[0]!.count).toBe("100");
   });
 
   it("estrutura de resposta vazia", () => {

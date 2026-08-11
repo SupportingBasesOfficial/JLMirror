@@ -591,7 +591,7 @@ export default function AdminPage() {
         );
         const clientTenants = tenants.filter((t) => t.tenant_type === "client");
         const tenantTypeCfg = (tt: string | undefined) =>
-          TENANT_TYPE_CONFIG[tt ?? "client"] ?? TENANT_TYPE_CONFIG.client;
+          TENANT_TYPE_CONFIG[tt ?? "client"] ?? TENANT_TYPE_CONFIG.client!;
 
         function renderTenantCard(t: Tenant) {
           const cfg = tenantTypeCfg(t.tenant_type);

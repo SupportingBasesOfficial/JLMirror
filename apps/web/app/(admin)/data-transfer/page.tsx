@@ -258,7 +258,7 @@ export default function DataTransferPage() {
           // CSV simples: primeira linha = headers
           const lines = iData.split("\n").filter((l) => l.trim());
           if (lines.length > 1) {
-            const headers = lines[0].split(",").map((h) => h.trim());
+            const headers = lines[0]!.split(",").map((h) => h.trim());
             parsedData = lines.slice(1).map((line) => {
               const values = line.split(",");
               const row = Object.fromEntries(

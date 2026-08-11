@@ -27,7 +27,11 @@ export interface PredictionConfig {
 }
 
 // Regressao linear simples (least squares)
-function linearRegression(values: number[]): { slope: number; intercept: number; rSquared: number } {
+function linearRegression(values: number[]): {
+  slope: number;
+  intercept: number;
+  rSquared: number;
+} {
   const n = values.length;
   if (n < 2) return { slope: 0, intercept: values[0] ?? 0, rSquared: 0 };
 
@@ -38,8 +42,8 @@ function linearRegression(values: number[]): { slope: number; intercept: number;
   let numerator = 0;
   let denominator = 0;
   for (let i = 0; i < n; i++) {
-    numerator += (x[i] - xMean) * (values[i] - yMean);
-    denominator += Math.pow(x[i] - xMean, 2);
+    numerator += (x[i]! - xMean) * (values[i]! - yMean);
+    denominator += Math.pow(x[i]! - xMean, 2);
   }
 
   const slope = denominator === 0 ? 0 : numerator / denominator;
@@ -49,9 +53,9 @@ function linearRegression(values: number[]): { slope: number; intercept: number;
   let ssRes = 0;
   let ssTot = 0;
   for (let i = 0; i < n; i++) {
-    const predicted = slope * x[i] + intercept;
-    ssRes += Math.pow(values[i] - predicted, 2);
-    ssTot += Math.pow(values[i] - yMean, 2);
+    const predicted = slope * x[i]! + intercept;
+    ssRes += Math.pow(values[i]! - predicted, 2);
+    ssTot += Math.pow(values[i]! - yMean, 2);
   }
   const rSquared = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
 
@@ -68,19 +72,26 @@ function predictLinearTrend(
   const { slope, intercept, rSquared } = linearRegression(values);
 
   // Prediz o valor no horizonte
-  const predictedValue = slope * (n - 1 + config.predictionHorizonHours) + intercept;
+  const predictedValue =
+    slope * (n - 1 + config.predictionHorizonHours) + intercept;
 
   // Estima quando o threshold sera cruzado
   let estimatedFailureHours: number | null = null;
   if (slope !== 0) {
     if (config.thresholdDirection === "above" && slope > 0) {
       const hoursToThreshold = (config.thresholdValue - currentValue) / slope;
-      if (hoursToThreshold > 0 && hoursToThreshold <= config.predictionHorizonHours * 2) {
+      if (
+        hoursToThreshold > 0 &&
+        hoursToThreshold <= config.predictionHorizonHours * 2
+      ) {
         estimatedFailureHours = Math.round(hoursToThreshold);
       }
     } else if (config.thresholdDirection === "below" && slope < 0) {
       const hoursToThreshold = (config.thresholdValue - currentValue) / slope;
-      if (hoursToThreshold > 0 && hoursToThreshold <= config.predictionHorizonHours * 2) {
+      if (
+        hoursToThreshold > 0 &&
+        hoursToThreshold <= config.predictionHorizonHours * 2
+      ) {
         estimatedFailureHours = Math.round(hoursToThreshold);
       }
     }
@@ -89,23 +100,31 @@ function predictLinearTrend(
   // Calcula probabilidade baseada em R-squared e proximidade do threshold
   const distanceToThreshold = Math.abs(config.thresholdValue - currentValue);
   const thresholdRange = Math.abs(config.thresholdValue);
-  const proximityRatio = thresholdRange === 0 ? 1 : distanceToThreshold / thresholdRange;
+  const proximityRatio =
+    thresholdRange === 0 ? 1 : distanceToThreshold / thresholdRange;
 
   let failureProbability = 0;
   if (estimatedFailureHours !== null) {
     // Quanto mais proximo, maior a probabilidade
-    const horizonRatio = 1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
+    const horizonRatio =
+      1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
     failureProbability = Math.min(1, Math.max(0, rSquared * horizonRatio));
   } else {
     failureProbability = Math.min(0.3, proximityRatio * 0.1);
   }
 
   const predictedFailure = failureProbability >= config.warningProbability;
-  const severity = failureProbability >= config.criticalProbability ? "critical" : failureProbability >= config.warningProbability ? "warning" : "info";
+  const severity =
+    failureProbability >= config.criticalProbability
+      ? "critical"
+      : failureProbability >= config.warningProbability
+        ? "warning"
+        : "info";
 
-  const estimatedFailureAt = estimatedFailureHours !== null
-    ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
-    : null;
+  const estimatedFailureAt =
+    estimatedFailureHours !== null
+      ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
+      : null;
 
   return {
     predictedFailure,
@@ -134,11 +153,16 @@ function predictExponential(
   const { slope, rSquared } = linearRegression(logValues);
 
   const growthRate = Math.exp(slope);
-  const predictedValue = currentValue * Math.pow(growthRate, config.predictionHorizonHours);
+  const predictedValue =
+    currentValue * Math.pow(growthRate, config.predictionHorizonHours);
 
   // Estima quando cruza o threshold
   let estimatedFailureHours: number | null = null;
-  if (growthRate > 1 && config.thresholdDirection === "above" && currentValue > 0) {
+  if (
+    growthRate > 1 &&
+    config.thresholdDirection === "above" &&
+    currentValue > 0
+  ) {
     const ratio = config.thresholdValue / currentValue;
     if (ratio > 1) {
       const hours = Math.log(ratio) / Math.log(growthRate);
@@ -150,16 +174,23 @@ function predictExponential(
 
   let failureProbability = 0;
   if (estimatedFailureHours !== null) {
-    const horizonRatio = 1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
+    const horizonRatio =
+      1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
     failureProbability = Math.min(1, Math.max(0, rSquared * horizonRatio));
   }
 
   const predictedFailure = failureProbability >= config.warningProbability;
-  const severity = failureProbability >= config.criticalProbability ? "critical" : failureProbability >= config.warningProbability ? "warning" : "info";
+  const severity =
+    failureProbability >= config.criticalProbability
+      ? "critical"
+      : failureProbability >= config.warningProbability
+        ? "warning"
+        : "info";
 
-  const estimatedFailureAt = estimatedFailureHours !== null
-    ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
-    : null;
+  const estimatedFailureAt =
+    estimatedFailureHours !== null
+      ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
+      : null;
 
   return {
     predictedFailure,
@@ -186,7 +217,8 @@ function predictMovingAverage(
   // Media movel simples
   const window = Math.min(10, n);
   const recentValues = values.slice(-window);
-  const movingAvg = recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
+  const movingAvg =
+    recentValues.reduce((a, b) => a + b, 0) / recentValues.length;
 
   // Calcula tendencia da media movel
   const maValues: number[] = [];
@@ -201,23 +233,33 @@ function predictMovingAverage(
   let estimatedFailureHours: number | null = null;
   if (slope !== 0) {
     const hoursToThreshold = (config.thresholdValue - movingAvg) / slope;
-    if (hoursToThreshold > 0 && hoursToThreshold <= config.predictionHorizonHours * 2) {
+    if (
+      hoursToThreshold > 0 &&
+      hoursToThreshold <= config.predictionHorizonHours * 2
+    ) {
       estimatedFailureHours = Math.round(hoursToThreshold);
     }
   }
 
   let failureProbability = 0;
   if (estimatedFailureHours !== null) {
-    const horizonRatio = 1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
+    const horizonRatio =
+      1 - estimatedFailureHours / (config.predictionHorizonHours * 2);
     failureProbability = Math.min(1, Math.max(0, rSquared * horizonRatio));
   }
 
   const predictedFailure = failureProbability >= config.warningProbability;
-  const severity = failureProbability >= config.criticalProbability ? "critical" : failureProbability >= config.warningProbability ? "warning" : "info";
+  const severity =
+    failureProbability >= config.criticalProbability
+      ? "critical"
+      : failureProbability >= config.warningProbability
+        ? "warning"
+        : "info";
 
-  const estimatedFailureAt = estimatedFailureHours !== null
-    ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
-    : null;
+  const estimatedFailureAt =
+    estimatedFailureHours !== null
+      ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
+      : null;
 
   return {
     predictedFailure,
@@ -247,24 +289,35 @@ function predictThresholdProximity(
   const failureProbability = 1 - proximityRatio;
 
   // Estima falha baseado na taxa de aproximacao
-  const recentSlope = values.length >= 3
-    ? (values[values.length - 1] - values[values.length - 3]) / 2
-    : 0;
+  const recentSlope =
+    values.length >= 3
+      ? (values[values.length - 1]! - values[values.length - 3]!) / 2
+      : 0;
 
   let estimatedFailureHours: number | null = null;
   if (recentSlope !== 0) {
-    const hoursToThreshold = (config.thresholdValue - currentValue) / recentSlope;
-    if (hoursToThreshold > 0 && hoursToThreshold <= config.predictionHorizonHours * 2) {
+    const hoursToThreshold =
+      (config.thresholdValue - currentValue) / recentSlope;
+    if (
+      hoursToThreshold > 0 &&
+      hoursToThreshold <= config.predictionHorizonHours * 2
+    ) {
       estimatedFailureHours = Math.round(hoursToThreshold);
     }
   }
 
   const predictedFailure = failureProbability >= config.warningProbability;
-  const severity = failureProbability >= config.criticalProbability ? "critical" : failureProbability >= config.warningProbability ? "warning" : "info";
+  const severity =
+    failureProbability >= config.criticalProbability
+      ? "critical"
+      : failureProbability >= config.warningProbability
+        ? "warning"
+        : "info";
 
-  const estimatedFailureAt = estimatedFailureHours !== null
-    ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
-    : null;
+  const estimatedFailureAt =
+    estimatedFailureHours !== null
+      ? new Date(Date.now() + estimatedFailureHours * 60 * 60 * 1000)
+      : null;
 
   return {
     predictedFailure,

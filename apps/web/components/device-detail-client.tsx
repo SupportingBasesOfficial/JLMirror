@@ -286,7 +286,7 @@ export function DeviceDetailClient({
               if (nameMatch) return nameMatch[1];
               const keyMatch = i.key_.match(/net\.if\.\w+\[([^\]]+)\]/);
               if (keyMatch) {
-                const raw = keyMatch[1];
+                const raw = keyMatch[1]!;
                 const parts = raw.split(".");
                 if (parts.length > 1) return `if.${parts[parts.length - 1]}`;
                 return raw;
@@ -308,7 +308,7 @@ export function DeviceDetailClient({
           : (() => {
               const keyMatch = i.key_.match(/net\.if\.\w+\[([^\]]+)\]/);
               if (!keyMatch) return null;
-              const raw = keyMatch[1];
+              const raw = keyMatch[1]!;
               const parts = raw.split(".");
               return parts.length > 1 ? `if.${parts[parts.length - 1]}` : raw;
             })();
@@ -320,11 +320,11 @@ export function DeviceDetailClient({
       const outItem = netInterfaceItems.find((i) => {
         const nameMatch = i.name.match(/Interface\s+(\S+)\(\)/i);
         const extracted = nameMatch
-          ? nameMatch[1]
+          ? nameMatch[1]!
           : (() => {
               const keyMatch = i.key_.match(/net\.if\.\w+\[([^\]]+)\]/);
               if (!keyMatch) return null;
-              const raw = keyMatch[1];
+              const raw = keyMatch[1]!;
               const parts = raw.split(".");
               return parts.length > 1 ? `if.${parts[parts.length - 1]}` : raw;
             })();
@@ -437,7 +437,7 @@ export function DeviceDetailClient({
               : (() => {
                   const keyMatch = i.key_.match(/net\.if\.\w+\[([^\]]+)\]/);
                   if (!keyMatch) return null;
-                  const raw = keyMatch[1];
+                  const raw = keyMatch[1]!;
                   const parts = raw.split(".");
                   return parts.length > 1
                     ? `if.${parts[parts.length - 1]}`
@@ -451,11 +451,11 @@ export function DeviceDetailClient({
           const outItem = netInterfaceItems.find((i) => {
             const nameMatch = i.name.match(/Interface\s+(\S+)\(\)/i);
             const extracted = nameMatch
-              ? nameMatch[1]
+              ? nameMatch[1]!
               : (() => {
                   const keyMatch = i.key_.match(/net\.if\.\w+\[([^\]]+)\]/);
                   if (!keyMatch) return null;
-                  const raw = keyMatch[1];
+                  const raw = keyMatch[1]!;
                   const parts = raw.split(".");
                   return parts.length > 1
                     ? `if.${parts[parts.length - 1]}`
@@ -692,14 +692,14 @@ export function DeviceDetailClient({
           {
             label: "TEMPERATURA",
             value: (() => {
-              const t = tempItems[0];
+              const t = tempItems[0]!;
               const v = parseFloat(t.lastvalue);
               if (Number.isNaN(v)) return "N/A";
               const unit = t.units || "°C";
               return `${v.toFixed(1)}${unit}`;
             })(),
             color: (() => {
-              const v = parseFloat(tempItems[0].lastvalue);
+              const v = parseFloat(tempItems[0]!.lastvalue);
               if (!Number.isNaN(v) && v >= 70) return CHART_COLORS.red;
               if (!Number.isNaN(v) && v >= 55) return CHART_COLORS.amber;
               return CHART_COLORS.green;
@@ -707,7 +707,7 @@ export function DeviceDetailClient({
             sub:
               tempItems.length > 1
                 ? `${tempItems.length} sensores`
-                : tempItems[0].name.replace(/.*temperature/i, "").trim() ||
+                : tempItems[0]!.name.replace(/.*temperature/i, "").trim() ||
                   "Sensor de temperatura",
             show: true,
           },
@@ -745,7 +745,7 @@ export function DeviceDetailClient({
             sub:
               sslCertItems.length > 1
                 ? `${sslCertItems.length} certificados monitorados`
-                : sslCertItems[0].name,
+                : sslCertItems[0]!.name,
             show: true,
           },
         ]

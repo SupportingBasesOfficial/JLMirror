@@ -857,9 +857,9 @@ notificationRoute.post(
       const usedChannelIds: string[] = [];
 
       for (let i = 0; i < rules.length; i++) {
-        const rule = rules[i];
+        const rule = rules[i]!;
         const cooldownOk =
-          cooldownResults[i].data?.rows[0]?.check_rule_cooldown;
+          cooldownResults[i]!.data?.rows[0]?.check_rule_cooldown;
         if (!cooldownOk) {
           results.push({
             rule_id: rule.id,

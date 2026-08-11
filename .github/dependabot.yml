@@ -1,157 +1,154 @@
-# Configuração do Dependabot — gestão automatizada de dependências
-# Mantém bibliotecas atualizadas e monitora vulnerabilidades conhecidas (SBOM implícito)
+# Dependabot — JLMIRROR
+# Mantém dependências atualizadas automaticamente.
+# PRs são criados mas NÃO auto-mergidos — precisam passar CI + zero-error + review.
 
 version: 2
 
 updates:
-  # Dependências de produção — semanal
-  - package-ecosystem: "npm"
-    directory: "/"
+  # npm — apps/api
+  - package-ecosystem: npm
+    directory: /apps/api
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps)"
     groups:
-      # Agrupa minor/patch para evitar PR spam
-      minor-and-patch:
+      minor-patch:
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps(api)"
+    labels:
+      - dependencies
+      - api
 
-  # Dependências dos packages internos
-  - package-ecosystem: "npm"
-    directory: "/packages/eslint-config"
+  # npm — apps/web
+  - package-ecosystem: npm
+    directory: /apps/web
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps(web)"
+    labels:
+      - dependencies
+      - web
+
+  # npm — raiz (devDependencies compartilhadas)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: "deps(root)"
+    labels:
+      - dependencies
+
+  # npm — packages/*
+  - package-ecosystem: npm
+    directory: /packages/auth
+    schedule:
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
     commit-message:
-      prefix: "chore(deps-eslint)"
+      prefix: "deps(auth)"
+    labels:
+      - dependencies
+      - packages
 
-  - package-ecosystem: "npm"
-    directory: "/packages/ui"
+  - package-ecosystem: npm
+    directory: /packages/cache
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
     commit-message:
-      prefix: "chore(deps-ui)"
+      prefix: "deps(cache)"
+    labels:
+      - dependencies
+      - packages
 
-  - package-ecosystem: "npm"
-    directory: "/packages/tailwind-config"
+  - package-ecosystem: npm
+    directory: /packages/db
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
     commit-message:
-      prefix: "chore(deps-tailwind)"
+      prefix: "deps(db)"
+    labels:
+      - dependencies
+      - packages
 
-  - package-ecosystem: "npm"
-    directory: "/packages/typescript-config"
+  - package-ecosystem: npm
+    directory: /packages/zabbix
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
+    groups:
+      minor-patch:
+        update-types:
+          - minor
+          - patch
     commit-message:
-      prefix: "chore(deps-tsconfig)"
+      prefix: "deps(zabbix)"
+    labels:
+      - dependencies
+      - packages
 
-  - package-ecosystem: "npm"
-    directory: "/packages/db"
+  # Docker — docker-compose.yml
+  - package-ecosystem: docker
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
     commit-message:
-      prefix: "chore(deps-db)"
+      prefix: "deps(docker)"
+    labels:
+      - dependencies
+      - docker
 
-  - package-ecosystem: "npm"
-    directory: "/packages/auth"
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: weekly
+      day: monday
     open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
     commit-message:
-      prefix: "chore(deps-auth)"
-
-  - package-ecosystem: "npm"
-    directory: "/packages/cache"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
+      prefix: "deps(ci)"
     labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps-cache)"
-
-  - package-ecosystem: "npm"
-    directory: "/packages/shared-validation"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps-validation)"
-
-  - package-ecosystem: "npm"
-    directory: "/packages/zabbix"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps-zabbix)"
-
-  - package-ecosystem: "npm"
-    directory: "/apps/api"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "security"
-    commit-message:
-      prefix: "chore(deps-api)"
-
-  # GitHub Actions — mensal
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 2
-    labels:
-      - "dependencies"
-      - "ci"
-    commit-message:
-      prefix: "chore(ci)"
+      - dependencies
+      - ci

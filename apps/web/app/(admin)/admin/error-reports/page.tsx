@@ -165,8 +165,8 @@ export default function ErrorReportsPage() {
           <div className="lg:col-span-1 space-y-2 max-h-[70vh] overflow-y-auto">
             {reports.map((report) => {
               const sev =
-                SEVERITY_CONFIG[report.severity] ?? SEVERITY_CONFIG.error;
-              const st = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.open;
+                SEVERITY_CONFIG[report.severity] ?? SEVERITY_CONFIG.error!;
+              const st = STATUS_CONFIG[report.status] ?? STATUS_CONFIG.open!;
               return (
                 <button
                   type="button"

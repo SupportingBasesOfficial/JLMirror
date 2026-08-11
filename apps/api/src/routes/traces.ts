@@ -184,7 +184,7 @@ tracesRoute.get("/:traceId", requirePermission("logs:read"), async (c) => {
     const spans = result.data.rows as unknown as TraceSpanRow[];
 
     // Calcula timeline relativa
-    const earliestStart = new Date(spans[0].start_time).getTime();
+    const earliestStart = new Date(spans[0]!.start_time).getTime();
     const latestEnd = Math.max(
       ...spans.map((s) => new Date(s.end_time).getTime()),
     );

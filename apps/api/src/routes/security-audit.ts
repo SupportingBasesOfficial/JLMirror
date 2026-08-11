@@ -364,7 +364,7 @@ securityAuditRoute.post(
             const count =
               rows.length > 0
                 ? Number.parseInt(
-                    (rows[0].count as string) ?? String(rows.length),
+                    (rows[0]!.count as string) ?? String(rows.length),
                     10,
                   ) || 0
                 : 0;

@@ -147,7 +147,7 @@ export default function PublicStatusPage() {
 
   const { page } = data;
   const overallConfig =
-    STATUS_CONFIG[data.overall_status] ?? STATUS_CONFIG.operational;
+    STATUS_CONFIG[data.overall_status] ?? STATUS_CONFIG.operational!;
 
   return (
     <div
@@ -309,7 +309,8 @@ export default function PublicStatusPage() {
           <div className="space-y-2">
             {data.services.map((svc: Record<string, unknown>) => {
               const status = (svc.status as string) ?? "operational";
-              const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.operational;
+              const config =
+                STATUS_CONFIG[status] ?? STATUS_CONFIG.operational!;
               return (
                 <div
                   key={svc.id as string}

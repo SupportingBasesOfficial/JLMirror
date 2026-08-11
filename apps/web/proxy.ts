@@ -21,7 +21,7 @@ function decodeJwtPayload(
     const parts = token.split(".");
     if (parts.length !== 3) return null;
     // Base64url -> Base64
-    const payloadB64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payloadB64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
     const payloadJson = atob(payloadB64);
     return JSON.parse(payloadJson);
   } catch {

@@ -503,7 +503,7 @@ export default function MarketplacePage() {
           <div className="divide-y" style={{ borderColor: COLORS.border }}>
             {installs.map((inst) => {
               const statusConfig =
-                STATUS_CONFIG[inst.status] ?? STATUS_CONFIG.installed;
+                STATUS_CONFIG[inst.status] ?? STATUS_CONFIG.installed!;
               const catColor = CATEGORY_COLORS[inst.category] ?? COLORS.muted;
               return (
                 <div key={inst.id} className="p-4">

@@ -2,6 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
+import type { Context } from "hono";
 import { validate, getValidatedData } from "../middleware/validate.js";
 
 interface MockContext {
@@ -17,7 +18,10 @@ interface MockContext {
 }
 
 // Mock minimal para Context do Hono
-function createMockContext(body: unknown, method: string = "POST"): MockContext {
+function createMockContext(
+  body: unknown,
+  method: string = "POST",
+): MockContext {
   return {
     req: {
       json: async () => body,
@@ -42,14 +46,16 @@ describe("validate middleware", () => {
     const next = vi.fn();
     const middleware = validate({ schema: testSchema });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(ctx as any, next);
+    await middleware(ctx as unknown as Context, next);
 
     expect(next).toHaveBeenCalled();
-    expect(ctx.set).toHaveBeenCalledWith("validatedData", expect.objectContaining({
-      name: "Test",
-      email: "test@example.com",
-    }));
+    expect(ctx.set).toHaveBeenCalledWith(
+      "validatedData",
+      expect.objectContaining({
+        name: "Test",
+        email: "test@example.com",
+      }),
+    );
   });
 
   it("retorna 400 quando body é inválido", async () => {
@@ -57,8 +63,8 @@ describe("validate middleware", () => {
     const next = vi.fn();
     const middleware = validate({ schema: testSchema });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await middleware(ctx as any, next) as { data: unknown; status: number } | undefined;
+    const result = (await middleware(ctx as unknown as Context, next)) as
+      { data: unknown; status: number } | undefined;
 
     expect(next).not.toHaveBeenCalled();
     expect(result?.status).toBe(400);
@@ -68,20 +74,25 @@ describe("validate middleware", () => {
   it("retorna 400 quando JSON é malformado", async () => {
     const ctx = {
       req: {
-        json: async () => { throw new SyntaxError("Unexpected token"); },
+        json: async () => {
+          throw new SyntaxError("Unexpected token");
+        },
         query: () => ({}),
         param: () => ({}),
         method: "POST",
       },
-      json: (data: unknown, status?: number) => ({ data, status: status ?? 200 }),
+      json: (data: unknown, status?: number) => ({
+        data,
+        status: status ?? 200,
+      }),
       set: vi.fn(),
       get: vi.fn(),
     };
     const next = vi.fn();
     const middleware = validate({ schema: testSchema });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await middleware(ctx as any, next) as { data: unknown; status: number } | undefined;
+    const result = (await middleware(ctx as unknown as Context, next)) as
+      { data: unknown; status: number } | undefined;
 
     expect(next).not.toHaveBeenCalled();
     expect(result?.status).toBe(400);
@@ -92,8 +103,9 @@ describe("validate middleware", () => {
     const mockCtx = {
       get: vi.fn().mockReturnValue({ name: "Test", email: "test@example.com" }),
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = getValidatedData<{ name: string }>(mockCtx as any);
+    const data = getValidatedData<{ name: string }>(
+      mockCtx as unknown as Context,
+    );
     expect(data.name).toBe("Test");
   });
 });

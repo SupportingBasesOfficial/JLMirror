@@ -764,7 +764,7 @@ describe("capacity — logica de parallel queries", () => {
       Promise.resolve({ data: { rows: [{ total: "5", active: "3" }] } }),
     ]);
     expect(results).toHaveLength(2);
-    expect(results[0].data.rows[0].total).toBe("10");
+    expect(results[0]!.data.rows[0]!.total).toBe("10");
   });
 
   it("stats paraleliza 4 queries", async () => {

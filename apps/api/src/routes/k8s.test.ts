@@ -678,8 +678,8 @@ describe("k8s — logica de parallel queries (overview)", () => {
       data: { rows: [{ type: "Warning", count: "5" }] },
     });
     const [r1, r2] = await Promise.all([mockQuery1, mockQuery2]);
-    expect(r1.data.rows[0].resource_type).toBe("pods");
-    expect(r2.data.rows[0].type).toBe("Warning");
+    expect(r1.data.rows[0]!.resource_type).toBe("pods");
+    expect(r2.data.rows[0]!.type).toBe("Warning");
   });
 
   it("Promise.all propaga erro de qualquer query", async () => {

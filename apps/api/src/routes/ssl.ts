@@ -132,17 +132,17 @@ async function checkTlsCertificate(
           typeof issuerO === "string"
             ? issuerO
             : Array.isArray(issuerO)
-              ? issuerO[0]
+              ? (issuerO[0] ?? null)
               : typeof issuerCN === "string"
                 ? issuerCN
                 : Array.isArray(issuerCN)
-                  ? issuerCN[0]
+                  ? (issuerCN[0] ?? null)
                   : null;
         const subjectStr =
           typeof subjectCN === "string"
             ? subjectCN
             : Array.isArray(subjectCN)
-              ? subjectCN[0]
+              ? (subjectCN[0] ?? null)
               : null;
         socket.destroy();
         resolve({

@@ -152,7 +152,7 @@ export default async function DevicesPage() {
   for (const t of triggers) {
     for (const h of t.hosts ?? []) {
       if (!triggersByHost[h.hostid]) triggersByHost[h.hostid] = [];
-      triggersByHost[h.hostid].push(t);
+      triggersByHost[h.hostid]!.push(t);
     }
   }
 
@@ -198,12 +198,12 @@ export default async function DevicesPage() {
       const key = "__sem_grupo";
       if (!devicesByGroup[key])
         devicesByGroup[key] = { groupName: "Sem categoria", devices: [] };
-      devicesByGroup[key].devices.push(d);
+      devicesByGroup[key]!.devices.push(d);
     } else {
       for (const g of groups) {
         if (!devicesByGroup[g.groupid])
           devicesByGroup[g.groupid] = { groupName: g.name, devices: [] };
-        devicesByGroup[g.groupid].devices.push(d);
+        devicesByGroup[g.groupid]!.devices.push(d);
       }
     }
   }

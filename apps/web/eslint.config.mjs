@@ -31,7 +31,7 @@ export default [
       "react/no-unescaped-entities": "off",
       "@next/next/no-html-link-for-pages": "off",
       "@next/next/no-img-element": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "react-hooks/exhaustive-deps": "warn",
     },
   },

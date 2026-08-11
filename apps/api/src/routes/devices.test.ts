@@ -134,7 +134,7 @@ describe("devices — agrupamento por grupo", () => {
         for (const g of groups) {
           if (!devicesByGroup[g.groupid])
             devicesByGroup[g.groupid] = { groupName: g.name, devices: [] };
-          devicesByGroup[g.groupid].devices.push(d);
+          devicesByGroup[g.groupid]!.devices.push(d);
         }
       }
     }
@@ -164,8 +164,8 @@ describe("devices — agrupamento por grupo", () => {
     ];
     const grouped = groupDevices(devices);
     expect(Object.keys(grouped)).toHaveLength(2);
-    expect(grouped["g1"].devices).toHaveLength(2);
-    expect(grouped["g2"].devices).toHaveLength(1);
+    expect(grouped["g1"]!.devices).toHaveLength(2);
+    expect(grouped["g2"]!.devices).toHaveLength(1);
   });
 
   it("coloca devices sem grupo em 'Sem categoria'", () => {
@@ -173,8 +173,8 @@ describe("devices — agrupamento por grupo", () => {
       { hostid: "1", name: "Server 1", status: "0" },
     ];
     const grouped = groupDevices(devices);
-    expect(grouped["__sem_grupo"].groupName).toBe("Sem categoria");
-    expect(grouped["__sem_grupo"].devices).toHaveLength(1);
+    expect(grouped["__sem_grupo"]!.groupName).toBe("Sem categoria");
+    expect(grouped["__sem_grupo"]!.devices).toHaveLength(1);
   });
 
   it("suporta hostgroups (Zabbix 5.x) em vez de groups", () => {
@@ -187,7 +187,7 @@ describe("devices — agrupamento por grupo", () => {
       },
     ];
     const grouped = groupDevices(devices);
-    expect(grouped["g1"].groupName).toBe("Legacy");
+    expect(grouped["g1"]!.groupName).toBe("Legacy");
   });
 
   it("device com multiplos grupos aparece em todos", () => {
@@ -203,8 +203,8 @@ describe("devices — agrupamento por grupo", () => {
       },
     ];
     const grouped = groupDevices(devices);
-    expect(grouped["g1"].devices).toHaveLength(1);
-    expect(grouped["g2"].devices).toHaveLength(1);
+    expect(grouped["g1"]!.devices).toHaveLength(1);
+    expect(grouped["g2"]!.devices).toHaveLength(1);
   });
 
   it("lista vazia retorna objeto vazio", () => {
@@ -329,10 +329,10 @@ describe("devices — batch items endpoint", () => {
     const itemsByHost: Record<string, typeof items> = {};
     for (const item of items) {
       if (!itemsByHost[item.hostid]) itemsByHost[item.hostid] = [];
-      itemsByHost[item.hostid].push(item);
+      itemsByHost[item.hostid]!.push(item);
     }
-    expect(itemsByHost["h1"]).toHaveLength(2);
-    expect(itemsByHost["h2"]).toHaveLength(1);
+    expect(itemsByHost["h1"]!).toHaveLength(2);
+    expect(itemsByHost["h2"]!).toHaveLength(1);
   });
 });
 

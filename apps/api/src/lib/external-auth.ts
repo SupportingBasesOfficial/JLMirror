@@ -80,8 +80,8 @@ export async function getUserTenantAuth(
 
   return {
     roles: result.data.rows.map((r) => r.role),
-    primaryTenantId: result.data.rows[0].tenant_id,
-    scope: result.data.rows[0].scope as "global" | "tenant",
+    primaryTenantId: result.data.rows[0]!.tenant_id,
+    scope: result.data.rows[0]!.scope as "global" | "tenant",
     tenantIds: result.data.rows.map((r) => r.tenant_id),
     tenants: result.data.rows.map((r) => ({
       tenant_id: r.tenant_id,

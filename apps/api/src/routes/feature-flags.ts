@@ -75,7 +75,7 @@ function pickVariant(
     cumulative += v.weight;
     if (hashVal < cumulative) return { key: v.key, value: v.value };
   }
-  return { key: variants[0].key, value: variants[0].value };
+  return { key: variants[0]!.key, value: variants[0]!.value };
 }
 
 // ========== List ==========

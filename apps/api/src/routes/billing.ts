@@ -225,8 +225,8 @@ billingRoute.post(
         customer: customerResult.id,
         billingType: data.payment_method,
         value: data.amount_cents / 100,
-        cycle: cycleMap[data.billing_cycle],
-        nextDueDate: new Date().toISOString().split("T")[0],
+        cycle: cycleMap[data.billing_cycle]!,
+        nextDueDate: new Date().toISOString().split("T")[0]!,
         description: `JLMIRROR ${data.plan.toUpperCase()}`,
       });
 

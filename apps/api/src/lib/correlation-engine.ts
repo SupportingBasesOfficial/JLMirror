@@ -215,7 +215,7 @@ async function processRule(
   for (const [groupKey, groupProblems] of groups) {
     if (groupProblems.length < 2) {
       // Evento isolado — não forma grupo, processa normalmente
-      await processSingleEvent(rule, tenantId, groupProblems[0]);
+      await processSingleEvent(rule, tenantId, groupProblems[0]!);
       continue;
     }
 
@@ -412,7 +412,7 @@ async function processGroup(
   // Título do grupo
   const title =
     groupProblems.length === 1
-      ? groupProblems[0].name
+      ? groupProblems[0]!.name
       : `${groupProblems.length} eventos correlacionados: ${devices.slice(0, 3).join(", ")}${devices.length > 3 ? ` (+${devices.length - 3})` : ""}`;
 
   const firstEventAt = Math.min(

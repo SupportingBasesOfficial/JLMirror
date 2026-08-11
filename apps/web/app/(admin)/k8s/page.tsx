@@ -156,7 +156,7 @@ export default function K8sPage() {
 
   useEffect(() => {
     if (cData?.clusters?.length && !selectedCluster) {
-      setSelectedCluster(cData.clusters[0].id);
+      setSelectedCluster(cData.clusters[0]!.id);
     }
   }, [cData, selectedCluster]);
 

@@ -716,11 +716,11 @@ function CreateWorkflowForm({
   const moveStep = (idx: number, dir: "up" | "down") => {
     if (dir === "up" && idx > 0) {
       const newSteps = [...steps];
-      [newSteps[idx - 1], newSteps[idx]] = [newSteps[idx], newSteps[idx - 1]];
+      [newSteps[idx - 1], newSteps[idx]] = [newSteps[idx]!, newSteps[idx - 1]!];
       setSteps(newSteps.map((s, i) => ({ ...s, step_order: i })));
     } else if (dir === "down" && idx < steps.length - 1) {
       const newSteps = [...steps];
-      [newSteps[idx + 1], newSteps[idx]] = [newSteps[idx], newSteps[idx + 1]];
+      [newSteps[idx + 1], newSteps[idx]] = [newSteps[idx]!, newSteps[idx + 1]!];
       setSteps(newSteps.map((s, i) => ({ ...s, step_order: i })));
     }
   };

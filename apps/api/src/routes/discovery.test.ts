@@ -266,8 +266,8 @@ describe("discovery — logica de topology", () => {
       vendor: d.vendor,
     }));
     expect(nodes).toHaveLength(2);
-    expect(nodes[0].label).toBe("router-01");
-    expect(nodes[1].label).toBe("192.168.1.2");
+    expect(nodes[0]!.label).toBe("router-01");
+    expect(nodes[1]!.label).toBe("192.168.1.2");
   });
 
   it("converte links em edges", () => {
@@ -292,8 +292,8 @@ describe("discovery — logica de topology", () => {
       speed: l.link_speed,
     }));
     expect(edges).toHaveLength(1);
-    expect(edges[0].source).toBe("dev-1");
-    expect(edges[0].target).toBe("dev-2");
+    expect(edges[0]!.source).toBe("dev-1");
+    expect(edges[0]!.target).toBe("dev-2");
   });
 });
 

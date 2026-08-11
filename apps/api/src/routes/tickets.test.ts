@@ -344,16 +344,16 @@ describe("tickets — logica de prioridade", () => {
       { priority: "medium" },
     ];
     const sorted = sortByPriority(tickets);
-    expect(sorted[0].priority).toBe("urgent");
-    expect(sorted[1].priority).toBe("medium");
-    expect(sorted[2].priority).toBe("low");
+    expect(sorted[0]!.priority).toBe("urgent");
+    expect(sorted[1]!.priority).toBe("medium");
+    expect(sorted[2]!.priority).toBe("low");
   });
 
   it("prioridade desconhecida vai para o final", () => {
     const tickets = [{ priority: "unknown" }, { priority: "low" }];
     const sorted = sortByPriority(tickets);
-    expect(sorted[0].priority).toBe("low");
-    expect(sorted[1].priority).toBe("unknown");
+    expect(sorted[0]!.priority).toBe("low");
+    expect(sorted[1]!.priority).toBe("unknown");
   });
 });
 
@@ -382,7 +382,7 @@ describe("tickets — edge cases", () => {
     ];
     const publicComments = comments.filter((c) => !c.is_internal);
     expect(publicComments).toHaveLength(1);
-    expect(publicComments[0].body).toBe("Publico");
+    expect(publicComments[0]!.body).toBe("Publico");
   });
 
   it("ticket sem categoria tem category_name null", () => {

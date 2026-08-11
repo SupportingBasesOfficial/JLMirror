@@ -17,6 +17,7 @@
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
     "resolveJsonModule": true
   },
   "exclude": ["node_modules"]

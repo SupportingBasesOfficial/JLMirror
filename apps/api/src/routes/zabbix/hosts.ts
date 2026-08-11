@@ -270,7 +270,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       const itemsByHost: Record<string, ZabbixItem[]> = {};
       for (const item of items) {
         if (!itemsByHost[item.hostid]) itemsByHost[item.hostid] = [];
-        itemsByHost[item.hostid].push(item);
+        itemsByHost[item.hostid]!.push(item);
       }
 
       return c.json({ items, itemsByHost });

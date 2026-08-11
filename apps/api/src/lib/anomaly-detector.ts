@@ -30,15 +30,32 @@ export function detectZScore(
   config: AnomalyConfig,
 ): AnomalyResult {
   if (values.length < 2) {
-    return { isAnomaly: false, observedValue: observed, expectedValue: observed, deviationScore: 0, thresholdLow: null, thresholdHigh: null, severity: "info" };
+    return {
+      isAnomaly: false,
+      observedValue: observed,
+      expectedValue: observed,
+      deviationScore: 0,
+      thresholdLow: null,
+      thresholdHigh: null,
+      severity: "info",
+    };
   }
 
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  const variance =
+    values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
   const stdDev = Math.sqrt(variance);
 
   if (stdDev === 0) {
-    return { isAnomaly: false, observedValue: observed, expectedValue: mean, deviationScore: 0, thresholdLow: mean, thresholdHigh: mean, severity: "info" };
+    return {
+      isAnomaly: false,
+      observedValue: observed,
+      expectedValue: mean,
+      deviationScore: 0,
+      thresholdLow: mean,
+      thresholdHigh: mean,
+      severity: "info",
+    };
   }
 
   const zScore = Math.abs((observed - mean) / stdDev);
@@ -46,7 +63,12 @@ export function detectZScore(
   const thresholdLow = mean - config.zscoreThreshold * stdDev;
 
   const isAnomaly = zScore > config.zscoreThreshold;
-  const severity = zScore > config.criticalThreshold ? "critical" : zScore > config.warningThreshold ? "warning" : "info";
+  const severity =
+    zScore > config.criticalThreshold
+      ? "critical"
+      : zScore > config.warningThreshold
+        ? "warning"
+        : "info";
 
   return {
     isAnomaly,
@@ -66,24 +88,40 @@ export function detectIQR(
   config: AnomalyConfig,
 ): AnomalyResult {
   if (values.length < 4) {
-    return { isAnomaly: false, observedValue: observed, expectedValue: observed, deviationScore: 0, thresholdLow: null, thresholdHigh: null, severity: "info" };
+    return {
+      isAnomaly: false,
+      observedValue: observed,
+      expectedValue: observed,
+      deviationScore: 0,
+      thresholdLow: null,
+      thresholdHigh: null,
+      severity: "info",
+    };
   }
 
   const sorted = [...values].sort((a, b) => a - b);
   const q1Index = Math.floor(sorted.length * 0.25);
   const q3Index = Math.floor(sorted.length * 0.75);
-  const q1 = sorted[q1Index];
-  const q3 = sorted[q3Index];
+  const q1 = sorted[q1Index]!;
+  const q3 = sorted[q3Index]!;
   const iqr = q3 - q1;
 
   const thresholdLow = q1 - config.iqrMultiplier * iqr;
   const thresholdHigh = q3 + config.iqrMultiplier * iqr;
-  const median = sorted[Math.floor(sorted.length / 2)];
+  const median = sorted[Math.floor(sorted.length / 2)]!;
 
   const isAnomaly = observed < thresholdLow || observed > thresholdHigh;
-  const deviation = median !== 0 ? Math.abs(observed - median) / Math.abs(median) : Math.abs(observed - median);
+  const deviation =
+    median !== 0
+      ? Math.abs(observed - median) / Math.abs(median)
+      : Math.abs(observed - median);
 
-  const severity = deviation > config.criticalThreshold ? "critical" : deviation > config.warningThreshold ? "warning" : "info";
+  const severity =
+    deviation > config.criticalThreshold
+      ? "critical"
+      : deviation > config.warningThreshold
+        ? "warning"
+        : "info";
 
   return {
     isAnomaly,
@@ -103,28 +141,46 @@ export function detectEWMA(
   config: AnomalyConfig,
 ): AnomalyResult {
   if (values.length < 2) {
-    return { isAnomaly: false, observedValue: observed, expectedValue: observed, deviationScore: 0, thresholdLow: null, thresholdHigh: null, severity: "info" };
+    return {
+      isAnomaly: false,
+      observedValue: observed,
+      expectedValue: observed,
+      deviationScore: 0,
+      thresholdLow: null,
+      thresholdHigh: null,
+      severity: "info",
+    };
   }
 
   const alpha = config.ewmaAlpha;
-  let ewma = values[0];
+  let ewma = values[0]!;
   for (let i = 1; i < values.length; i++) {
-    ewma = alpha * values[i] + (1 - alpha) * ewma;
+    ewma = alpha * values[i]! + (1 - alpha) * ewma;
   }
 
   // Calcula desvio dos residuos EWMA
   const residuals: number[] = [];
-  let prevEwma = values[0];
+  let prevEwma = values[0]!;
   for (let i = 1; i < values.length; i++) {
-    residuals.push(values[i] - prevEwma);
-    prevEwma = alpha * values[i] + (1 - alpha) * prevEwma;
+    residuals.push(values[i]! - prevEwma);
+    prevEwma = alpha * values[i]! + (1 - alpha) * prevEwma;
   }
   const residualMean = residuals.reduce((a, b) => a + b, 0) / residuals.length;
-  const residualVariance = residuals.reduce((sum, v) => sum + Math.pow(v - residualMean, 2), 0) / residuals.length;
+  const residualVariance =
+    residuals.reduce((sum, v) => sum + Math.pow(v - residualMean, 2), 0) /
+    residuals.length;
   const residualStdDev = Math.sqrt(residualVariance);
 
   if (residualStdDev === 0) {
-    return { isAnomaly: false, observedValue: observed, expectedValue: ewma, deviationScore: 0, thresholdLow: ewma, thresholdHigh: ewma, severity: "info" };
+    return {
+      isAnomaly: false,
+      observedValue: observed,
+      expectedValue: ewma,
+      deviationScore: 0,
+      thresholdLow: ewma,
+      thresholdHigh: ewma,
+      severity: "info",
+    };
   }
 
   const deviation = Math.abs(observed - ewma) / residualStdDev;
@@ -132,7 +188,12 @@ export function detectEWMA(
   const thresholdLow = ewma - config.zscoreThreshold * residualStdDev;
 
   const isAnomaly = deviation > config.zscoreThreshold;
-  const severity = deviation > config.criticalThreshold ? "critical" : deviation > config.warningThreshold ? "warning" : "info";
+  const severity =
+    deviation > config.criticalThreshold
+      ? "critical"
+      : deviation > config.warningThreshold
+        ? "warning"
+        : "info";
 
   return {
     isAnomaly,

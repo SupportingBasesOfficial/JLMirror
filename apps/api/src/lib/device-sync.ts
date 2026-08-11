@@ -71,11 +71,11 @@ export async function syncAllTenants(): Promise<void> {
 
     for (let j = 0; j < results.length; j++) {
       completed++;
-      const r = results[j];
+      const r = results[j]!;
       if (r.status === "rejected") {
         failed++;
         logger.error("Erro no sync do tenant", {
-          tenantId: chunk[j].tenant_id,
+          tenantId: chunk[j]!.tenant_id,
           error:
             r.reason instanceof Error ? r.reason.message : String(r.reason),
         });

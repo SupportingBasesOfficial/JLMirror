@@ -31,12 +31,20 @@ const TIME_AXIS_HEIGHT = 14;
 
 function formatTimeLabel(ts: number): string {
   const d = new Date(ts * 1000);
- const h = d.getHours().toString().padStart(2, "0");
+  const h = d.getHours().toString().padStart(2, "0");
   const m = d.getMinutes().toString().padStart(2, "0");
   return `${h}:${m}`;
 }
 
-export function MultiSparkline({ series, height = 120, unit, formatValue, timeRangeSeconds, nowSec, thresholds }: MultiSparklineProps) {
+export function MultiSparkline({
+  series,
+  height = 120,
+  unit,
+  formatValue,
+  timeRangeSeconds,
+  nowSec,
+  thresholds,
+}: MultiSparklineProps) {
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
@@ -62,8 +70,8 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
         if (nextZoom === prevZoom) return prevZoom;
         // Conteudo sob cursor: panX + mouseRatio * SVG_WIDTH / prevZoom
         // Apos zoom: panX' + mouseRatio * SVG_WIDTH / nextZoom = mesmo conteudo
-        const contentX = panX + mouseRatio * SVG_WIDTH / prevZoom;
-        const newPan = contentX - mouseRatio * SVG_WIDTH / nextZoom;
+        const contentX = panX + (mouseRatio * SVG_WIDTH) / prevZoom;
+        const newPan = contentX - (mouseRatio * SVG_WIDTH) / nextZoom;
         const maxPan = SVG_WIDTH - SVG_WIDTH / nextZoom;
         setPanX(Math.max(0, Math.min(maxPan, newPan)));
         return nextZoom;
@@ -73,25 +81,31 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
     return () => el.removeEventListener("wheel", onWheel);
   }, [hasData, panX]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (zoom === 1) return;
-    isDragging.current = true;
-    lastDragX.current = e.clientX;
-  }, [zoom]);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (zoom === 1) return;
+      isDragging.current = true;
+      lastDragX.current = e.clientX;
+    },
+    [zoom],
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseRatio = (e.clientX - rect.left) / rect.width;
-    const vbX = mouseRatio * SVG_WIDTH;
-    setHoverX(vbX);
-    if (!isDragging.current) return;
-    const dx = e.clientX - lastDragX.current;
-    lastDragX.current = e.clientX;
-    const dxVb = (dx / rect.width) * SVG_WIDTH;
-    const dxContent = dxVb / zoom;
-    const maxPan = SVG_WIDTH - SVG_WIDTH / zoom;
-    setPanX((prev) => Math.max(0, Math.min(maxPan, prev - dxContent)));
-  }, [zoom]);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mouseRatio = (e.clientX - rect.left) / rect.width;
+      const vbX = mouseRatio * SVG_WIDTH;
+      setHoverX(vbX);
+      if (!isDragging.current) return;
+      const dx = e.clientX - lastDragX.current;
+      lastDragX.current = e.clientX;
+      const dxVb = (dx / rect.width) * SVG_WIDTH;
+      const dxContent = dxVb / zoom;
+      const maxPan = SVG_WIDTH - SVG_WIDTH / zoom;
+      setPanX((prev) => Math.max(0, Math.min(maxPan, prev - dxContent)));
+    },
+    [zoom],
+  );
 
   const handleMouseUp = useCallback(() => {
     isDragging.current = false;
@@ -128,11 +142,14 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
 
   // Largura dinamica de linha baseada na quantidade de pontos
   const dataLen = series.find((s) => s.data.length > 0)?.data.length ?? 0;
-  const baseStroke = dataLen > 500 ? 0.8 : dataLen > 200 ? 1.0 : dataLen > 100 ? 1.3 : 1.6;
+  const baseStroke =
+    dataLen > 500 ? 0.8 : dataLen > 200 ? 1.0 : dataLen > 100 ? 1.3 : 1.6;
 
   // Timestamps derivados do range
   const currentNowSec = nowSec ?? 0;
-  const fromSec = timeRangeSeconds ? currentNowSec - timeRangeSeconds : currentNowSec - 3600;
+  const fromSec = timeRangeSeconds
+    ? currentNowSec - timeRangeSeconds
+    : currentNowSec - 3600;
   const durationSec = currentNowSec - fromSec;
 
   // Ticks de tempo: posicao fixa no viewBox, label calculado do range visivel
@@ -143,7 +160,9 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
   for (let i = 0; i <= tickCount; i++) {
     const frac = i / tickCount;
     const x = frac * SVG_WIDTH;
-    const contentFrac = (visibleFromContent + frac * (visibleToContent - visibleFromContent)) / SVG_WIDTH;
+    const contentFrac =
+      (visibleFromContent + frac * (visibleToContent - visibleFromContent)) /
+      SVG_WIDTH;
     const ts = fromSec + contentFrac * durationSec;
     ticks.push({ x, label: formatTimeLabel(ts) });
   }
@@ -167,30 +186,40 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
   };
 
   // Ordena renderizacao: serie focada por ultimo (fica acima)
-  const renderOrder = focusedIndex !== null
-    ? [...series.keys()].sort((a, _b) => (a === focusedIndex ? 1 : -1))
-    : series.keys();
+  const renderOrder =
+    focusedIndex !== null
+      ? [...series.keys()].sort((a, _b) => (a === focusedIndex ? 1 : -1))
+      : series.keys();
 
   // Transform: translada e escala apenas o conteudo do grafico
   // Conteudo na posicao p aparece em viewBox x: (p - panX) * zoom
   const transform = `translate(${-clampedPan * zoom} 0) scale(${zoom} 1)`;
 
   // Calcula ponto mais proximo do hover para tooltip
-  const hoverDataIndex = hoverX !== null && dataLen > 1
-    ? Math.round((clampedPan + hoverX / zoom) / SVG_WIDTH * (dataLen - 1))
-    : null;
-  const clampedHoverIdx = hoverDataIndex !== null
-    ? Math.max(0, Math.min(dataLen - 1, hoverDataIndex))
-    : null;
-  const hoverTs = clampedHoverIdx !== null && dataLen > 1
-    ? fromSec + (clampedHoverIdx / (dataLen - 1)) * durationSec
-    : null;
-  const hoverVbX = clampedHoverIdx !== null && dataLen > 1
-    ? ((clampedHoverIdx / Math.max(dataLen - 1, 1)) * SVG_WIDTH - clampedPan) * zoom
-    : null;
+  const hoverDataIndex =
+    hoverX !== null && dataLen > 1
+      ? Math.round(((clampedPan + hoverX / zoom) / SVG_WIDTH) * (dataLen - 1))
+      : null;
+  const clampedHoverIdx =
+    hoverDataIndex !== null
+      ? Math.max(0, Math.min(dataLen - 1, hoverDataIndex))
+      : null;
+  const hoverTs =
+    clampedHoverIdx !== null && dataLen > 1
+      ? fromSec + (clampedHoverIdx / (dataLen - 1)) * durationSec
+      : null;
+  const hoverVbX =
+    clampedHoverIdx !== null && dataLen > 1
+      ? ((clampedHoverIdx / Math.max(dataLen - 1, 1)) * SVG_WIDTH -
+          clampedPan) *
+        zoom
+      : null;
 
   return (
-    <div className="rounded-md p-2.5 px-3.5" style={{ background: "var(--surface-2)" }}>
+    <div
+      className="rounded-md p-2.5 px-3.5"
+      style={{ background: "var(--surface-2)" }}
+    >
       {/* Legenda interativa + controles de zoom */}
       <div className="flex gap-3 mb-1.5 flex-wrap items-center">
         {series.map((s, i) => {
@@ -223,7 +252,10 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
               {s.label}
               {s.data.length > 0 && (
                 <span style={{ color: s.color, fontWeight: "bold" }}>
-                  {formatValue ? formatValue(s.data[s.data.length - 1]) : s.data[s.data.length - 1].toFixed(2)}{unit ? ` ${unit}` : ""}
+                  {formatValue
+                    ? formatValue(s.data[s.data.length - 1]!)
+                    : s.data[s.data.length - 1]!.toFixed(2)}
+                  {unit ? ` ${unit}` : ""}
                 </span>
               )}
             </button>
@@ -233,7 +265,11 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
           <button
             onClick={resetZoom}
             className="text-[11px] px-2 py-0.5 rounded ml-auto transition-colors"
-            style={{ background: "var(--border-subtle)", color: "var(--text-primary)", cursor: "pointer" }}
+            style={{
+              background: "var(--border-subtle)",
+              color: "var(--text-primary)",
+              cursor: "pointer",
+            }}
           >
             Reset zoom ({zoom.toFixed(1)}x)
           </button>
@@ -261,7 +297,6 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
           <g clipPath="url(#chart-clip)">
             <g transform={transform}>
               {Array.from(renderOrder).map((idx) => {
-                 
                 const s = series[idx];
                 if (!s || s.data.length === 0) return null;
                 const points = s.data.map((v, i) => {
@@ -272,11 +307,25 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
                 const polylinePoints = points.join(" ");
                 const gradId = `multi-spark-grad-${idx}-${s.color.replace("#", "")}`;
                 return (
-                  <g key={idx} style={{ transition: "opacity 0.3s ease", opacity: getOpacity(idx) }}>
+                  <g
+                    key={idx}
+                    style={{
+                      transition: "opacity 0.3s ease",
+                      opacity: getOpacity(idx),
+                    }}
+                  >
                     <defs>
                       <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={s.color} stopOpacity={getGradOpacity(idx)} />
-                        <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+                        <stop
+                          offset="0%"
+                          stopColor={s.color}
+                          stopOpacity={getGradOpacity(idx)}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor={s.color}
+                          stopOpacity="0"
+                        />
                       </linearGradient>
                     </defs>
                     <polygon
@@ -342,76 +391,110 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
             );
           })}
           {/* Linha vertical e pontos de hover */}
-          {hoverVbX !== null && hoverVbX >= 0 && hoverVbX <= SVG_WIDTH && clampedHoverIdx !== null && (
-            <>
-              <line
-                x1={hoverVbX}
-                y1="0"
-                x2={hoverVbX}
-                y2={height - 8}
-                stroke="var(--text-muted)"
-                strokeWidth="1"
-                strokeDasharray="3 3"
-                vectorEffect="non-scaling-stroke"
-                opacity="0.6"
-              />
-              {series.map((s, i) => {
-                if (s.data.length === 0) return null;
-                 
-                const v = s.data[clampedHoverIdx];
-                if (v === undefined) return null;
-                const y = height - 8 - ((v - min) / range) * (height - 16);
-                return (
-                  <circle
-                    key={i}
-                    cx={hoverVbX}
-                    cy={y}
-                    r="3"
-                    fill={s.color}
-                    stroke="var(--surface-2)"
-                    strokeWidth="1.5"
-                    vectorEffect="non-scaling-stroke"
-                    style={{ opacity: getOpacity(i) }}
-                  />
-                );
-              })}
-            </>
-          )}
+          {hoverVbX !== null &&
+            hoverVbX >= 0 &&
+            hoverVbX <= SVG_WIDTH &&
+            clampedHoverIdx !== null && (
+              <>
+                <line
+                  x1={hoverVbX}
+                  y1="0"
+                  x2={hoverVbX}
+                  y2={height - 8}
+                  stroke="var(--text-muted)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                  vectorEffect="non-scaling-stroke"
+                  opacity="0.6"
+                />
+                {series.map((s, i) => {
+                  if (s.data.length === 0) return null;
+
+                  const v = s.data[clampedHoverIdx];
+                  if (v === undefined) return null;
+                  const y = height - 8 - ((v - min) / range) * (height - 16);
+                  return (
+                    <circle
+                      key={i}
+                      cx={hoverVbX}
+                      cy={y}
+                      r="3"
+                      fill={s.color}
+                      stroke="var(--surface-2)"
+                      strokeWidth="1.5"
+                      vectorEffect="non-scaling-stroke"
+                      style={{ opacity: getOpacity(i) }}
+                    />
+                  );
+                })}
+              </>
+            )}
         </svg>
         {/* Tooltip HTML com valores do ponto hover */}
-        {hoverVbX !== null && hoverVbX >= 0 && hoverVbX <= SVG_WIDTH && clampedHoverIdx !== null && hoverTs !== null && (
-          <div
-            className="absolute pointer-events-none rounded-md px-2.5 py-1.5 z-10"
-            style={{
-              background: "rgba(16,23,28,0.92)",
-              border: "1px solid var(--border-default)",
-              left: `${(hoverVbX / SVG_WIDTH) * 100}%`,
-              top: 0,
-              transform: hoverVbX > SVG_WIDTH / 2 ? "translateX(-100%) translateX(-8px)" : "translateX(8px)",
-            }}
-          >
-            <div className="text-[10px] mb-1" style={{ color: "var(--text-muted)", fontFamily: "'JetBrains Mono','Consolas',monospace" }}>
-              {formatTimeLabel(hoverTs)}
+        {hoverVbX !== null &&
+          hoverVbX >= 0 &&
+          hoverVbX <= SVG_WIDTH &&
+          clampedHoverIdx !== null &&
+          hoverTs !== null && (
+            <div
+              className="absolute pointer-events-none rounded-md px-2.5 py-1.5 z-10"
+              style={{
+                background: "rgba(16,23,28,0.92)",
+                border: "1px solid var(--border-default)",
+                left: `${(hoverVbX / SVG_WIDTH) * 100}%`,
+                top: 0,
+                transform:
+                  hoverVbX > SVG_WIDTH / 2
+                    ? "translateX(-100%) translateX(-8px)"
+                    : "translateX(8px)",
+              }}
+            >
+              <div
+                className="text-[10px] mb-1"
+                style={{
+                  color: "var(--text-muted)",
+                  fontFamily: "'JetBrains Mono','Consolas',monospace",
+                }}
+              >
+                {formatTimeLabel(hoverTs)}
+              </div>
+              {series.map((s, i) => {
+                if (s.data.length === 0) return null;
+
+                const v = s.data[clampedHoverIdx];
+                if (v === undefined) return null;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5 text-[11px]"
+                    style={{ opacity: getOpacity(i) }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        background: s.color,
+                        borderRadius: 1,
+                        display: "inline-block",
+                      }}
+                    />
+                    <span style={{ color: "var(--text-primary)" }}>
+                      {s.label}:
+                    </span>
+                    <span style={{ color: s.color, fontWeight: "bold" }}>
+                      {formatValue ? formatValue(v) : v.toFixed(2)}
+                      {unit ? ` ${unit}` : ""}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            {series.map((s, i) => {
-              if (s.data.length === 0) return null;
-               
-              const v = s.data[clampedHoverIdx];
-              if (v === undefined) return null;
-              return (
-                <div key={i} className="flex items-center gap-1.5 text-[11px]" style={{ opacity: getOpacity(i) }}>
-                  <span style={{ width: 6, height: 6, background: s.color, borderRadius: 1, display: "inline-block" }} />
-                  <span style={{ color: "var(--text-primary)" }}>{s.label}:</span>
-                  <span style={{ color: s.color, fontWeight: "bold" }}>
-                    {formatValue ? formatValue(v) : v.toFixed(2)}{unit ? ` ${unit}` : ""}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
+          )}
         {/* Eixo de tempo em HTML para nao distorcer */}
-        <div className="flex justify-between px-0.5" style={{ height: TIME_AXIS_HEIGHT }}>
+        <div
+          className="flex justify-between px-0.5"
+          style={{ height: TIME_AXIS_HEIGHT }}
+        >
           {ticks.map((tick, i) => (
             <span
               key={i}
@@ -419,7 +502,12 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
               style={{
                 color: "var(--text-muted)",
                 fontFamily: "'JetBrains Mono','Consolas',monospace",
-                textAlign: i === 0 ? "left" : i === ticks.length - 1 ? "right" : "center",
+                textAlign:
+                  i === 0
+                    ? "left"
+                    : i === ticks.length - 1
+                      ? "right"
+                      : "center",
                 flex: 1,
               }}
             >
@@ -428,8 +516,13 @@ export function MultiSparkline({ series, height = 120, unit, formatValue, timeRa
           ))}
         </div>
       </div>
-      <div className="text-[10px] text-center mt-0.5" style={{ color: "var(--text-muted)" }}>
-        {zoom === 1 ? "Scroll para zoom · Arraste para navegar" : `Zoom ${zoom.toFixed(1)}x — arraste para navegar`}
+      <div
+        className="text-[10px] text-center mt-0.5"
+        style={{ color: "var(--text-muted)" }}
+      >
+        {zoom === 1
+          ? "Scroll para zoom · Arraste para navegar"
+          : `Zoom ${zoom.toFixed(1)}x — arraste para navegar`}
       </div>
     </div>
   );

@@ -211,8 +211,8 @@ describe("drift — logica de drift detection", () => {
       { hostname: "router-01", new_key: "value" },
     );
     expect(drifts).toHaveLength(1);
-    expect(drifts[0].drift_type).toBe("added");
-    expect(drifts[0].severity).toBe("warning");
+    expect(drifts[0]!.drift_type).toBe("added");
+    expect(drifts[0]!.severity).toBe("warning");
   });
 
   it("detecta chave removida", () => {
@@ -221,8 +221,8 @@ describe("drift — logica de drift detection", () => {
       { hostname: "router-01" },
     );
     expect(drifts).toHaveLength(1);
-    expect(drifts[0].drift_type).toBe("removed");
-    expect(drifts[0].severity).toBe("critical");
+    expect(drifts[0]!.drift_type).toBe("removed");
+    expect(drifts[0]!.severity).toBe("critical");
   });
 
   it("detecta chave modificada", () => {
@@ -231,8 +231,8 @@ describe("drift — logica de drift detection", () => {
       { hostname: "router-02" },
     );
     expect(drifts).toHaveLength(1);
-    expect(drifts[0].drift_type).toBe("modified");
-    expect(drifts[0].severity).toBe("warning");
+    expect(drifts[0]!.drift_type).toBe("modified");
+    expect(drifts[0]!.severity).toBe("warning");
   });
 
   it("retorna vazio quando configs sao identicas", () => {

@@ -200,7 +200,7 @@ export function ServicesProcesses({
                   </div>
                   {stopped.map((svc) => {
                     const nameMatch = /service\.info\[([^\],]+)/.exec(svc.key_);
-                    const svcName = nameMatch ? nameMatch[1] : svc.name;
+                    const svcName = nameMatch ? nameMatch[1]! : svc.name;
                     const trigger = findTriggerForService(svcName, triggers);
                     const description =
                       WINDOWS_SERVICE_DESCRIPTIONS[svcName] ??
@@ -350,14 +350,14 @@ export function ServicesProcesses({
               >();
               for (const cpu of cpuProcs) {
                 const nameMatch = /proc\.cpu\.util\[([^\],]+)/.exec(cpu.key_);
-                const name = nameMatch ? nameMatch[1] : cpu.name;
+                const name = nameMatch ? nameMatch[1]! : cpu.name;
                 const existing = procMap.get(name) ?? { name, cpu: 0, mem: 0 };
                 existing.cpu = Number.parseFloat(cpu.lastvalue);
                 procMap.set(name, existing);
               }
               for (const mem of memProcs) {
                 const nameMatch = /proc\.mem\[([^\],]+)/.exec(mem.key_);
-                const name = nameMatch ? nameMatch[1] : mem.name;
+                const name = nameMatch ? nameMatch[1]! : mem.name;
                 const existing = procMap.get(name) ?? { name, cpu: 0, mem: 0 };
                 existing.mem = Number.parseFloat(mem.lastvalue);
                 procMap.set(name, existing);

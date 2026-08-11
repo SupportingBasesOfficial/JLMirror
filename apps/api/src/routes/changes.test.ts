@@ -938,8 +938,8 @@ describe("changes — logica de parallel queries (stats)", () => {
     );
     const results = await Promise.all(queries);
     expect(results).toHaveLength(10);
-    expect(results[0].data.rows[0].count).toBe("0");
-    expect(results[9].data.rows[0].count).toBe("9");
+    expect(results[0]!.data.rows[0]!.count).toBe("0");
+    expect(results[9]!.data.rows[0]!.count).toBe("9");
   });
 
   it("Promise.all propaga erro de qualquer query", async () => {

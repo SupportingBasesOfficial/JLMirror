@@ -36,7 +36,7 @@ describe("collectReportData", () => {
 
     expect(result.title).toBe("Relatório de Devices");
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].hostname).toBe("server-01");
+    expect(result.rows[0]!.hostname).toBe("server-01");
     expect(result.columns).toContain("id");
     expect(result.columns).toContain("hostname");
   });
@@ -60,7 +60,7 @@ describe("collectReportData", () => {
     );
 
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0].subject).toBe("Problema CPU");
+    expect(result.rows[0]!.subject).toBe("Problema CPU");
   });
 
   it("coleta dados de multiplas fontes", async () => {

@@ -1111,7 +1111,7 @@ function WorkLogRow({
       icon: <CheckCircle2 size={12} />,
     },
   };
-  const st = statusConfig[log.status] ?? statusConfig.finished;
+  const st = statusConfig[log.status] ?? statusConfig.finished!;
 
   return (
     <div
@@ -1634,7 +1634,7 @@ function CreateContractModal({
     rate_meeting: "",
     rate_research: "",
     rate_default: "",
-    start_date: new Date().toISOString().split("T")[0],
+    start_date: new Date().toISOString().split("T")[0]!,
     end_date: "",
     auto_close_tickets_on_expire: "false",
     notes: "",

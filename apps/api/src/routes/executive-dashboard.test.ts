@@ -52,7 +52,7 @@ describe("executive-dashboard helpers — safeRows", () => {
     };
     const rows = safeRows(result);
     expect(rows).toHaveLength(2);
-    expect(rows[0].date).toBe("2026-08-01");
+    expect(rows[0]!.date).toBe("2026-08-01");
   });
 
   it("retorna array vazio quando data e null", () => {

@@ -94,7 +94,7 @@ export default async function DashboardPage() {
   for (const t of activeTriggers) {
     for (const h of t.hosts ?? []) {
       if (!triggersByHost[h.hostid]) triggersByHost[h.hostid] = [];
-      triggersByHost[h.hostid].push(t);
+      triggersByHost[h.hostid]!.push(t);
     }
   }
 

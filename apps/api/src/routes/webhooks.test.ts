@@ -21,12 +21,12 @@ describe("webhooks — isSafeWebhookUrl (SSRF prevention)", () => {
       if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
         const parts = hostname.split(".").map(Number);
         if (
-          parts[0] === 10 ||
-          parts[0] === 127 ||
-          (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-          (parts[0] === 192 && parts[1] === 168) ||
-          (parts[0] === 169 && parts[1] === 254) ||
-          parts[0] === 0
+          parts[0]! === 10 ||
+          parts[0]! === 127 ||
+          (parts[0]! === 172 && parts[1]! >= 16 && parts[1]! <= 31) ||
+          (parts[0]! === 192 && parts[1]! === 168) ||
+          (parts[0]! === 169 && parts[1]! === 254) ||
+          parts[0]! === 0
         ) {
           return false;
         }

@@ -59,7 +59,9 @@ export function CursorProvider({ children }: { children: ReactNode }) {
 
       const target = e.target as HTMLElement;
       const isInteractive =
-        target.closest("a, button, input, [role='button'], [data-cursor='hover']") !== null;
+        target.closest(
+          "a, button, input, [role='button'], [data-cursor='hover']",
+        ) !== null;
       setHovering(isInteractive);
     };
 
@@ -147,7 +149,8 @@ export function CursorProvider({ children }: { children: ReactNode }) {
     width: 400,
     height: 400,
     borderRadius: "50%",
-    background: "radial-gradient(circle, rgba(27,168,152,0.08) 0%, transparent 60%)",
+    background:
+      "radial-gradient(circle, rgba(27,168,152,0.08) 0%, transparent 60%)",
     transform: "translate(-50%, -50%)",
     pointerEvents: "none",
     zIndex: 0,
@@ -197,7 +200,11 @@ interface Particle {
   size: number;
 }
 
-export function ParticleTrail({ maxParticles = 80 }: { maxParticles?: number }) {
+export function ParticleTrail({
+  maxParticles = 80,
+}: {
+  maxParticles?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -250,7 +257,7 @@ export function ParticleTrail({ maxParticles = 80 }: { maxParticles?: number }) 
       ctx.clearRect(0, 0, width, height);
 
       for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
+        const p = particles[i]!;
         p.x += p.vx;
         p.y += p.vy;
         p.vy += 0.02;
@@ -349,7 +356,8 @@ export function MagneticButton({
 
   const commonStyle: CSSProperties = {
     ...style,
-    transition: "transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s",
+    transition:
+      "transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), box-shadow 0.3s",
     willChange: "transform",
   };
 
@@ -407,17 +415,16 @@ export function SpotlightCard({
   spotlightSize = 300,
 }: SpotlightCardProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [spotlight, setSpotlight] = useState<{ x: number; y: number } | null>(null);
-
-  const handleMouseMove = useCallback(
-    (e: ReactMouseEvent<HTMLDivElement>) => {
-      const el = ref.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      setSpotlight({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    },
-    [],
+  const [spotlight, setSpotlight] = useState<{ x: number; y: number } | null>(
+    null,
   );
+
+  const handleMouseMove = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setSpotlight({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
 
   const handleMouseLeave = useCallback(() => setSpotlight(null), []);
 
@@ -485,7 +492,8 @@ export function TiltCard({
   const handleMouseLeave = useCallback(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.transform = "perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)";
+    el.style.transform =
+      "perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)";
   }, []);
 
   return (
@@ -615,7 +623,11 @@ export function ParallaxLayer({
     <div
       ref={ref}
       className={className}
-      style={{ ...style, transition: "transform 0.1s ease-out", willChange: "transform" }}
+      style={{
+        ...style,
+        transition: "transform 0.1s ease-out",
+        willChange: "transform",
+      }}
     >
       {children}
     </div>

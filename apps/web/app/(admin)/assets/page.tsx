@@ -310,12 +310,12 @@ export default function AssetsPage() {
         const key = "__sem_grupo";
         if (!groups[key])
           groups[key] = { groupName: "Sem categoria", devices: [] };
-        groups[key].devices.push(d);
+        groups[key]!.devices.push(d);
       } else {
         for (const g of hg) {
           if (!groups[g.groupid])
             groups[g.groupid] = { groupName: g.name, devices: [] };
-          groups[g.groupid].devices.push(d);
+          groups[g.groupid]!.devices.push(d);
         }
       }
     }

@@ -279,8 +279,8 @@ export default function EscalationPage() {
     if (newIndex < 0 || newIndex >= fSteps.length) return;
     const newSteps = [...fSteps];
     [newSteps[index], newSteps[newIndex]] = [
-      newSteps[newIndex],
-      newSteps[index],
+      newSteps[newIndex]!,
+      newSteps[index]!,
     ];
     // Reordena tiers
     newSteps.forEach((s, i) => (s.tier = i + 1));
@@ -293,12 +293,12 @@ export default function EscalationPage() {
     value: unknown,
   ) {
     const newSteps = [...fSteps];
-    newSteps[index] = { ...newSteps[index], [field]: value };
+    newSteps[index] = { ...newSteps[index]!, [field]: value };
     setFSteps(newSteps);
   }
 
   function toggleChannel(stepIndex: number, channelId: string) {
-    const step = fSteps[stepIndex];
+    const step = fSteps[stepIndex]!;
     const has = step.channel_ids.includes(channelId);
     updateStep(
       stepIndex,

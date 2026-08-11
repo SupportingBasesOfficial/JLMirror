@@ -56,7 +56,7 @@ export function DiskSection(props: DiskSectionProps) {
             <div className="flex flex-col gap-3">
               {fsItems.map((fs) => {
                 const driveMatch = fs.key_.match(/vfs\.fs\.size\[([^\],]+)/);
-                const driveName = driveMatch ? driveMatch[1] : fs.name;
+                const driveName = driveMatch ? driveMatch[1]! : fs.name;
                 const pct = parseFloat(fs.lastvalue);
                 const barColor =
                   pct > 80
@@ -136,7 +136,7 @@ export function DiskSection(props: DiskSectionProps) {
                 const driveMatch = totalItem.key_.match(
                   /vfs\.fs\.size\[([^\],]+)/,
                 );
-                const driveName = driveMatch ? driveMatch[1] : totalItem.name;
+                const driveName = driveMatch ? driveMatch[1]! : totalItem.name;
                 const totalBytes = parseFloat(totalItem.lastvalue);
                 const usedItem = fsUsedItems.find((u) =>
                   u.key_.includes(driveName),
