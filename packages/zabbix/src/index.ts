@@ -1101,18 +1101,13 @@ export class BlindedZabbixClient {
     });
   }
 
-  // Services (SLA)
+  // Services (SLA) — compativel com Zabbix 6.0+ e 7.x
+  // Zabbix 7.x removeu limit, sortorder e description do service.get
   async getServices(parentId?: string): Promise<ZabbixService[]> {
     const params: Record<string, unknown> = {
-      output: [
-        "serviceid",
-        "name",
-        "status",
-        "sortorder",
-        "description",
-        "parentid",
-      ],
-      limit: 200,
+      output: ["serviceid", "name", "status", "parentid"],
+      selectChildren: ["serviceid", "name", "status", "parentid"],
+      selectParents: ["serviceid", "name"],
     };
     if (parentId) params.parentids = parentId;
     return this.rpc<ZabbixService[]>("service.get", params);
