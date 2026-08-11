@@ -13,7 +13,7 @@ import "../types.js";
 
 export const clientPortalRoute = new Hono();
 
-// Middleware: verifica feature flag "client_portal_enabled"
+// Middleware: verifica feature flag "module_client_portal"
 clientPortalRoute.use("/*", async (c, next) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
@@ -21,7 +21,7 @@ clientPortalRoute.use("/*", async (c, next) => {
   try {
     const flagResult = await query<{ default_value: boolean }>(
       `SELECT default_value FROM public.feature_flags
-       WHERE key = 'client_portal_enabled' AND (tenant_id IS NULL OR tenant_id = $1) AND is_active = true
+       WHERE key = 'module_client_portal' AND (tenant_id IS NULL OR tenant_id = $1) AND is_active = true
        LIMIT 1`,
       [tenantId],
     );
