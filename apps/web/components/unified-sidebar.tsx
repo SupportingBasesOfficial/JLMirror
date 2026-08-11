@@ -640,6 +640,10 @@ export function UnifiedSidebar() {
   const sidebarWidth = collapsed ? "w-16" : "w-64";
   const isSearching = query.trim().length > 0;
 
+  // Ref para garantir que auto-expand so execute quando pathname muda
+  // Nao quando filteredModules muda de referencia (isModuleEnabled muda a cada render)
+  const prevPathnameRef = useRef<string | null>(null);
+
   // Filtra a arvore por RBAC + feature flags + busca textual
   const filteredModules = useMemo(() => {
     if (rolesLoading) return [];
@@ -671,8 +675,12 @@ export function UnifiedSidebar() {
   }, [roles, rolesLoading, isModuleEnabled, query]);
 
   // Auto-expande o modulo/categoria ativa apenas quando a rota muda
-  // Nao força expansao em todo render — usuario pode recolher manualmente
+  // O ref previne re-execucao quando filteredModules muda de referencia
+  // (isModuleEnabled do hook muda a cada render, causando novo useMemo)
   useEffect(() => {
+    if (prevPathnameRef.current === pathname) return;
+    prevPathnameRef.current = pathname;
+
     if (!pathname || rolesLoading || isSearching || collapsed) return;
     for (const mod of filteredModules) {
       if (moduleHasActive(mod, pathname)) {
