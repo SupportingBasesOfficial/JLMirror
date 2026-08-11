@@ -38,8 +38,8 @@ changesRoute.get(
     const parsedLimit = Number.parseInt(c.req.query("limit") ?? "50", 10);
     const limit = Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200);
 
-    let sql = `SELECT cr.*, u.name as requester_name, u.email as requester_email,
-       a.name as assignee_name
+    let sql = `SELECT cr.*, u.full_name as requester_name, u.email as requester_email,
+       a.full_name as assignee_name
      FROM public.change_requests cr
      LEFT JOIN public.users u ON cr.requested_by = u.id
      LEFT JOIN public.users a ON cr.assigned_to = a.id
@@ -144,7 +144,7 @@ changesRoute.get(
         ),
         query(
           `SELECT cr.id, cr.rfc_number, cr.title, cr.status, cr.priority, cr.change_type, cr.created_at,
-           u.name as requester_name
+           u.full_name as requester_name
          FROM public.change_requests cr
          LEFT JOIN public.users u ON cr.requested_by = u.id
          WHERE cr.tenant_id = $1 ORDER BY cr.created_at DESC LIMIT 10`,
@@ -199,8 +199,8 @@ changesRoute.get("/:changeId", requirePermission("changes:read"), async (c) => {
 
   try {
     const result = await query(
-      `SELECT cr.*, u.name as requester_name, u.email as requester_email,
-         a.name as assignee_name, ap.name as approver_name
+      `SELECT cr.*, u.full_name as requester_name, u.email as requester_email,
+         a.full_name as assignee_name, ap.full_name as approver_name
          FROM public.change_requests cr
          LEFT JOIN public.users u ON cr.requested_by = u.id
          LEFT JOIN public.users a ON cr.assigned_to = a.id
@@ -224,14 +224,14 @@ changesRoute.get("/:changeId", requirePermission("changes:read"), async (c) => {
     // Paraleliza 2 queries de detalhe
     const [approvals, tasks] = await Promise.all([
       query(
-        `SELECT ca.*, u.name as approver_name, u.email as approver_email
+        `SELECT ca.*, u.full_name as approver_name, u.email as approver_email
            FROM public.change_approvals ca
            LEFT JOIN public.users u ON ca.approver_id = u.id
            WHERE ca.change_id = $1 ORDER BY ca.created_at`,
         [changeId],
       ),
       query(
-        `SELECT ct.*, u.name as assignee_name FROM public.change_tasks ct
+        `SELECT ct.*, u.full_name as assignee_name FROM public.change_tasks ct
            LEFT JOIN public.users u ON ct.assigned_to = u.id
            WHERE ct.change_id = $1 ORDER BY ct.task_order`,
         [changeId],
@@ -948,7 +948,7 @@ changesRoute.get(
 
     try {
       const result = await query(
-        `SELECT ct.*, u.name as assignee_name FROM public.change_tasks ct
+        `SELECT ct.*, u.full_name as assignee_name FROM public.change_tasks ct
        LEFT JOIN public.users u ON ct.assigned_to = u.id
        WHERE ct.change_id = $1 AND ct.tenant_id = $2 ORDER BY ct.task_order`,
         [changeId, tenantId],
