@@ -32,12 +32,14 @@ export function useApi<T>(url: string | null, config?: SWRConfiguration) {
     dedupingInterval: 2000,
     errorRetryCount: 3,
     // Nao retenta em 429 — evita aggravar rate limiting com retry storm
-    onErrorRetry: (err, _key, _config, revalidate, _opts) => {
+    onErrorRetry: (err, _key, _config, revalidate, opts) => {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("429") || msg.includes("RATE_LIMIT")) {
         return; // Nao retenta — aguarda o usuario recarregar manualmente
       }
-      revalidate(_opts);
+      // Respeita errorRetryCount — para apos 3 tentativas
+      if (opts.retryCount >= 3) return;
+      revalidate(opts);
     },
     ...config,
   });
