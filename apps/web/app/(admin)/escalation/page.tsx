@@ -204,15 +204,15 @@ export default function EscalationPage() {
   const [tSource, setTSource] = useState("monitoring.service_down");
 
   const { data: overviewData, mutate: mutateOverview } =
-    useApi<OverviewData>("/api/escalation");
+    useApi<OverviewData>("/api/v1/escalation");
   const { data: policiesData, mutate: mutatePolicies } = useApi<{
     policies: EscalationPolicy[];
-  }>("/api/escalation/policies");
+  }>("/api/v1/escalation/policies");
   const { data: instancesData, mutate: mutateInstances } = useApi<{
     instances: EscalationInstance[];
-  }>(`/api/escalation/instances?status=${instanceFilter}`);
+  }>(`/api/v1/escalation/instances?status=${instanceFilter}`);
   const { data: channelsData } = useApi<{ channels: NotificationChannel[] }>(
-    "/api/notifications/channels",
+    "/api/v1/notifications/channels",
   );
 
   const policies = policiesData?.policies ?? [];
@@ -345,8 +345,8 @@ export default function EscalationPage() {
 
     try {
       const url = editPolicy
-        ? `/api/escalation/policies/${editPolicy.id}`
-        : "/api/escalation/policies";
+        ? `/api/v1/escalation/policies/${editPolicy.id}`
+        : "/api/v1/escalation/policies";
       const method = editPolicy ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -373,7 +373,7 @@ export default function EscalationPage() {
     if (!confirm("Excluir esta política de escalonamento?")) return;
     setError(null);
     try {
-      const res = await fetch(`/api/escalation/policies/${id}`, {
+      const res = await fetch(`/api/v1/escalation/policies/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -394,7 +394,7 @@ export default function EscalationPage() {
     setError(null);
     try {
       const res = await fetch(
-        `/api/escalation/instances/${instanceId}/resolve`,
+        `/api/v1/escalation/instances/${instanceId}/resolve`,
         {
           method: "POST",
           credentials: "include",
@@ -419,7 +419,7 @@ export default function EscalationPage() {
       return;
     }
     try {
-      const res = await fetch("/api/escalation/trigger", {
+      const res = await fetch("/api/v1/escalation/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

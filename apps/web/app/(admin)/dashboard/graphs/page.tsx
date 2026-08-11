@@ -200,7 +200,7 @@ function GraphDetailModal({
   const [timeRange, setTimeRange] = useState(3600);
   const now = Math.floor(Date.now() / 1000);
   const { data, error, isLoading } = useApi<GraphDataResponse>(
-    `/api/zabbix/graphs/${graph.graphid}/data?from=${now - timeRange}&to=${now}`,
+    `/api/v1/zabbix/graphs/${graph.graphid}/data?from=${now - timeRange}&to=${now}`,
   );
 
   return (
@@ -351,7 +351,7 @@ export default function GraphsPage() {
   if (hostId) params.set("host_id", hostId);
   const { data, error, isLoading, progress, mutate } = useApi<{
     data: ZabbixGraph[];
-  }>(`/api/zabbix/graphs?${params.toString()}`);
+  }>(`/api/v1/zabbix/graphs?${params.toString()}`);
   const graphs = data?.data ?? [];
 
   const filteredGraphs = search

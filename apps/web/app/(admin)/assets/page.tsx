@@ -200,15 +200,16 @@ export default function AssetsPage() {
     if (filterStatus) params.set("status", filterStatus);
     if (filterType) params.set("type", filterType);
     const qs = params.toString();
-    return qs ? `/api/assets?${qs}` : "/api/assets";
+    return qs ? `/api/v1/assets?${qs}` : "/api/v1/assets";
   })();
   const {
     data: aData,
     isLoading: loading,
     mutate: mutateAssets,
   } = useApi<{ assets: Asset[] }>(assetsQuery);
-  const { data: stats, mutate: mutateStats } =
-    useApi<AssetStats>("/api/assets/stats");
+  const { data: stats, mutate: mutateStats } = useApi<AssetStats>(
+    "/api/v1/assets/stats",
+  );
   const assets = useMemo(() => aData?.assets ?? [], [aData]);
 
   // Dispositivos do Zabbix — busca todos os hosts monitorados
@@ -216,7 +217,7 @@ export default function AssetsPage() {
     data: zData,
     isLoading: zLoading,
     mutate: mutateZabbix,
-  } = useApi<{ devices: ZabbixHost[] }>("/api/zabbix/devices");
+  } = useApi<{ devices: ZabbixHost[] }>("/api/v1/zabbix/devices");
   const zDevices = useMemo(() => zData?.devices ?? [], [zData]);
 
   // Stats efetivos — soma devices do Zabbix ao total do CMDB
@@ -353,7 +354,7 @@ export default function AssetsPage() {
   async function handleCreate() {
     setError(null);
     try {
-      const res = await fetch("/api/assets", {
+      const res = await fetch("/api/v1/assets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -399,7 +400,7 @@ export default function AssetsPage() {
 
   async function handleDelete(assetId: string) {
     try {
-      const res = await fetch(`/api/assets/${assetId}`, {
+      const res = await fetch(`/api/v1/assets/${assetId}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -419,7 +420,7 @@ export default function AssetsPage() {
   async function handleSelectAsset(asset: Asset) {
     setSelectedAsset(asset);
     try {
-      const res = await fetch(`/api/assets/${asset.id}/licenses`, {
+      const res = await fetch(`/api/v1/assets/${asset.id}/licenses`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -439,7 +440,7 @@ export default function AssetsPage() {
     if (!selectedAsset) return;
     setError(null);
     try {
-      const res = await fetch(`/api/assets/${selectedAsset.id}/licenses`, {
+      const res = await fetch(`/api/v1/assets/${selectedAsset.id}/licenses`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -477,7 +478,7 @@ export default function AssetsPage() {
     if (!selectedAsset) return;
     try {
       const res = await fetch(
-        `/api/assets/${selectedAsset.id}/licenses/${licenseId}`,
+        `/api/v1/assets/${selectedAsset.id}/licenses/${licenseId}`,
         {
           method: "DELETE",
           credentials: "include",

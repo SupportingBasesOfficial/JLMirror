@@ -151,18 +151,18 @@ export default function DataTransferPage() {
     data: exData,
     isLoading: loading,
     mutate: mutateExports,
-  } = useApi<{ exports: DataExport[] }>("/api/data-transfer/exports");
+  } = useApi<{ exports: DataExport[] }>("/api/v1/data-transfer/exports");
   const { data: imData, mutate: mutateImports } = useApi<{
     imports: DataImport[];
-  }>("/api/data-transfer/imports");
+  }>("/api/v1/data-transfer/imports");
   const { data: tplData, mutate: mutateTemplates } = useApi<{
     templates: ExportTemplate[];
-  }>("/api/data-transfer/templates");
+  }>("/api/v1/data-transfer/templates");
   const { data: wlData, mutate: mutateWhitelist } = useApi<{
     whitelist: WhitelistedTable[];
-  }>("/api/data-transfer/whitelist");
+  }>("/api/v1/data-transfer/whitelist");
   const { data: stats, mutate: mutateStats } = useApi<TransferStats>(
-    "/api/data-transfer/stats",
+    "/api/v1/data-transfer/stats",
   );
   const exports = exData?.exports ?? [];
   const imports = imData?.imports ?? [];
@@ -184,7 +184,7 @@ export default function DataTransferPage() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const res = await fetch("/api/data-transfer/exports", {
+      const res = await fetch("/api/v1/data-transfer/exports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -223,7 +223,7 @@ export default function DataTransferPage() {
   async function handleCreateImport() {
     setError(null);
     try {
-      const res = await fetch("/api/data-transfer/imports", {
+      const res = await fetch("/api/v1/data-transfer/imports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -270,7 +270,7 @@ export default function DataTransferPage() {
         }
       }
 
-      const res = await fetch(`/api/data-transfer/imports/${id}`, {
+      const res = await fetch(`/api/v1/data-transfer/imports/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -299,7 +299,7 @@ export default function DataTransferPage() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const res = await fetch("/api/data-transfer/templates", {
+      const res = await fetch("/api/v1/data-transfer/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -328,7 +328,7 @@ export default function DataTransferPage() {
 
   async function handleDeleteExport(id: string) {
     try {
-      const res = await fetch(`/api/data-transfer/exports/${id}`, {
+      const res = await fetch(`/api/v1/data-transfer/exports/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -347,7 +347,7 @@ export default function DataTransferPage() {
 
   async function handleDeleteImport(id: string) {
     try {
-      const res = await fetch(`/api/data-transfer/imports/${id}`, {
+      const res = await fetch(`/api/v1/data-transfer/imports/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -366,7 +366,7 @@ export default function DataTransferPage() {
 
   async function handleDeleteTemplate(id: string) {
     try {
-      const res = await fetch(`/api/data-transfer/templates/${id}`, {
+      const res = await fetch(`/api/v1/data-transfer/templates/${id}`, {
         method: "DELETE",
         credentials: "include",
       });

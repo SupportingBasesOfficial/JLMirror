@@ -101,7 +101,7 @@ export default function ProblemsPage() {
   if (filterSeverity !== "all") params.set("severity_from", filterSeverity);
   const { data, error, isLoading, progress, mutate } = useApi<{
     data: ZabbixProblem[];
-  }>(`/api/zabbix/problems?${params.toString()}`);
+  }>(`/api/v1/zabbix/problems?${params.toString()}`);
 
   // Auto-refresh a cada 30s quando ativado
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function ProblemsPage() {
     setAckLoading(true);
     setActionError(null);
     try {
-      await apiFetch("/api/zabbix/acknowledge", {
+      await apiFetch("/api/v1/zabbix/acknowledge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

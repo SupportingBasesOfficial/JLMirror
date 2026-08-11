@@ -193,17 +193,18 @@ export default function ChangesPage() {
   const [actionComment, setActionComment] = useState("");
 
   const changesQuery = filterStatus
-    ? `/api/changes?status=${filterStatus}`
-    : "/api/changes";
+    ? `/api/v1/changes?status=${filterStatus}`
+    : "/api/v1/changes";
   const { data: chData, mutate: mutateChanges } = useApi<{
     changes: ChangeRequest[];
   }>(changesQuery);
-  const { data: stats, mutate: mutateStats } =
-    useApi<Stats>("/api/changes/stats");
+  const { data: stats, mutate: mutateStats } = useApi<Stats>(
+    "/api/v1/changes/stats",
+  );
   const changes = chData?.changes ?? [];
   const calendarQuery =
     tab === "calendar"
-      ? `/api/changes/calendar?month=${calendarMonth.year}-${String(calendarMonth.month + 1).padStart(2, "0")}`
+      ? `/api/v1/changes/calendar?month=${calendarMonth.year}-${String(calendarMonth.month + 1).padStart(2, "0")}`
       : null;
   const { data: calData } = useApi<{
     events: Array<{
@@ -220,7 +221,7 @@ export default function ChangesPage() {
 
   async function fetchDetail(changeId: string) {
     try {
-      const res = await fetch(`/api/changes/${changeId}`, {
+      const res = await fetch(`/api/v1/changes/${changeId}`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -246,7 +247,7 @@ export default function ChangesPage() {
       return;
     }
     try {
-      const res = await fetch("/api/changes", {
+      const res = await fetch("/api/v1/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -296,7 +297,7 @@ export default function ChangesPage() {
     setError(null);
     try {
       const res = await fetch(
-        `/api/changes/${changeId}/action?action=${action}`,
+        `/api/v1/changes/${changeId}/action?action=${action}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -322,7 +323,7 @@ export default function ChangesPage() {
     newStatus: string,
   ) {
     try {
-      await fetch(`/api/changes/${changeId}/tasks`, {
+      await fetch(`/api/v1/changes/${changeId}/tasks`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

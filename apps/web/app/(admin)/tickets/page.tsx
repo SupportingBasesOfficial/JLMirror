@@ -165,13 +165,14 @@ export default function TicketsPage() {
   if (overdueOnly) ticketParams.set("overdue", "true");
 
   const { data: tData, mutate: mutateTickets } = useApi<{ data: Ticket[] }>(
-    `/api/tickets?${ticketParams.toString()}`,
+    `/api/v1/tickets?${ticketParams.toString()}`,
   );
   const { data: cData, mutate: mutateCategories } = useApi<{
     categories: TicketCategory[];
-  }>("/api/tickets/categories");
-  const { data: stats, mutate: mutateStats } =
-    useApi<TicketStats>("/api/tickets/stats");
+  }>("/api/v1/tickets/categories");
+  const { data: stats, mutate: mutateStats } = useApi<TicketStats>(
+    "/api/v1/tickets/stats",
+  );
 
   const tickets = tData?.data ?? [];
   const categories = cData?.categories ?? [];
@@ -179,7 +180,7 @@ export default function TicketsPage() {
   async function handleCreateTicket() {
     setError(null);
     try {
-      const res = await fetch("/api/tickets", {
+      const res = await fetch("/api/v1/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -216,7 +217,7 @@ export default function TicketsPage() {
   async function handleSelectTicket(ticket: Ticket) {
     setSelectedTicket(ticket);
     try {
-      const res = await fetch(`/api/tickets/${ticket.id}`, {
+      const res = await fetch(`/api/v1/tickets/${ticket.id}`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -231,7 +232,7 @@ export default function TicketsPage() {
 
   async function handleUpdateStatus(ticketId: string, status: string) {
     try {
-      const res = await fetch(`/api/tickets/${ticketId}`, {
+      const res = await fetch(`/api/v1/tickets/${ticketId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -256,7 +257,7 @@ export default function TicketsPage() {
   async function handleAddComment() {
     if (!selectedTicket || !newComment) return;
     try {
-      const res = await fetch(`/api/tickets/${selectedTicket.id}/comments`, {
+      const res = await fetch(`/api/v1/tickets/${selectedTicket.id}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -282,7 +283,7 @@ export default function TicketsPage() {
   async function handleCreateCategory() {
     setError(null);
     try {
-      const res = await fetch("/api/tickets/categories", {
+      const res = await fetch("/api/v1/tickets/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -312,7 +313,7 @@ export default function TicketsPage() {
 
   async function handleDeleteCategory(id: string) {
     try {
-      const res = await fetch(`/api/tickets/categories/${id}`, {
+      const res = await fetch(`/api/v1/tickets/categories/${id}`, {
         method: "DELETE",
         credentials: "include",
       });

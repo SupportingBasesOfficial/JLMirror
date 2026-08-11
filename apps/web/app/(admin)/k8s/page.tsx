@@ -147,9 +147,9 @@ export default function K8sPage() {
     data: cData,
     isLoading: loading,
     mutate: mutateClusters,
-  } = useApi<{ clusters: K8sCluster[] }>("/api/k8s/clusters");
+  } = useApi<{ clusters: K8sCluster[] }>("/api/v1/k8s/clusters");
   const overviewUrl = selectedCluster
-    ? `/api/k8s/${selectedCluster}/overview`
+    ? `/api/v1/k8s/${selectedCluster}/overview`
     : null;
   const { data: overview, mutate: mutateOverview } =
     useApi<Overview>(overviewUrl);
@@ -166,19 +166,19 @@ export default function K8sPage() {
       const params = new URLSearchParams();
       if (namespaceFilter && namespaceFilter !== "all")
         params.set("namespace", namespaceFilter);
-      return `/api/k8s/${selectedCluster}/resources/pod?${params.toString()}`;
+      return `/api/v1/k8s/${selectedCluster}/resources/pod?${params.toString()}`;
     }
     if (tab === "services") {
       const params = new URLSearchParams();
       if (namespaceFilter && namespaceFilter !== "all")
         params.set("namespace", namespaceFilter);
-      return `/api/k8s/${selectedCluster}/resources/service?${params.toString()}`;
+      return `/api/v1/k8s/${selectedCluster}/resources/service?${params.toString()}`;
     }
     if (tab === "deployments") {
       const params = new URLSearchParams();
       if (namespaceFilter && namespaceFilter !== "all")
         params.set("namespace", namespaceFilter);
-      return `/api/k8s/${selectedCluster}/resources/deployment?${params.toString()}`;
+      return `/api/v1/k8s/${selectedCluster}/resources/deployment?${params.toString()}`;
     }
     return null;
   })();
@@ -192,7 +192,7 @@ export default function K8sPage() {
     if (namespaceFilter && namespaceFilter !== "all")
       params.set("namespace", namespaceFilter);
     params.set("limit", "100");
-    return `/api/k8s/${selectedCluster}/events?${params.toString()}`;
+    return `/api/v1/k8s/${selectedCluster}/events?${params.toString()}`;
   })();
   const { data: eData } = useApi<{ events: K8sEvent[] }>(eventsUrl);
 
@@ -211,7 +211,7 @@ export default function K8sPage() {
   async function handleRegister() {
     setError(null);
     try {
-      const res = await fetch("/api/k8s/clusters", {
+      const res = await fetch("/api/v1/k8s/clusters", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -242,7 +242,7 @@ export default function K8sPage() {
     if (!selectedCluster) return;
     try {
       const res = await fetch(
-        `/api/k8s/${selectedCluster}/resources/${resourceType}`,
+        `/api/v1/k8s/${selectedCluster}/resources/${resourceType}`,
         {
           method: "POST",
           credentials: "include",

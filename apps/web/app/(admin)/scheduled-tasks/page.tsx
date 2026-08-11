@@ -138,10 +138,11 @@ function formatDuration(ms: number | null): string {
 
 export default function ScheduledTasksPage() {
   const { data: tData, mutate: mutateTasks } = useApi<{ data: Task[] }>(
-    "/api/tasks",
+    "/api/v1/tasks",
   );
-  const { data: stats, mutate: mutateStats } =
-    useApi<TaskStats>("/api/tasks/stats");
+  const { data: stats, mutate: mutateStats } = useApi<TaskStats>(
+    "/api/v1/tasks/stats",
+  );
   const tasks = tData?.data ?? [];
   const [runs, setRuns] = useState<Run[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -169,7 +170,7 @@ export default function ScheduledTasksPage() {
         config.method = fMethod;
       }
 
-      const res = await fetch("/api/tasks", {
+      const res = await fetch("/api/v1/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -202,7 +203,7 @@ export default function ScheduledTasksPage() {
 
   async function handleRun(id: string) {
     try {
-      const res = await fetch(`/api/tasks/${id}/run`, {
+      const res = await fetch(`/api/v1/tasks/${id}/run`, {
         method: "POST",
         credentials: "include",
       });
@@ -228,7 +229,7 @@ export default function ScheduledTasksPage() {
 
   async function handleToggle(id: string, active: boolean) {
     try {
-      const res = await fetch(`/api/tasks/${id}`, {
+      const res = await fetch(`/api/v1/tasks/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -249,7 +250,7 @@ export default function ScheduledTasksPage() {
 
   async function handleDelete(id: string) {
     try {
-      const res = await fetch(`/api/tasks/${id}`, {
+      const res = await fetch(`/api/v1/tasks/${id}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -268,7 +269,7 @@ export default function ScheduledTasksPage() {
 
   async function fetchRuns(taskId: string) {
     try {
-      const res = await fetch(`/api/tasks/${taskId}/runs?limit=20`, {
+      const res = await fetch(`/api/v1/tasks/${taskId}/runs?limit=20`, {
         credentials: "include",
       });
       if (res.ok) {
