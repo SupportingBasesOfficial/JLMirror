@@ -190,9 +190,11 @@ export interface ZabbixService {
   serviceid: string;
   name: string;
   status: string;
-  sortorder: number;
+  sortorder?: number;
   description?: string;
+  // Zabbix 7.x: parentid nao existe como campo — parents via selectParents
   parentid?: string;
+  parents?: { serviceid: string; name: string }[];
   children?: ZabbixService[];
 }
 
@@ -1102,11 +1104,11 @@ export class BlindedZabbixClient {
   }
 
   // Services (SLA) — compativel com Zabbix 6.0+ e 7.x
-  // Zabbix 7.x removeu limit, sortorder e description do service.get
+  // Zabbix 7.x nao tem campo parentid no output — parents via selectParents
   async getServices(parentId?: string): Promise<ZabbixService[]> {
     const params: Record<string, unknown> = {
-      output: ["serviceid", "name", "status", "parentid"],
-      selectChildren: ["serviceid", "name", "status", "parentid"],
+      output: ["serviceid", "name", "status", "sortorder", "description"],
+      selectChildren: ["serviceid", "name", "status"],
       selectParents: ["serviceid", "name"],
     };
     if (parentId) params.parentids = parentId;
