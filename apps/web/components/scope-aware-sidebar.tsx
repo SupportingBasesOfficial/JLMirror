@@ -2,27 +2,21 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 "use client";
 
-import { AdminSidebar } from "@/components/admin-sidebar";
-import { ClientSidebar } from "@/components/client-sidebar";
+import { UnifiedSidebar } from "@/components/unified-sidebar";
 import { useUserScope } from "@/components/user-scope-provider";
 
-// Componente wrapper que renderiza AdminSidebar ou ClientSidebar
-// baseado no scope do usuário (global = JL staff, tenant = cliente)
-// Usa UserScopeProvider (context) — sem fetch proprio
+// Componente wrapper que renderiza a UnifiedSidebar
+// A unified sidebar filtra modulos/categorias/itens por RBAC (roles)
+// internamente — nao precisa mais de switch admin vs client
 export function ScopeAwareSidebar() {
-  const { scope, isLoading } = useUserScope();
+  const { isLoading } = useUserScope();
 
-  // Durante loading, renderiza um skeleton neutro para evitar
-  // flash da sidebar errada (admin para tenant ou vice-versa)
+  // Durante loading, renderiza um skeleton neutro para evitar flash
   if (isLoading) {
     return <SidebarSkeleton />;
   }
 
-  if (scope === "global") {
-    return <AdminSidebar />;
-  }
-
-  return <ClientSidebar />;
+  return <UnifiedSidebar />;
 }
 
 // Skeleton com largura e estrutura neutras, sem nenhum item de menu

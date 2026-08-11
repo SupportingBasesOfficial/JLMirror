@@ -8,6 +8,7 @@ const withBundleAnalyzer = bundleAnalyzer({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   ...(process.env.BUILD_STANDALONE === "true" ? { output: "standalone" } : {}),
   transpilePackages: ["@repo/ui", "@repo/tailwind-config", "@repo/logger", "@repo/shared-validation", "@repo/zabbix"],
   // React Compiler — otimiza re-renders automaticamente (React 19)
@@ -41,7 +42,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https:",
               "font-src 'self'",
-              "connect-src 'self' http://localhost:3001 ws://localhost:3001 wss://localhost:3001",
+              "connect-src 'self' http://localhost:3001 http://127.0.0.1:3001 ws://localhost:3001 ws://127.0.0.1:3001 wss://localhost:3001 wss://127.0.0.1:3001",
               "frame-ancestors 'none'",
             ].join("; "),
           },

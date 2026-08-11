@@ -1071,20 +1071,20 @@ slaRoute.delete(
 // ========== SLA Dashboard (módulo ativável por tenant via feature flag) ==========
 
 // GET /api/v1/sla/dashboard — dashboard de SLA em tempo real
-// Requer feature flag "sla_dashboard_enabled" ativa para o tenant
+// Requer modulo SLA ativo para o tenant (feature flag module_sla)
 slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
   const user = c.get("user");
   const tenantId = user?.tenant_id ?? null;
   const startedAt = Date.now();
 
   try {
-    // Verifica feature flag
+    // Verifica se o modulo SLA esta ativado para o tenant
     const flagResult = await query<{
       default_value: boolean;
       is_active: boolean;
     }>(
       `SELECT default_value, is_active FROM public.feature_flags
-       WHERE key = 'sla_dashboard_enabled' AND (tenant_id IS NULL OR tenant_id = $1) AND is_active = true
+       WHERE key = 'module_sla' AND (tenant_id IS NULL OR tenant_id = $1) AND is_active = true
        LIMIT 1`,
       [tenantId],
     );
@@ -1095,7 +1095,7 @@ slaRoute.get("/dashboard", requirePermission("sla:read"), async (c) => {
         {
           error: {
             code: "MODULE_DISABLED",
-            message: "Módulo SLA Dashboard não está ativado para este tenant",
+            message: "Módulo SLA não está ativado para este tenant",
           },
         },
         403,

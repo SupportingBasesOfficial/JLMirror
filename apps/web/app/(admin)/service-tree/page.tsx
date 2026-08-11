@@ -67,14 +67,18 @@ export default function ServiceTreePage() {
   const fetchServices = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Timeout fallback — se a API Zabbix nao responder em 20s, aborta
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
     try {
       const res = await fetch("/api/v1/zabbix/services", {
         credentials: "include",
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       if (!res.ok) {
         const data = await res.json();
         setError(data?.error?.message ?? "Erro ao carregar serviços");
-        setLoading(false);
         return;
       }
       const data = await res.json();
@@ -82,9 +86,17 @@ export default function ServiceTreePage() {
       setServices(roots);
       // Expande root por padrao
       setExpanded(new Set(roots.map((r) => r.serviceid)));
-    } catch {
-      setError("Erro de conexão");
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setError(
+          "Tempo limite excedido ao carregar serviços (Zabbix indisponível)",
+        );
+      } else {
+        setError("Erro de conexão");
+      }
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, []);
