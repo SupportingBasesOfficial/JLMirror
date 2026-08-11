@@ -56,7 +56,15 @@ export async function apiFetch<T>(
         // Resposta nao e JSON
       }
       const message = errJson?.error?.message ?? `Erro ${res.status}`;
-      throw new Error(message);
+      const code = errJson?.error?.code;
+      // Inclui status code e code na mensagem para permitir checks no onErrorRetry
+      const error = new Error(
+        code
+          ? `[${res.status} ${code}] ${message}`
+          : `[${res.status}] ${message}`,
+      );
+      (error as Error & { status?: number }).status = res.status;
+      throw error;
     }
     return res.json() as Promise<T>;
   } catch (err) {
@@ -102,7 +110,14 @@ export async function apiFetchWithProgress<T>(
         // Resposta nao e JSON
       }
       const message = errJson?.error?.message ?? `Erro ${res.status}`;
-      throw new Error(message);
+      const code = errJson?.error?.code;
+      const error = new Error(
+        code
+          ? `[${res.status} ${code}] ${message}`
+          : `[${res.status}] ${message}`,
+      );
+      (error as Error & { status?: number }).status = res.status;
+      throw error;
     }
 
     const contentLength = res.headers.get("Content-Length");

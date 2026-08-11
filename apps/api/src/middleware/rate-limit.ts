@@ -151,9 +151,11 @@ export const rateLimitWrite = rateLimit({
 
 // Rate limit por tenant (sem IP) — protege API Zabbix de sobrecarga
 // Limita total de requests por tenant independente de quantos usuarios/IPs
+// 300/min: sidebar faz ~5 calls (auth/me, modules, 3x stats) a cada 30s
+// + paginas individuais + polling de badges = ~60-80 req/min em uso normal
 export const rateLimitTenant = rateLimit({
   windowMs: 60 * 1000,
-  maxRequests: 100,
+  maxRequests: 300,
   keyPrefix: "tenant",
   tenantOnly: true,
 });
