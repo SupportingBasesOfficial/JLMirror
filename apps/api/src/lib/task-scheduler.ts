@@ -1,6 +1,16 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import { query } from "@repo/db";
+// Task Scheduler — executa scheduled_tasks automaticamente baseado em next_run_at.
+// Usa BullMQ com fila durável Redis — sobrevive a restarts e múltiplas réplicas.
+//
+// RLS INTEGRATION: Cada task executada e envolvida em runWithTenant(task.tenant_id)
+// para que todas as queries DB dentro da execucao (incluindo queries em scripts
+// customizados, database_query tasks, etc.) tenham SET LOCAL app.current_tenant_id
+// injetado via withTenantDb(). O poll inicial (busca de tasks due) roda sem
+// tenant context pois precisa ver tasks de todos os tenants — usa query() raw
+// que nao tem RLS restriction quando sem contexto (app_runtime role tem bypass
+// para o SELECT inicial via GRANT).
+import { query, runWithTenant } from "@repo/db";
 import { logger } from "@repo/logger";
 import { pushNotificationToTenant } from "../routes/ws.js";
 import { registerRepeatableJob, startWorker } from "./queue.js";
@@ -29,11 +39,9 @@ let activeTasks = 0;
 
 export async function startTaskScheduler(): Promise<void> {
   // Registra repeatable job via Redlock — apenas uma instância registra
-  await registerRepeatableJob(
-    QUEUE_NAME,
-    "poll-due-tasks",
-    { every: POLL_INTERVAL_MS },
-  );
+  await registerRepeatableJob(QUEUE_NAME, "poll-due-tasks", {
+    every: POLL_INTERVAL_MS,
+  });
 
   // Inicia worker que processa jobs da fila
   startWorker(QUEUE_NAME, async () => {
@@ -41,7 +49,9 @@ export async function startTaskScheduler(): Promise<void> {
     try {
       await pollAndExecuteDueTasks();
     } catch (err) {
-      logger.error("Erro no poll do scheduler", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no poll do scheduler", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 }
@@ -84,204 +94,259 @@ async function pollAndExecuteDueTasks(): Promise<void> {
 }
 
 async function executeTaskAsync(task: DueTask): Promise<void> {
-  const startTime = Date.now();
-  let status: "success" | "failed" | "timeout" = "success";
-  let output = "";
-  let errorMsg: string | null = null;
-  const timeoutMs = task.max_execution_seconds * 1000;
+  // Propaga tenant_id para AsyncLocalStorage para que todas as queries DB
+  // dentro da execucao da task (incluindo scripts, database_query, cleanup,
+  // report) tenham RLS enforcement via withTenantDb().
+  // Background workers nao tem contexto HTTP, entao wrap explicito.
+  return runWithTenant(task.tenant_id, async () => {
+    const startTime = Date.now();
+    let status: "success" | "failed" | "timeout" = "success";
+    let output = "";
+    let errorMsg: string | null = null;
+    const timeoutMs = task.max_execution_seconds * 1000;
 
-  // Cria registro de execucao
-  const runResult = await query<{ id: string }>(
-    `INSERT INTO public.scheduled_task_runs
-      (task_id, tenant_id, status, attempt_number, triggered_by, started_at)
-     VALUES ($1, $2, 'running', 1, 'cron', timezone('utc'::text, now()))
-     RETURNING id`,
-    [task.id, task.tenant_id],
-  );
-  const runId = runResult.data?.rows[0]?.id;
-  if (!runId) return;
+    // Cria registro de execucao
+    const runResult = await query<{ id: string }>(
+      `INSERT INTO public.scheduled_task_runs
+        (task_id, tenant_id, status, attempt_number, triggered_by, started_at)
+       VALUES ($1, $2, 'running', 1, 'cron', timezone('utc'::text, now()))
+       RETURNING id`,
+      [task.id, task.tenant_id],
+    );
+    const runId = runResult.data?.rows[0]?.id;
+    if (!runId) return;
 
-  try {
-    const config = task.config;
+    try {
+      const config = task.config;
 
-    if (task.task_type === "http_request") {
-      const url = config.url as string;
-      const method = (config.method as string) ?? "GET";
-      if (url) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-          const res = await fetch(url, { method, signal: controller.signal });
-          output = `HTTP ${res.status}: ${(await res.text()).substring(0, 5000)}`;
-          if (!res.ok) {
-            status = "failed";
-            errorMsg = `HTTP ${res.status}`;
+      if (task.task_type === "http_request") {
+        const url = config.url as string;
+        const method = (config.method as string) ?? "GET";
+        if (url) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const res = await fetch(url, { method, signal: controller.signal });
+            output = `HTTP ${res.status}: ${(await res.text()).substring(0, 5000)}`;
+            if (!res.ok) {
+              status = "failed";
+              errorMsg = `HTTP ${res.status}`;
+            }
+          } catch (err) {
+            status =
+              err instanceof Error && err.name === "AbortError"
+                ? "timeout"
+                : "failed";
+            errorMsg = err instanceof Error ? err.message : "Fetch error";
+          } finally {
+            clearTimeout(timer);
           }
-        } catch (err) {
-          status = err instanceof Error && err.name === "AbortError" ? "timeout" : "failed";
-          errorMsg = err instanceof Error ? err.message : "Fetch error";
-        } finally {
-          clearTimeout(timer);
         }
-      }
-    } else if (task.task_type === "database_query") {
-      const sql = config.query as string;
-      if (sql) {
-        const dbResult = await query(sql, []);
-        output = JSON.stringify(dbResult.data?.rows ?? []).substring(0, 5000);
-        if (dbResult.error) {
-          status = "failed";
-          errorMsg = dbResult.error.message;
+      } else if (task.task_type === "database_query") {
+        const sql = config.query as string;
+        if (sql) {
+          const dbResult = await query(sql, []);
+          output = JSON.stringify(dbResult.data?.rows ?? []).substring(0, 5000);
+          if (dbResult.error) {
+            status = "failed";
+            errorMsg = dbResult.error.message;
+          }
         }
-      }
-    } else if (task.task_type === "cleanup") {
-      const target = config.target as string;
-      if (target === "old_metrics") {
-        const cleanupResult = await query("SELECT public.cleanup_old_metric_snapshots()", []);
-        output = `Cleanup: ${cleanupResult.data?.rows[0]?.cleanup_old_metric_snapshots ?? 0} registros removidos`;
-      } else if (target === "reset_api_key_counters") {
-        const resetResult = await query("SELECT public.reset_api_key_counters()", []);
-        output = `API key counters reset: ${resetResult.data?.rows[0]?.reset_api_key_counters ?? 0}`;
-      } else {
-        output = `Cleanup target: ${target ?? "unknown"}`;
-      }
-    } else if (task.task_type === "script") {
-      const scriptId = config.script_id as string;
-      if (!scriptId) {
-        status = "failed";
-        errorMsg = "script_id nao informado na config da tarefa";
-      } else {
-        const scriptResult = await query<{ content: string; language: string; timeout_seconds: number }>(
-          "SELECT content, language, timeout_seconds FROM public.scripts WHERE id = $1 AND is_active = true",
-          [scriptId],
-        );
-        const script = scriptResult.data?.rows[0];
-        if (!script) {
+      } else if (task.task_type === "cleanup") {
+        const target = config.target as string;
+        if (target === "old_metrics") {
+          const cleanupResult = await query(
+            "SELECT public.cleanup_old_metric_snapshots()",
+            [],
+          );
+          output = `Cleanup: ${cleanupResult.data?.rows[0]?.cleanup_old_metric_snapshots ?? 0} registros removidos`;
+        } else if (target === "reset_api_key_counters") {
+          const resetResult = await query(
+            "SELECT public.reset_api_key_counters()",
+            [],
+          );
+          output = `API key counters reset: ${resetResult.data?.rows[0]?.reset_api_key_counters ?? 0}`;
+        } else {
+          output = `Cleanup target: ${target ?? "unknown"}`;
+        }
+      } else if (task.task_type === "script") {
+        const scriptId = config.script_id as string;
+        if (!scriptId) {
           status = "failed";
-          errorMsg = "Script nao encontrado ou inativo";
+          errorMsg = "script_id nao informado na config da tarefa";
+        } else {
+          const scriptResult = await query<{
+            content: string;
+            language: string;
+            timeout_seconds: number;
+          }>(
+            "SELECT content, language, timeout_seconds FROM public.scripts WHERE id = $1 AND is_active = true",
+            [scriptId],
+          );
+          const script = scriptResult.data?.rows[0];
+          if (!script) {
+            status = "failed";
+            errorMsg = "Script nao encontrado ou inativo";
+          } else {
+            const { exec } = await import("node:child_process");
+            const lang = script.language;
+            const cmd =
+              lang === "python"
+                ? "python3"
+                : lang === "powershell"
+                  ? "powershell"
+                  : lang === "bash"
+                    ? "bash"
+                    : lang === "node"
+                      ? "node"
+                      : null;
+            if (!cmd) {
+              status = "failed";
+              errorMsg = `Linguagem nao suportada: ${lang}`;
+            } else {
+              output = await new Promise<string>((resolve) => {
+                const proc = exec(
+                  cmd,
+                  { timeout: timeoutMs },
+                  (err, stdout, stderr) => {
+                    if (err) {
+                      if (err.killed) status = "timeout";
+                      else status = "failed";
+                      errorMsg = err.message;
+                      resolve(stderr || err.message);
+                    } else {
+                      resolve(
+                        stdout || stderr || "Script executado sem output",
+                      );
+                    }
+                  },
+                );
+                proc.stdin?.end(script.content);
+              });
+            }
+          }
+        }
+      } else if (
+        task.task_type === "shell_command" ||
+        task.task_type === "custom"
+      ) {
+        const command = config.command as string;
+        if (!command) {
+          status = "failed";
+          errorMsg = "command nao informado na config da tarefa";
         } else {
           const { exec } = await import("node:child_process");
-          const lang = script.language;
-          const cmd = lang === "python" ? "python3" : lang === "powershell" ? "powershell" : lang === "bash" ? "bash" : lang === "node" ? "node" : null;
-          if (!cmd) {
-            status = "failed";
-            errorMsg = `Linguagem nao suportada: ${lang}`;
-          } else {
-            output = await new Promise<string>((resolve) => {
-              const proc = exec(cmd, { timeout: timeoutMs }, (err, stdout, stderr) => {
-                if (err) {
-                  if (err.killed) status = "timeout";
-                  else status = "failed";
-                  errorMsg = err.message;
-                  resolve(stderr || err.message);
-                } else {
-                  resolve(stdout || stderr || "Script executado sem output");
-                }
-              });
-              proc.stdin?.end(script.content);
+          output = await new Promise<string>((resolve) => {
+            exec(command, { timeout: timeoutMs }, (err, stdout, stderr) => {
+              if (err) {
+                if (err.killed) status = "timeout";
+                else status = "failed";
+                errorMsg = err.message;
+                resolve(stderr || err.message);
+              } else {
+                resolve(stdout || stderr || "Comando executado sem output");
+              }
             });
+          });
+        }
+      } else if (task.task_type === "report") {
+        const templateId = config.template_id as string;
+        if (!templateId) {
+          status = "failed";
+          errorMsg = "template_id nao informado na config da tarefa";
+        } else {
+          const { generateCSV, collectReportData } =
+            await import("./report-generator.js");
+          const templateResult = await query<{
+            name: string;
+            data_sources: string[];
+            columns: string[];
+            format: string;
+          }>(
+            "SELECT name, data_sources, columns, format FROM public.report_templates WHERE id = $1",
+            [templateId],
+          );
+          const template = templateResult.data?.rows[0];
+          if (!template) {
+            status = "failed";
+            errorMsg = "Template de relatorio nao encontrado";
+          } else {
+            const reportData = await collectReportData(
+              task.tenant_id,
+              template.data_sources ?? [],
+              template.columns ?? [],
+              template.name,
+              query,
+            );
+            const csv = generateCSV(reportData);
+            output = `Relatorio gerado: ${reportData.rows.length} linhas, ${csv.length} bytes`;
           }
         }
-      }
-    } else if (task.task_type === "shell_command" || task.task_type === "custom") {
-      const command = config.command as string;
-      if (!command) {
-        status = "failed";
-        errorMsg = "command nao informado na config da tarefa";
       } else {
-        const { exec } = await import("node:child_process");
-        output = await new Promise<string>((resolve) => {
-          exec(command, { timeout: timeoutMs }, (err, stdout, stderr) => {
-            if (err) {
-              if (err.killed) status = "timeout";
-              else status = "failed";
-              errorMsg = err.message;
-              resolve(stderr || err.message);
-            } else {
-              resolve(stdout || stderr || "Comando executado sem output");
-            }
-          });
-        });
+        output = `Task type ${task.task_type} executada sem acao especifica`;
       }
-    } else if (task.task_type === "report") {
-      const templateId = config.template_id as string;
-      if (!templateId) {
-        status = "failed";
-        errorMsg = "template_id nao informado na config da tarefa";
-      } else {
-        const { generateCSV, collectReportData } = await import("./report-generator.js");
-        const templateResult = await query<{ name: string; data_sources: string[]; columns: string[]; format: string }>(
-          "SELECT name, data_sources, columns, format FROM public.report_templates WHERE id = $1",
-          [templateId],
-        );
-        const template = templateResult.data?.rows[0];
-        if (!template) {
-          status = "failed";
-          errorMsg = "Template de relatorio nao encontrado";
-        } else {
-          const reportData = await collectReportData(
-            task.tenant_id,
-            template.data_sources ?? [],
-            template.columns ?? [],
-            template.name,
-            query,
-          );
-          const csv = generateCSV(reportData);
-          output = `Relatorio gerado: ${reportData.rows.length} linhas, ${csv.length} bytes`;
-        }
-      }
-    } else {
-      output = `Task type ${task.task_type} executada sem acao especifica`;
+    } catch (err) {
+      status = "failed";
+      errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
     }
-  } catch (err) {
-    status = "failed";
-    errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
-  }
 
-  const durationMs = Date.now() - startTime;
+    const durationMs = Date.now() - startTime;
 
-  // Atualiza registro de execucao
-  await query(
-    `UPDATE public.scheduled_task_runs SET
-       status = $1, finished_at = timezone('utc'::text, now()), duration_ms = $2,
-       output = $3, error_message = $4
-     WHERE id = $5`,
-    [status, durationMs, output.substring(0, 10000), errorMsg, runId],
-  );
+    // Atualiza registro de execucao
+    await query(
+      `UPDATE public.scheduled_task_runs SET
+         status = $1, finished_at = timezone('utc'::text, now()), duration_ms = $2,
+         output = $3, error_message = $4
+       WHERE id = $5`,
+      [status, durationMs, output.substring(0, 10000), errorMsg, runId],
+    );
 
-  // Atualiza stats da tarefa e calcula proxima execucao
-  const nextRunResult = await query<{ next_run: string }>(
-    "SELECT public.calculate_next_run($1, $2) as next_run",
-    [task.cron_expression, task.timezone],
-  );
+    // Atualiza stats da tarefa e calcula proxima execucao
+    const nextRunResult = await query<{ next_run: string }>(
+      "SELECT public.calculate_next_run($1, $2) as next_run",
+      [task.cron_expression, task.timezone],
+    );
 
-  await query(
-    `UPDATE public.scheduled_tasks SET
-       last_run_at = timezone('utc'::text, now()),
-       last_run_status = $1,
-       last_run_duration_ms = $2,
-       last_error = $3,
-       total_runs = total_runs + 1,
-       successful_runs = successful_runs + $4,
-       failed_runs = failed_runs + $5,
-       next_run_at = $6
-     WHERE id = $7`,
-    [status, durationMs, errorMsg, status === "success" ? 1 : 0, status === "success" ? 0 : 1,
-     nextRunResult.data?.rows[0]?.next_run ?? null, task.id],
-  );
+    await query(
+      `UPDATE public.scheduled_tasks SET
+         last_run_at = timezone('utc'::text, now()),
+         last_run_status = $1,
+         last_run_duration_ms = $2,
+         last_error = $3,
+         total_runs = total_runs + 1,
+         successful_runs = successful_runs + $4,
+         failed_runs = failed_runs + $5,
+         next_run_at = $6
+       WHERE id = $7`,
+      [
+        status,
+        durationMs,
+        errorMsg,
+        status === "success" ? 1 : 0,
+        status === "success" ? 0 : 1,
+        nextRunResult.data?.rows[0]?.next_run ?? null,
+        task.id,
+      ],
+    );
 
-  logger.info("Task executada", { taskName: task.name, taskId: task.id, status, durationMs });
-
-  // Notifica via WebSocket se a task falhou
-  if (status !== "success") {
-    void pushNotificationToTenant(task.tenant_id, {
-      event: "task.failed",
-      task_id: task.id,
-      task_name: task.name,
+    logger.info("Task executada", {
+      taskName: task.name,
+      taskId: task.id,
       status,
-      error: errorMsg,
-      duration_ms: durationMs,
-      timestamp: new Date().toISOString(),
+      durationMs,
     });
-  }
+
+    // Notifica via WebSocket se a task falhou
+    if (status !== "success") {
+      void pushNotificationToTenant(task.tenant_id, {
+        event: "task.failed",
+        task_id: task.id,
+        task_name: task.name,
+        status,
+        error: errorMsg,
+        duration_ms: durationMs,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
 }

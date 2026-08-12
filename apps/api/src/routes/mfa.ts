@@ -1,7 +1,17 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
+// Rotas MFA — refatoradas para Drizzle ORM + error handling padronizado.
+//
+// PADRAO DE ERROR HANDLING:
+//   400 — VALIDATION_ERROR (Zod), INVALID_TOKEN (reset token)
+//   401 — INVALID_CODE, INVALID_CHALLENGE, CHALLENGE_CONSUMED, CHALLENGE_EXPIRED
+//   403 — FORBIDDEN (RBAC denial via requirePermission)
+//   404 — USER_NOT_FOUND, MFA_NOT_SETUP, MFA_NOT_ENABLED
+//   409 — MFA_ALREADY_ENABLED
+//   500 — INTERNAL_ERROR
 import { Hono } from "hono";
-import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, and } from "drizzle-orm";
 import { logger } from "@repo/logger";
 import {
   generateTotpSetup,
@@ -22,6 +32,7 @@ import { rateLimitWrite } from "../middleware/rate-limit.js";
 import { httpCache } from "../middleware/http-cache.js";
 import { safeJsonBody } from "../lib/safe-json.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { getUserTenantAuth } from "../lib/external-auth.js";
 import "../types.js";
 
 export const mfaRoute = new Hono();
@@ -41,16 +52,18 @@ mfaRoute.get(
     }
 
     try {
-      const result = await query<{
-        mfa_enabled: boolean;
-        mfa_method: string | null;
-      }>("SELECT mfa_enabled, mfa_method FROM public.users WHERE id = $1", [
-        user.sub,
-      ]);
+      const mfaStatus = await withTenantDb(async (db) => {
+        const [row] = await db
+          .select({ isEnabled: schema.userMfaTotp.isEnabled })
+          .from(schema.userMfaTotp)
+          .where(eq(schema.userMfaTotp.userId, user.sub))
+          .limit(1);
+        return row?.isEnabled ?? false;
+      });
 
       return c.json({
-        enabled: result.data?.rows[0]?.mfa_enabled ?? false,
-        method: result.data?.rows[0]?.mfa_method ?? null,
+        enabled: mfaStatus,
+        method: mfaStatus ? "totp" : null,
         endpoints: [
           "/setup",
           "/verify",
@@ -87,13 +100,17 @@ mfaRoute.post(
     }
 
     try {
-      // Busca email do usuário
-      const userResult = await query<{ email: string }>(
-        "SELECT email FROM public.users WHERE id = $1",
-        [user.sub],
-      );
+      // Busca email do usuário via Drizzle
+      const email = await withTenantDb(async (db) => {
+        const [row] = await db
+          .select({ email: schema.users.email })
+          .from(schema.users)
+          .where(eq(schema.users.id, user.sub))
+          .limit(1);
+        return row?.email;
+      });
 
-      if (userResult.error || !userResult.data?.rows[0]) {
+      if (!email) {
         return c.json(
           {
             error: {
@@ -105,15 +122,17 @@ mfaRoute.post(
         );
       }
 
-      const email = userResult.data.rows[0].email;
-
       // Verifica se já tem MFA habilitado
-      const existingResult = await query<{ is_enabled: boolean }>(
-        "SELECT is_enabled FROM public.user_mfa_totp WHERE user_id = $1",
-        [user.sub],
-      );
+      const existingEnabled = await withTenantDb(async (db) => {
+        const [row] = await db
+          .select({ isEnabled: schema.userMfaTotp.isEnabled })
+          .from(schema.userMfaTotp)
+          .where(eq(schema.userMfaTotp.userId, user.sub))
+          .limit(1);
+        return row?.isEnabled ?? false;
+      });
 
-      if (existingResult.data?.rows[0]?.is_enabled) {
+      if (existingEnabled) {
         return c.json(
           {
             error: {
@@ -132,12 +151,25 @@ mfaRoute.post(
       // Armazena secret temporariamente (não habilitado até verificação)
       const recoveryHashed = await hashRecoveryCodes(setup.recovery_codes);
 
-      await query(
-        `INSERT INTO public.user_mfa_totp (user_id, secret, recovery_codes, is_enabled)
-       VALUES ($1, $2, $3, false)
-       ON CONFLICT (user_id) DO UPDATE SET secret = $2, recovery_codes = $3, is_enabled = false, updated_at = timezone('utc'::text, now())`,
-        [user.sub, setup.secret, JSON.stringify(recoveryHashed)],
-      );
+      await withTenantDb(async (db) => {
+        await db
+          .insert(schema.userMfaTotp)
+          .values({
+            userId: user.sub,
+            secret: setup.secret,
+            recoveryCodes: recoveryHashed,
+            isEnabled: false,
+          })
+          .onConflictDoUpdate({
+            target: schema.userMfaTotp.userId,
+            set: {
+              secret: setup.secret,
+              recoveryCodes: recoveryHashed,
+              isEnabled: false,
+              updatedAt: new Date(),
+            },
+          });
+      });
 
       logger.info("MFA setup iniciado", { userId: user.sub });
 
@@ -190,13 +222,20 @@ mfaRoute.post(
     }
 
     try {
-      // Busca secret pendente
-      const result = await query<{ secret: string; is_enabled: boolean }>(
-        "SELECT secret, is_enabled FROM public.user_mfa_totp WHERE user_id = $1",
-        [user.sub],
-      );
+      // Busca secret pendente via Drizzle
+      const record = await withTenantDb(async (db) => {
+        const [row] = await db
+          .select({
+            secret: schema.userMfaTotp.secret,
+            isEnabled: schema.userMfaTotp.isEnabled,
+          })
+          .from(schema.userMfaTotp)
+          .where(eq(schema.userMfaTotp.userId, user.sub))
+          .limit(1);
+        return row;
+      });
 
-      if (result.error || !result.data?.rows[0]) {
+      if (!record) {
         return c.json(
           {
             error: {
@@ -208,8 +247,7 @@ mfaRoute.post(
         );
       }
 
-      const record = result.data.rows[0];
-      if (record.is_enabled) {
+      if (record.isEnabled) {
         return c.json(
           {
             error: {
@@ -230,17 +268,13 @@ mfaRoute.post(
         );
       }
 
-      // Habilita MFA
-      await query(
-        "UPDATE public.user_mfa_totp SET is_enabled = true, updated_at = timezone('utc'::text, now()) WHERE user_id = $1",
-        [user.sub],
-      );
-
-      // Atualiza flag na tabela users
-      await query(
-        "UPDATE public.users SET mfa_enabled = true, mfa_method = 'totp' WHERE id = $1",
-        [user.sub],
-      );
+      // Habilita MFA via Drizzle
+      await withTenantDb(async (db) => {
+        await db
+          .update(schema.userMfaTotp)
+          .set({ isEnabled: true, updatedAt: new Date() })
+          .where(eq(schema.userMfaTotp.userId, user.sub));
+      });
 
       try {
         await writeAuditLog({
@@ -292,17 +326,21 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
   const data = parsed.data as MfaVerifyInput;
 
   try {
-    // Busca challenge
-    const challengeResult = await query<{
-      user_id: string;
-      expires_at: string;
-      consumed: boolean;
-    }>(
-      "SELECT user_id, expires_at, consumed FROM public.mfa_challenges WHERE challenge_token = $1",
-      [data.challenge_token],
-    );
+    // Busca challenge via Drizzle
+    const challenge = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({
+          userId: schema.mfaChallenges.userId,
+          expiresAt: schema.mfaChallenges.expiresAt,
+          consumed: schema.mfaChallenges.consumed,
+        })
+        .from(schema.mfaChallenges)
+        .where(eq(schema.mfaChallenges.challengeToken, data.challenge_token))
+        .limit(1);
+      return row;
+    });
 
-    if (challengeResult.error || !challengeResult.data?.rows[0]) {
+    if (!challenge) {
       return c.json(
         {
           error: {
@@ -314,7 +352,6 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       );
     }
 
-    const challenge = challengeResult.data.rows[0];
     if (challenge.consumed) {
       return c.json(
         {
@@ -327,23 +364,32 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       );
     }
 
-    if (new Date(challenge.expires_at) < new Date()) {
+    if (challenge.expiresAt < new Date()) {
       return c.json(
         { error: { code: "CHALLENGE_EXPIRED", message: "Challenge expirado" } },
         401,
       );
     }
 
-    // Busca secret TOTP do usuário
-    const totpResult = await query<{
-      secret: string;
-      recovery_codes: string[];
-    }>(
-      "SELECT secret, recovery_codes FROM public.user_mfa_totp WHERE user_id = $1 AND is_enabled = true",
-      [challenge.user_id],
-    );
+    // Busca secret TOTP do usuário via Drizzle
+    const totp = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({
+          secret: schema.userMfaTotp.secret,
+          recoveryCodes: schema.userMfaTotp.recoveryCodes,
+        })
+        .from(schema.userMfaTotp)
+        .where(
+          and(
+            eq(schema.userMfaTotp.userId, challenge.userId),
+            eq(schema.userMfaTotp.isEnabled, true),
+          ),
+        )
+        .limit(1);
+      return row;
+    });
 
-    if (totpResult.error || !totpResult.data?.rows[0]) {
+    if (!totp) {
       return c.json(
         {
           error: {
@@ -355,14 +401,13 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       );
     }
 
-    const totp = totpResult.data.rows[0];
     const valid = verifyTotpCode(totp.secret, data.code);
 
     if (!valid) {
       // Verifica se é recovery code
-      const recoveryCodes = totp.recovery_codes as unknown as string[];
+      const recoveryCodes = totp.recoveryCodes as unknown as string[];
       if (!verifyRecoveryCode(data.code, recoveryCodes)) {
-        logger.warn("MFA codigo invalido", { userId: challenge.user_id });
+        logger.warn("MFA codigo invalido", { userId: challenge.userId });
         return c.json(
           { error: { code: "INVALID_CODE", message: "Código TOTP inválido" } },
           401,
@@ -370,24 +415,30 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       }
     }
 
-    // Marca challenge como consumido
-    await query(
-      "UPDATE public.mfa_challenges SET consumed = true WHERE challenge_token = $1",
-      [data.challenge_token],
-    );
+    // Marca challenge como consumido via Drizzle
+    await withTenantDb(async (db) => {
+      await db
+        .update(schema.mfaChallenges)
+        .set({ consumed: true })
+        .where(eq(schema.mfaChallenges.challengeToken, data.challenge_token));
+    });
 
-    // Busca dados do usuário para gerar tokens
-    const userResult = await query<{
-      id: string;
-      email: string;
-      full_name: string | null;
-      is_active: boolean;
-    }>(
-      "SELECT id, email, full_name, is_active FROM public.users WHERE id = $1",
-      [challenge.user_id],
-    );
+    // Busca dados do usuário para gerar tokens via Drizzle
+    const userRow = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          fullName: schema.users.fullName,
+          isActive: schema.users.isActive,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.id, challenge.userId))
+        .limit(1);
+      return row;
+    });
 
-    if (userResult.error || !userResult.data?.rows[0]) {
+    if (!userRow) {
       return c.json(
         {
           error: { code: "USER_NOT_FOUND", message: "Usuário não encontrado" },
@@ -396,20 +447,9 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       );
     }
 
-    const userRow = userResult.data.rows[0];
-
-    // Busca tenants e roles
-    const tenantsResult = await query<{
-      tenant_id: string;
-      role: string;
-      scope: string;
-    }>("SELECT * FROM public.get_tenant_user_auth($1)", [userRow.id]);
-
-    const roles = tenantsResult.data?.rows.map((r) => r.role) ?? [];
-    const primaryTenantId = tenantsResult.data?.rows[0]?.tenant_id ?? "";
-    const userScope = tenantsResult.data?.rows[0]?.scope as
-      "global" | "tenant" | undefined;
-    if (!userScope) {
+    // Busca tenants e roles via RPC
+    const tenantAuth = await getUserTenantAuth(userRow.id);
+    if (!tenantAuth) {
       return c.json(
         {
           error: {
@@ -420,21 +460,20 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
         403,
       );
     }
-    const tenantIds = tenantsResult.data?.rows.map((r) => r.tenant_id) ?? [];
 
     // Gera tokens JWT
     const { accessToken, refreshToken } = await generateAndStoreTokens({
       sub: userRow.id,
-      tenant_id: primaryTenantId,
-      roles,
-      scope: userScope,
-      tenant_ids: tenantIds,
+      tenant_id: tenantAuth.primaryTenantId,
+      roles: tenantAuth.roles,
+      scope: tenantAuth.scope,
+      tenant_ids: tenantAuth.tenantIds,
     });
 
     try {
       await writeAuditLog({
         userId: userRow.id,
-        tenantId: primaryTenantId,
+        tenantId: tenantAuth.primaryTenantId,
         action: "auth.login.mfa",
         entityType: "user",
         entityId: userRow.id,
@@ -451,16 +490,11 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       user: {
         id: userRow.id,
         email: userRow.email,
-        full_name: userRow.full_name,
-        is_active: userRow.is_active,
+        full_name: userRow.fullName,
+        is_active: userRow.isActive,
       },
-      scope: userScope,
-      tenants:
-        tenantsResult.data?.rows.map((r) => ({
-          tenant_id: r.tenant_id,
-          role: r.role,
-          scope: r.scope,
-        })) ?? [],
+      scope: tenantAuth.scope,
+      tenants: tenantAuth.tenants,
     });
   } catch (error) {
     logger.error("Erro ao verificar MFA login", {
@@ -506,12 +540,21 @@ mfaRoute.post(
     const data = parsed.data as MfaDisableInput;
 
     try {
-      const result = await query<{ secret: string }>(
-        "SELECT secret FROM public.user_mfa_totp WHERE user_id = $1 AND is_enabled = true",
-        [user.sub],
-      );
+      const totp = await withTenantDb(async (db) => {
+        const [row] = await db
+          .select({ secret: schema.userMfaTotp.secret })
+          .from(schema.userMfaTotp)
+          .where(
+            and(
+              eq(schema.userMfaTotp.userId, user.sub),
+              eq(schema.userMfaTotp.isEnabled, true),
+            ),
+          )
+          .limit(1);
+        return row;
+      });
 
-      if (result.error || !result.data?.rows[0]) {
+      if (!totp) {
         return c.json(
           {
             error: {
@@ -523,7 +566,7 @@ mfaRoute.post(
         );
       }
 
-      const valid = verifyTotpCode(data.code, result.data.rows[0].secret);
+      const valid = verifyTotpCode(data.code, totp.secret);
       if (!valid) {
         return c.json(
           { error: { code: "INVALID_CODE", message: "Código TOTP inválido" } },
@@ -531,15 +574,11 @@ mfaRoute.post(
         );
       }
 
-      await query("DELETE FROM public.user_mfa_totp WHERE user_id = $1", [
-        user.sub,
-      ]);
-
-      // Atualiza flag na tabela users
-      await query(
-        "UPDATE public.users SET mfa_enabled = false, mfa_method = NULL WHERE id = $1",
-        [user.sub],
-      );
+      await withTenantDb(async (db) => {
+        await db
+          .delete(schema.userMfaTotp)
+          .where(eq(schema.userMfaTotp.userId, user.sub));
+      });
 
       try {
         await writeAuditLog({
@@ -584,25 +623,34 @@ mfaRoute.get(
     }
 
     try {
-      // Paraleliza 2 queries independentes
-      const [result, webauthnResult] = await Promise.all([
-        query<{ is_enabled: boolean }>(
-          "SELECT is_enabled FROM public.user_mfa_totp WHERE user_id = $1",
-          [user.sub],
-        ),
-        query<{ count: string }>(
-          "SELECT COUNT(*) as count FROM public.user_webauthn_credentials WHERE user_id = $1 AND is_enabled = true",
-          [user.sub],
-        ),
+      // Paraleliza 2 queries independentes via Drizzle
+      const [totpResult, webauthnResult] = await Promise.all([
+        withTenantDb(async (db) => {
+          const [row] = await db
+            .select({ isEnabled: schema.userMfaTotp.isEnabled })
+            .from(schema.userMfaTotp)
+            .where(eq(schema.userMfaTotp.userId, user.sub))
+            .limit(1);
+          return row?.isEnabled ?? false;
+        }),
+        withTenantDb(async (db) => {
+          const result = await db
+            .select({ id: schema.userWebauthnCredentials.id })
+            .from(schema.userWebauthnCredentials)
+            .where(
+              and(
+                eq(schema.userWebauthnCredentials.userId, user.sub),
+                eq(schema.userWebauthnCredentials.isEnabled, true),
+              ),
+            );
+          return result.length;
+        }),
       ]);
 
       return c.json({
-        totp_enabled: result.data?.rows[0]?.is_enabled ?? false,
-        webauthn_enabled:
-          (Number.parseInt(webauthnResult.data?.rows[0]?.count ?? "0", 10) ||
-            0) > 0,
-        webauthn_credentials:
-          Number.parseInt(webauthnResult.data?.rows[0]?.count ?? "0", 10) || 0,
+        totp_enabled: totpResult,
+        webauthn_enabled: webauthnResult > 0,
+        webauthn_credentials: webauthnResult,
       });
     } catch (error) {
       logger.error("Erro ao buscar status MFA", {

@@ -3,22 +3,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiRoutes, type AuthMeResponse } from "@/lib/api-routes";
 import type { SidebarRole } from "@/lib/sidebar-config";
-
-interface AuthMeResponse {
-  user: {
-    id: string;
-    email: string;
-    full_name: string | null;
-    is_active: boolean;
-  };
-  scope: "global" | "tenant";
-  tenants: Array<{
-    tenant_id: string;
-    role: string;
-    scope: string;
-  }>;
-}
 
 // Mapeia scope + roles do /auth/me para os roles da sidebar
 function mapToSidebarRoles(
@@ -72,23 +58,34 @@ export function useUserRoles() {
 
     async function fetchRoles() {
       try {
-        const res = await fetch("/api/v1/auth/me", { credentials: "include" });
+        // Usa rota centralizada de apiRoutes em vez de string hardcoded
+        const res = await fetch(apiRoutes.auth.me, {
+          credentials: "include",
+        });
         if (!res.ok) {
           if (mounted) setIsLoading(false);
           return;
         }
-        const data = (await res.json()) as AuthMeResponse;
+        // Tipos type-safe de api-routes.ts — garante que full_name existe
+        const data = (await res.json()) as AuthMeResponse & {
+          tenants?: Array<{
+            tenant_id: string;
+            role: string;
+            scope: string;
+          }>;
+        };
         if (!mounted) return;
 
         const mapped = mapToSidebarRoles(data.scope, data.tenants ?? []);
         setRoles(mapped);
         setUserInfo({
+          // USA full_name (campo correto do DB via Drizzle), nao `name`
           name: data.user.full_name ?? data.user.email,
           email: data.user.email,
           organization:
             data.scope === "global"
               ? "JL Informática"
-              : (data.tenants[0]?.tenant_id ?? "Tenant"),
+              : (data.tenants?.[0]?.tenant_id ?? "Tenant"),
         });
       } catch {
         // Mantem default restritivo

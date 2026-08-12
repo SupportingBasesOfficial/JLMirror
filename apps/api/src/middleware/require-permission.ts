@@ -2,11 +2,23 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { createMiddleware } from "hono/factory";
 import { getPermissionChecker } from "@repo/auth";
-import { query } from "@repo/db";
+import { withTenantDb } from "@repo/db/drizzle";
+import { sql } from "drizzle-orm";
 import "../types.js";
 
 // Middleware que verifica se o usuário tem uma permissão específica.
 // Deve ser usado após jwtAuth e tenantContext.
+//
+// Usa Drizzle ORM para buscar permissões do usuário via join das tabelas
+// RBAC mapeadas em @repo/db/src/schema/rbac.ts:
+//   tenant_users → roles → role_permissions → permissions
+//   tenant_users → tenant_custom_roles → tenant_custom_role_permissions → permissions
+//
+// A função RPC `get_user_permissions` no PostgreSQL encapsula esses joins
+// complexos (incluindo roles do sistema + custom roles do tenant). Mantemos
+// a chamada via Drizzle's sql template tag para nao duplicar a logica de
+// join em TypeScript — a funcao SQL é a source of truth para resolucao de
+// permissoes.
 //
 // Uso:
 //   app.get("/api/v1/devices", jwtAuth, tenantContext, requirePermission("zabbix:devices:read"), handler)
@@ -30,14 +42,16 @@ export function requirePermission(permission: string) {
       return;
     }
 
-    // Busca permissões do DB via RPC
+    // Busca permissões do DB via Drizzle, chamando a funcao RPC
+    // get_user_permissions que resolve system roles + tenant custom roles.
+    // withTenantDb injeta SET LOCAL app.current_tenant_id para RLS.
     const fetcher = async (userId: string): Promise<string[]> => {
-      const result = await query<{ permission_key: string }>(
-        "SELECT * FROM public.get_user_permissions($1)",
-        [userId],
-      );
-      if (result.error || !result.data) return [];
-      return result.data.rows.map((r) => r.permission_key);
+      const result = await withTenantDb(async (db) => {
+        return db.execute<{
+          permission_key: string;
+        }>(sql`SELECT * FROM public.get_user_permissions(${userId})`);
+      });
+      return result.rows.map((r) => r.permission_key);
     };
 
     const checker = await getPermissionChecker(user.sub, user.roles, fetcher);

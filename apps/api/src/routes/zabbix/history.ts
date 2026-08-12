@@ -1,11 +1,17 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-// Rotas de history, trends, graphs, triggers e overview
+// Rotas de history, trends, graphs, triggers e overview.
+//
+// RLS INTEGRATION: As rotas ja executam dentro do middleware tenantContext
+// (que seta AsyncLocalStorage via runWithTenant), entao withTenantDb() le
+// o tenant_id do contexto automaticamente. A query ao zabbix_history_cache
+// usa Drizzle ORM com withTenantDb() para RLS enforcement.
 
 import type { Hono } from "hono";
 import type { ZabbixItem } from "@repo/zabbix";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
-import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, and, gte, lte, asc } from "drizzle-orm";
 import { downsamplePoints } from "../../lib/downsample.js";
 import {
   createZabbixClient,
@@ -17,22 +23,40 @@ import {
   enqueueWriteJob,
 } from "./shared.js";
 
-// Le history do TSDB (zabbix_history_cache) — retorna null se nao houver dados
+// Le history do TSDB (zabbix_history_cache) via Drizzle — retorna null se nao houver dados.
+// Usa withTenantDb() que le o tenant_id do AsyncLocalStorage (setado pelo
+// tenantContext middleware) e injeta SET LOCAL app.current_tenant_id para RLS.
 async function getHistoryFromCache(
-  tenantId: string,
+  _tenantId: string,
   itemId: string,
   from: number,
   to: number,
 ): Promise<Array<{ clock: number; value: string }> | null> {
   try {
-    const result = await query<{ clock: number; value: string }>(
-      `SELECT clock, value FROM public.zabbix_history_cache
-       WHERE tenant_id = $1 AND itemid = $2 AND clock >= $3 AND clock <= $4
-       ORDER BY clock ASC LIMIT 5000`,
-      [tenantId, itemId, from, to],
-    );
-    if (result.error || !result.data?.rows.length) return null;
-    return result.data.rows;
+    const rows = await withTenantDb(async (db) => {
+      return db
+        .select({
+          clock: schema.zabbixHistoryCache.clock,
+          value: schema.zabbixHistoryCache.value,
+        })
+        .from(schema.zabbixHistoryCache)
+        .where(
+          and(
+            eq(schema.zabbixHistoryCache.itemid, itemId),
+            gte(schema.zabbixHistoryCache.clock, from),
+            lte(schema.zabbixHistoryCache.clock, to),
+          ),
+        )
+        .orderBy(asc(schema.zabbixHistoryCache.clock))
+        .limit(5000);
+    });
+    if (!rows.length) return null;
+    // Drizzle retorna clock como number (mode: "number"), mas o tipo pode ser
+    // bigint — converte para number para compatibilidade com o downsample.
+    return rows.map((r) => ({
+      clock: Number(r.clock),
+      value: r.value,
+    }));
   } catch {
     return null;
   }
@@ -81,6 +105,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
       }
 
       // 1. Tenta ler do TSDB (zabbix_history_cache) primeiro — connector streaming
+      // withTenantDb() le o tenant_id do AsyncLocalStorage (setado pelo tenantContext)
       const tsdbData = await getHistoryFromCache(tenantId, itemId, from, to);
       if (tsdbData && tsdbData.length > 0) {
         const points = downsamplePoints(tsdbData, 500);

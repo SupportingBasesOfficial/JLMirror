@@ -1,6 +1,13 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import { query } from "@repo/db";
+// Device Sync — sincroniza devices do Zabbix para public.devices.
+// Usa BullMQ com fila durável Redis — sobrevive a restarts e múltiplas réplicas.
+// Processa tenants em paralelo com limite de concorrência para não saturar pool PG.
+//
+// RLS INTEGRATION: O poll inicial (busca de tenants) roda sem tenant context.
+// Cada syncTenantDevices() e envolvido em runWithTenant(tenant.tenant_id) para
+// que o UPSERT em public.devices e public.assets tenha RLS enforcement.
+import { query, runWithTenant } from "@repo/db";
 import { logger } from "@repo/logger";
 import { BlindedZabbixClient, decryptTokenParts } from "@repo/zabbix";
 import { registerRepeatableJob, startWorker } from "./queue.js";
@@ -89,61 +96,65 @@ export async function syncAllTenants(): Promise<void> {
 export async function syncTenantDevices(
   tenant: TenantConfig,
 ): Promise<{ synced: number; total: number }> {
-  const apiToken = decryptTokenParts(
-    tenant.zabbix_encrypted_token,
-    tenant.zabbix_token_iv,
-    tenant.zabbix_token_tag,
-  );
-
-  if (!apiToken) {
-    return { synced: 0, total: 0 };
-  }
-
-  const client = new BlindedZabbixClient({
-    apiUrl: tenant.zabbix_api_url,
-    apiToken,
-  });
-
-  // Passa o host_group_id para filtrar apenas os hosts do grupo do tenant
-  const devices = await client.getDevices(tenant.zabbix_host_group_id);
-
-  let synced = 0;
-  if (devices.length > 0) {
-    const hostnames = devices.map(
-      (d) => d.name || d.host || `host-${d.hostid}`,
-    );
-    const ips = devices.map((d) => d.interfaces?.[0]?.ip ?? "0.0.0.0");
-    const statuses = devices.map((d) =>
-      d.status === "0" ? "active" : "inactive",
-    );
-    const hostIds = devices.map((d) => d.hostid);
-
-    const upsertResult = await query(
-      `INSERT INTO public.devices (tenant_id, hostname, ip, type, status, zabbix_host_id)
-       SELECT $1, hostname, ip, 'server', status, zabbix_host_id
-       FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[]) AS t(hostname, ip, status, zabbix_host_id)
-       ON CONFLICT (tenant_id, zabbix_host_id) WHERE zabbix_host_id IS NOT NULL
-       DO UPDATE SET
-         hostname = EXCLUDED.hostname,
-         ip = EXCLUDED.ip,
-         status = EXCLUDED.status,
-         updated_at = timezone('utc'::text, now())`,
-      [tenant.tenant_id, hostnames, ips, statuses, hostIds],
+  // Propaga tenant_id para AsyncLocalStorage para que o UPSERT em public.devices
+  // e public.assets tenha RLS enforcement via withTenantDb().
+  return runWithTenant(tenant.tenant_id, async () => {
+    const apiToken = decryptTokenParts(
+      tenant.zabbix_encrypted_token,
+      tenant.zabbix_token_iv,
+      tenant.zabbix_token_tag,
     );
 
-    if (!upsertResult.error) {
-      synced = devices.length;
-      // Auto-cria assets a partir dos devices do Zabbix
-      await syncAssetsFromDevices(tenant.tenant_id, devices);
+    if (!apiToken) {
+      return { synced: 0, total: 0 };
     }
-  }
 
-  logger.info("Tenant sincronizado", {
-    tenantId: tenant.tenant_id,
-    synced,
-    total: devices.length,
+    const client = new BlindedZabbixClient({
+      apiUrl: tenant.zabbix_api_url,
+      apiToken,
+    });
+
+    // Passa o host_group_id para filtrar apenas os hosts do grupo do tenant
+    const devices = await client.getDevices(tenant.zabbix_host_group_id);
+
+    let synced = 0;
+    if (devices.length > 0) {
+      const hostnames = devices.map(
+        (d) => d.name || d.host || `host-${d.hostid}`,
+      );
+      const ips = devices.map((d) => d.interfaces?.[0]?.ip ?? "0.0.0.0");
+      const statuses = devices.map((d) =>
+        d.status === "0" ? "active" : "inactive",
+      );
+      const hostIds = devices.map((d) => d.hostid);
+
+      const upsertResult = await query(
+        `INSERT INTO public.devices (tenant_id, hostname, ip, type, status, zabbix_host_id)
+         SELECT $1, hostname, ip, 'server', status, zabbix_host_id
+         FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[]) AS t(hostname, ip, status, zabbix_host_id)
+         ON CONFLICT (tenant_id, zabbix_host_id) WHERE zabbix_host_id IS NOT NULL
+         DO UPDATE SET
+           hostname = EXCLUDED.hostname,
+           ip = EXCLUDED.ip,
+           status = EXCLUDED.status,
+           updated_at = timezone('utc'::text, now())`,
+        [tenant.tenant_id, hostnames, ips, statuses, hostIds],
+      );
+
+      if (!upsertResult.error) {
+        synced = devices.length;
+        // Auto-cria assets a partir dos devices do Zabbix
+        await syncAssetsFromDevices(tenant.tenant_id, devices);
+      }
+    }
+
+    logger.info("Tenant sincronizado", {
+      tenantId: tenant.tenant_id,
+      synced,
+      total: devices.length,
+    });
+    return { synced, total: devices.length };
   });
-  return { synced, total: devices.length };
 }
 
 // Auto-cria assets a partir dos devices do Zabbix

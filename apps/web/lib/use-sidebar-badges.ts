@@ -3,6 +3,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { apiRoutes } from "@/lib/api-routes";
 
 // Severidades classicas do Zabbix
 export type IncidentSeverity =
@@ -44,9 +45,9 @@ export function useSidebarBadges() {
   const fetchBadges = useCallback(async () => {
     try {
       const [incidentsRes, ticketsRes, tasksRes] = await Promise.allSettled([
-        fetch("/api/v1/system-health/stats", { credentials: "include" }),
-        fetch("/api/v1/tickets/stats", { credentials: "include" }),
-        fetch("/api/v1/tasks/stats", { credentials: "include" }),
+        fetch(apiRoutes.systemHealth.stats, { credentials: "include" }),
+        fetch(apiRoutes.tickets.stats, { credentials: "include" }),
+        fetch(apiRoutes.tasks.stats, { credentials: "include" }),
       ]);
 
       const next: SidebarBadges = { ...EMPTY_BADGES };

@@ -1,8 +1,10 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 // Lookup/criacao de usuario por email para auth externa (OAuth, LDAP)
+// Refatorado para usar Drizzle ORM em vez de query() raw SQL.
 
-import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, sql } from "drizzle-orm";
 
 interface ExternalUserInfo {
   email: string;
@@ -21,37 +23,48 @@ export async function findOrCreateExternalUser(
   info: ExternalUserInfo,
   passwordPlaceholder: string,
 ): Promise<ResolvedUser | { error: "USER_INACTIVE" }> {
-  const existing = await query<{
-    id: string;
-    email: string;
-    full_name: string | null;
-    is_active: boolean;
-  }>(
-    "SELECT id, email, full_name, is_active FROM public.users WHERE email = $1",
-    [info.email],
-  );
+  const existing = await withTenantDb(async (db) => {
+    const [row] = await db
+      .select({
+        id: schema.users.id,
+        email: schema.users.email,
+        fullName: schema.users.fullName,
+        isActive: schema.users.isActive,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.email, info.email))
+      .limit(1);
+    return row;
+  });
 
-  if (existing.data?.rows[0]) {
-    const user = existing.data.rows[0];
-    if (!user.is_active) {
+  if (existing) {
+    if (!existing.isActive) {
       return { error: "USER_INACTIVE" };
     }
     return {
-      id: user.id,
-      email: user.email,
-      fullName: user.full_name,
-      isActive: user.is_active,
+      id: existing.id,
+      email: existing.email,
+      fullName: existing.fullName,
+      isActive: existing.isActive,
       isNew: false,
     };
   }
 
-  const newUser = await query<{ id: string }>(
-    "INSERT INTO public.users (email, password_hash, full_name, is_active) VALUES ($1, $2, $3, true) RETURNING id",
-    [info.email, passwordPlaceholder, info.name],
-  );
+  const newUser = await withTenantDb(async (db) => {
+    const [row] = await db
+      .insert(schema.users)
+      .values({
+        email: info.email,
+        passwordHash: passwordPlaceholder,
+        fullName: info.name,
+        isActive: true,
+      })
+      .returning({ id: schema.users.id });
+    return row;
+  });
 
   return {
-    id: newUser.data?.rows[0]?.id as string,
+    id: newUser!.id,
     email: info.email,
     fullName: info.name,
     isActive: true,
@@ -70,20 +83,25 @@ interface TenantAuthInfo {
 export async function getUserTenantAuth(
   userId: string,
 ): Promise<TenantAuthInfo | null> {
-  const result = await query<{
-    tenant_id: string;
-    role: string;
-    scope: string;
-  }>("SELECT * FROM public.get_tenant_user_auth($1)", [userId]);
+  // A funcao RPC get_tenant_user_auth faz joins complexos entre
+  // tenant_users e tenants. Mantemos a chamada via Drizzle sql template
+  // para nao duplicar a logica de join em TypeScript.
+  const result = await withTenantDb(async (db) => {
+    return db.execute<{
+      tenant_id: string;
+      role: string;
+      scope: string;
+    }>(sql`SELECT * FROM public.get_tenant_user_auth(${userId})`);
+  });
 
-  if (!result.data?.rows.length) return null;
+  if (!result.rows.length) return null;
 
   return {
-    roles: result.data.rows.map((r) => r.role),
-    primaryTenantId: result.data.rows[0]!.tenant_id,
-    scope: result.data.rows[0]!.scope as "global" | "tenant",
-    tenantIds: result.data.rows.map((r) => r.tenant_id),
-    tenants: result.data.rows.map((r) => ({
+    roles: result.rows.map((r) => r.role),
+    primaryTenantId: result.rows[0]!.tenant_id,
+    scope: result.rows[0]!.scope as "global" | "tenant",
+    tenantIds: result.rows.map((r) => r.tenant_id),
+    tenants: result.rows.map((r) => ({
       tenant_id: r.tenant_id,
       role: r.role,
       scope: r.scope,

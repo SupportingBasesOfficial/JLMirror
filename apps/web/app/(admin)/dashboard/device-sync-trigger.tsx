@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { apiRoutes } from "@/lib/api-routes";
 
 // Dispara sync de devices do Zabbix sob demanda ao montar
 // Usado no dashboard para sincronizar imediatamente sem esperar o intervalo de 5 min
@@ -34,7 +35,7 @@ export function DeviceSyncTrigger() {
   async function triggerSync() {
     setStatus("syncing");
     try {
-      const res = await fetch("/api/v1/dashboard/sync-devices", {
+      const res = await fetch(apiRoutes.dashboard.syncDevices, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });

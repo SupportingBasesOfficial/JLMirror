@@ -44,8 +44,8 @@ Thumbs.db
 .history/
 
 # --- Playwright ---
-/test-results/
-/playwright-report/
+test-results/
+playwright-report/
 /blob-report/
 /playwright/.cache/
 
@@ -86,7 +86,7 @@ route-defs.txt
 useapi-audit.txt
 api-calls-audit.txt
 check-triggers.cjs
-utputFormat
+**/utputFormat/**
 .devin_commit_msg.txt
 
 # --- Config de IDEs duplicadas ---

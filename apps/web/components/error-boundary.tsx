@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { apiRoutes } from "@/lib/api-routes";
 
 interface ErrorInfo {
   message: string;
@@ -45,7 +46,7 @@ async function sendErrorReport(
   const token =
     typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-  const response = await fetch("/api/v1/errors/report", {
+  const response = await fetch(apiRoutes.errors.report, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -4,28 +4,16 @@
 
 import { useMemo } from "react";
 import { useApi } from "@/lib/use-api";
-
-interface ModuleFlag {
-  key: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  is_active: boolean;
-  client_visible: boolean;
-  client_enabled: boolean;
-}
-
-interface ModulesResponse {
-  modules: ModuleFlag[];
-}
+import { apiRoutes, type ModuleFlagsResponse } from "@/lib/api-routes";
 
 // Hook que busca as feature flags de modulos e retorna um map { [flagKey]: enabled }
 // Cache de 60s via SWR (dedupingInterval alto para evitar refetch excessivo)
 // Para clientes tenant: usa client_visible AND client_enabled
 // Para admin global: usa default_value (enabled)
 export function useModuleFlags() {
-  const { data, mutate, isLoading } = useApi<ModulesResponse>(
-    "/api/v1/settings/modules",
+  // Usa rota centralizada + tipo type-safe de api-routes.ts
+  const { data, mutate, isLoading } = useApi<ModuleFlagsResponse>(
+    apiRoutes.settings.modules,
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,

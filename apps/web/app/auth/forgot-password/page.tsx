@@ -10,6 +10,8 @@ import {
   MagneticButton,
   SpotlightCard,
 } from "@/components/cursor-effects";
+import { apiRoutes } from "@/lib/api-routes";
+import type { ForgotPasswordInput } from "@repo/shared-validation";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -23,10 +25,13 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/auth/forgot-password", {
+      // Payload type-safe: ForgotPasswordInput (Zod schema)
+      const payload: ForgotPasswordInput = { email };
+
+      const res = await fetch(apiRoutes.auth.forgotPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();

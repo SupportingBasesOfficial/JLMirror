@@ -16,12 +16,32 @@
     "./migrate": {
       "types": "./dist/migrate.d.ts",
       "default": "./dist/migrate.js"
+    },
+    "./drizzle": {
+      "types": "./dist/drizzle.d.ts",
+      "default": "./dist/drizzle.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
     }
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "db:gen": "drizzle-kit generate --config=drizzle.config.ts",
+    "db:push": "drizzle-kit push --config=drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=drizzle.config.ts"
   },
   "dependencies": {
+    "drizzle-orm": "0.45.2",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10",
+    "tsx": "^4.19.2"
   }
 }

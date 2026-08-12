@@ -1,6 +1,13 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import { query } from "@repo/db";
+// Alerting Engine — monitora Zabbix problems e dispara notifications baseado em rules.
+// Usa BullMQ com fila durável Redis — sobrevive a restarts e múltiplas réplicas.
+//
+// RLS INTEGRATION: O poll inicial (busca de tenants com Zabbix) roda sem tenant
+// context pois precisa ver todos os tenants. Cada processTenantAlerts() e envolvido
+// em runWithTenant(tenant.tenant_id) para que todas as queries DB dentro (busca de
+// rules, channels, notification_log) tenham RLS enforcement via withTenantDb().
+import { query, runWithTenant } from "@repo/db";
 import { logger } from "@repo/logger";
 import {
   BlindedZabbixClient,
@@ -83,7 +90,10 @@ async function pollZabbixAndAlert(): Promise<void> {
 
   for (const tenant of tenantsResult.data.rows) {
     try {
-      await processTenantAlerts(tenant);
+      // Propaga tenant_id para AsyncLocalStorage para que withTenantDb()
+      // injete SET LOCAL app.current_tenant_id em todas as queries DB
+      // dentro de processTenantAlerts (rules, channels, notification_log).
+      await runWithTenant(tenant.tenant_id, () => processTenantAlerts(tenant));
     } catch (err) {
       logger.error("Erro no tenant (alerting)", {
         tenantId: tenant.tenant_id,

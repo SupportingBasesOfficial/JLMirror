@@ -6,6 +6,12 @@ import { useState, useEffect } from "react";
 import { RefreshCw, ArrowLeft } from "lucide-react";
 import { LoadingState } from "@/components/ui/state-display";
 import { useApi } from "@/lib/use-api";
+import { apiRoutes, type ProfileResponse } from "@/lib/api-routes";
+import type {
+  UpdateProfileInput,
+  UpdatePreferencesInput,
+  UpdateAvatarInput,
+} from "@repo/shared-validation";
 
 const COLORS = {
   bg: "var(--surface-0)",
@@ -44,35 +50,9 @@ const THEMES = ["dark", "light", "auto"];
 const DENSITIES = ["compact", "comfortable", "spacious"];
 const DIGEST_FREQS = ["instant", "hourly", "daily", "weekly", "never"];
 
-interface Profile {
-  id: string;
-  user_id: string;
-  display_name: string | null;
-  bio: string | null;
-  phone: string | null;
-  location: string | null;
-  timezone: string;
-  locale: string;
-  avatar_url: string | null;
-  avatar_initials: string | null;
-  avatar_color: string;
-  job_title: string | null;
-  department: string | null;
-  skills: string[];
-  social_links: Record<string, string>;
-  notification_email: boolean;
-  notification_push: boolean;
-  notification_sms: boolean;
-  notification_digest_frequency: string;
-  quiet_hours_start: string | null;
-  quiet_hours_end: string | null;
-  theme: string;
-  density: string;
-  sidebar_collapsed: boolean;
-  email: string | null;
-  name: string | null;
-  role: string | null;
-}
+// Nota: O tipo do profile e inferido de ProfileResponse (lib/api-routes.ts),
+// que usa full_name (campo Drizzle correto), NUNCA `name`. O bug historico
+// u.name vs u.full_name foi eliminado na Phase 4 via typed AuthMeResponse.
 
 interface Session {
   id: string;
@@ -120,15 +100,16 @@ function formatTime(iso: string | null): string {
 }
 
 export default function ProfilePage() {
-  const { data: pData, mutate: mutateProfile } = useApi<{ profile: Profile }>(
-    "/api/v1/profile",
+  // Usa rotas centralizadas de apiRoutes + tipo type-safe ProfileResponse
+  const { data: pData, mutate: mutateProfile } = useApi<ProfileResponse>(
+    apiRoutes.profile.get(),
   );
   const { data: sData, mutate: mutateSessions } = useApi<{
     sessions: Session[];
-  }>("/api/v1/profile/sessions");
+  }>(apiRoutes.profile.sessions);
   const { data: secData, mutate: mutateSecurityLog } = useApi<{
     events: SecurityEvent[];
-  }>("/api/v1/profile/security/log?limit=20");
+  }>(apiRoutes.profile.securityLog(20));
   const profile = pData?.profile ?? null;
   const sessions = sData?.sessions ?? [];
   const securityLog = secData?.events ?? [];
@@ -192,20 +173,23 @@ export default function ProfilePage() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const res = await fetch("/api/v1/profile", {
+      // Payload type-safe: UpdateProfileInput (Zod schema) garante que
+      // todos os campos match o schema do backend.
+      const payload: UpdateProfileInput = {
+        display_name: displayName,
+        bio: bio || undefined,
+        phone: phone || undefined,
+        location: locationVal || undefined,
+        timezone,
+        job_title: jobTitle || undefined,
+        department: department || undefined,
+        skills: skillsArr,
+      };
+      const res = await fetch(apiRoutes.profile.update, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          display_name: displayName,
-          bio: bio || undefined,
-          phone: phone || undefined,
-          location: locationVal || undefined,
-          timezone,
-          job_title: jobTitle || undefined,
-          department: department || undefined,
-          skills: skillsArr,
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSuccess("Perfil atualizado!");
@@ -219,14 +203,16 @@ export default function ProfilePage() {
   async function handleSaveAvatar() {
     setError(null);
     try {
-      const res = await fetch("/api/v1/profile/avatar", {
+      // Payload type-safe: UpdateAvatarInput (Zod schema)
+      const payload: UpdateAvatarInput = {
+        avatar_initials: avatarInitials,
+        avatar_color: avatarColor,
+      };
+      const res = await fetch(apiRoutes.profile.avatar, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          avatar_initials: avatarInitials,
-          avatar_color: avatarColor,
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSuccess("Avatar atualizado!");
@@ -240,21 +226,24 @@ export default function ProfilePage() {
   async function handleSavePreferences() {
     setError(null);
     try {
-      const res = await fetch("/api/v1/profile/preferences", {
+      // Payload type-safe: UpdatePreferencesInput (Zod schema)
+      const payload: UpdatePreferencesInput = {
+        notification_email: notifEmail,
+        notification_push: notifPush,
+        notification_sms: notifSms,
+        notification_digest_frequency: digestFreq as
+          "instant" | "hourly" | "daily" | "weekly",
+        quiet_hours_start: quietStart || undefined,
+        quiet_hours_end: quietEnd || undefined,
+        theme: theme as "light" | "dark" | "system",
+        density: density as "compact" | "comfortable",
+        sidebar_collapsed: sidebarCollapsed,
+      };
+      const res = await fetch(apiRoutes.profile.preferences, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          notification_email: notifEmail,
-          notification_push: notifPush,
-          notification_sms: notifSms,
-          notification_digest_frequency: digestFreq,
-          quiet_hours_start: quietStart || null,
-          quiet_hours_end: quietEnd || null,
-          theme,
-          density,
-          sidebar_collapsed: sidebarCollapsed,
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setSuccess("Preferências atualizadas!");
@@ -267,7 +256,7 @@ export default function ProfilePage() {
 
   async function handleRevokeSession(id: string) {
     try {
-      const res = await fetch(`/api/v1/profile/sessions/${id}`, {
+      const res = await fetch(apiRoutes.profile.sessionRevoke(id), {
         method: "DELETE",
         credentials: "include",
       });
@@ -404,7 +393,7 @@ export default function ProfilePage() {
           </div>
           <div>
             <div className="text-sm font-bold" style={{ color: COLORS.teal }}>
-              {profile.name ?? profile.display_name ?? "User"}
+              {profile.full_name ?? profile.display_name ?? "User"}
             </div>
             <div className="text-[12px]" style={{ color: COLORS.muted }}>
               {profile.email}

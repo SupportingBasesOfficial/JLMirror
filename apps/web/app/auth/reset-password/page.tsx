@@ -10,6 +10,8 @@ import {
   MagneticButton,
   SpotlightCard,
 } from "@/components/cursor-effects";
+import { apiRoutes } from "@/lib/api-routes";
+import type { ResetPasswordInput } from "@repo/shared-validation";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -50,10 +52,17 @@ function ResetPasswordForm() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/v1/auth/reset-password", {
+      // Payload type-safe: ResetPasswordInput (Zod schema) garante que
+      // token (min 32 chars) + new_password (min 8 chars) match o schema.
+      const payload: ResetPasswordInput = {
+        token,
+        new_password: newPassword,
+      };
+
+      const res = await fetch(apiRoutes.auth.resetPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, new_password: newPassword }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();

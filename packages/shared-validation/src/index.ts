@@ -2,6 +2,10 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { z } from "zod";
 
+// Re-exporta o modulo ponte que conecta tipos Drizzle (DB) aos schemas Zod (API).
+// Ver db-types.ts para detalhes do alinhamento compile-time.
+export * from "./db-types";
+
 // ========== Auth Schemas ==========
 export const loginInputSchema = z.object({
   email: z.string().email(),

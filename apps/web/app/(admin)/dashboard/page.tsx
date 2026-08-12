@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { serverApiGetWithToken } from "@/lib/api-client";
+import { apiRoutes } from "@/lib/api-routes";
 import { DeviceGrid } from "@/components/device-grid";
 import { StateDisplay } from "@/components/ui/state-display";
 import { KpiCard } from "@/components/ui/kpi-card";
@@ -22,8 +23,9 @@ import { DeviceSyncTrigger } from "./device-sync-trigger";
 import { DashboardAutoRefresh } from "./dashboard-auto-refresh";
 
 async function getZabbixDevices(accessToken: string, refreshToken?: string) {
+  // Usa rota centralizada de apiRoutes
   const result = await serverApiGetWithToken<{ devices: ZabbixHost[] }>(
-    "/api/v1/zabbix/devices",
+    apiRoutes.zabbix.devices,
     accessToken,
     refreshToken,
   );
@@ -31,8 +33,9 @@ async function getZabbixDevices(accessToken: string, refreshToken?: string) {
 }
 
 async function getZabbixTriggers(accessToken: string, refreshToken?: string) {
+  // Usa rota centralizada de apiRoutes
   const result = await serverApiGetWithToken<{ data: ZabbixTrigger[] }>(
-    "/api/v1/zabbix/triggers",
+    apiRoutes.zabbix.triggers,
     accessToken,
     refreshToken,
   );
