@@ -15,7 +15,7 @@
   "dependencies": {
     "@babel/runtime": "^7.26.0",
     "@expo/vector-icons": "^15.0.3",
-    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-async-storage/async-storage": "2.1.0",
     "@repo/logger": "workspace:*",
     "@repo/shared-validation": "workspace:*",
     "@tanstack/query-async-storage-persister": "5.101.4",

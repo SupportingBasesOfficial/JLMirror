@@ -21,8 +21,8 @@ react {
     bundleCommand = "export:embed"
 
     /* Folders */
-     //   The root of your project, i.e. where "package.json" lives. Default is '../..'
-    // root = file("../../")
+    //   The root of your project, i.e. where "package.json" lives. Default is '../..'
+    root = file("../../")
     //   The folder where the react-native NPM package is. Default is ../../node_modules/react-native
     // reactNativeDir = file("../../node_modules/react-native")
     //   The folder where the react-native Codegen package is. Default is ../../node_modules/@react-native/codegen
@@ -62,6 +62,11 @@ react {
     /* Autolinking */
     autolinkLibrariesWithApp()
 }
+
+// Forca o Metro server root a ser o project root (apps/mobile) em vez do monorepo root.
+// Sem isso, o expo export:embed resolve o entry file do monorepo root, falhando
+// com "Unable to resolve module ./../../node_modules/expo-router/entry.js".
+// A env var EXPO_NO_METRO_WORKSPACE_ROOT e setada no metro.config.js.
 
 /**
  * Set this to true in release builds to optimize the app using [R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization).
