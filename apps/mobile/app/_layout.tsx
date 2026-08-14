@@ -2,12 +2,12 @@
 // Root layout — auth gate + providers globais.
 // Se nao autenticado → redirect para /(auth)/login.
 // Se autenticado → renderiza (tabs).
+import "../src/theme/global.css";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
-import { OfflineBanner } from "@/components/ui/offline-banner";
 import { setupQueryPersistence } from "@/lib/query-persistence";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -61,12 +61,11 @@ export default function RootLayout() {
       <AuthProvider>
         <AuthGate>
           <StatusBar style="light" />
-          <OfflineBanner />
           <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="device/[id]" />
-            <Stack.Screen name="ticket/[id]" />
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="device/[id]" options={{ headerShown: false }} />
+            <Stack.Screen name="ticket/[id]" options={{ headerShown: false }} />
           </Stack>
         </AuthGate>
       </AuthProvider>
