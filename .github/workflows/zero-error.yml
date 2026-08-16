@@ -1,6 +1,6 @@
 # AI Black Box v2 — CI/CD Workflow
 # Runs ALL validators on PRs (supreme judge). Timeout: 10 minutes.
-# Bimodal enforcement: local hooks can be bypassed, CI cannot.
+# Bimodal enforcement: local hooks can be bypassed; CI cannot.
 
 name: AI Black Box v2 Validation
 
@@ -21,56 +21,61 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: pnpm
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.0.0'
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: |
-          if [ -f package.json ]; then npm ci || npm install; fi
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Install repository dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install AI Black Box dependencies
         run: |
           if [ -d .zero-error ]; then
-            cd .zero-error && npm install --production 2>/dev/null || true
+            cd .zero-error
+            npm install --omit=dev
+          else
+            echo "AI Black Box v2: .zero-error/ not found."
+            exit 1
           fi
 
       - name: Install security tools
         run: |
-          pip install semgrep gitleaks 2>/dev/null || true
-          go install github.com/gitleaks/gitleaks/v8@latest 2>/dev/null || true
+          pip install semgrep
+          go install github.com/gitleaks/gitleaks/v8@latest
 
       - name: Verify integrity (immutable files)
         run: |
-          if [ -f .zero-error/.integrity ]; then
-            node --input-type=module -e "
-              import('.zero-error/lib/integrity-guard.js').then(m => {
-                const r = m.verifyIntegrity('.zero-error');
-                if (!r.valid) {
-                  console.error('INTEGRITY VIOLATION:');
-                  r.violations.forEach(v => console.error('  - ' + v.file + ': ' + v.reason));
-                  process.exit(1);
-                }
-                console.log('Integrity: OK');
-              });
-            "
-          fi
+          node --input-type=module -e "
+            import('./.zero-error/lib/integrity-guard.js').then(m => {
+              const r = m.verifyIntegrity('.zero-error');
+              if (!r.valid) {
+                console.error('INTEGRITY VIOLATION:');
+                r.violations.forEach(v => console.error('  - ' + v.file + ': ' + v.reason));
+                process.exit(1);
+              }
+              console.log('Integrity: OK');
+            }).catch(err => {
+              console.error('Integrity check failed:', err.message);
+              process.exit(1);
+            });
+          "
 
       - name: Run AI Black Box validators (CI mode — supreme judge)
-        run: |
-          if [ -d .zero-error ]; then
-            node .zero-error/validators/index.js ci
-          else
-            echo "AI Black Box v2: .zero-error/ not found. Skipping."
-          fi
+        run: node .zero-error/validators/index.js ci
 
       - name: Upload AI Black Box report
         if: always()
