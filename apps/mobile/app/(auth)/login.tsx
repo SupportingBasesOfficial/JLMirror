@@ -12,8 +12,8 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context.js";
+import { ApiError } from "@/lib/api-client.js";
 import { loginInputSchema } from "@repo/shared-validation";
 
 export default function LoginScreen() {
@@ -30,23 +30,21 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // Valida com Zod antes de enviar
+      // Validação defensiva com Zod antes do disparo de rede
       const parsed = loginInputSchema.parse({ email, password });
-      console.warn("[Login] Tentando login com:", parsed.email);
-      const res = await login(parsed.email, parsed.password);
-      console.warn("[Login] Resposta:", JSON.stringify(res).substring(0, 200));
 
-      // Se MFA requerido, navega para verificacao
-      if (res.mfa_required && res.mfa_challenge_token) {
+      const res = await login(parsed.email, parsed.password);
+
+      // CORREÇÃO P2: Mapeamento alinhado ao campo estrito challenge_token da API
+      if (res.mfa_required && res.challenge_token) {
         router.replace({
           pathname: "/(auth)/mfa-verify",
-          params: { challengeToken: res.mfa_challenge_token },
+          params: { challengeToken: res.challenge_token },
         });
       }
-      // Se nao tem MFA, o AuthProvider ja atualizou o estado e o AuthGate
+      // Se não tem MFA, o AuthProvider já atualizou o estado e o AuthGate
       // vai redirecionar para /(tabs) automaticamente.
     } catch (err: unknown) {
-      console.warn("[Login] Erro:", err);
       if (err instanceof ApiError) {
         setError(err.message);
       } else if (err instanceof Error) {
@@ -65,7 +63,7 @@ export default function LoginScreen() {
       className="flex-1 bg-background"
     >
       <View className="flex-1 items-center justify-center px-6">
-        {/* Logo / Titulo */}
+        {/* Logo / Título */}
         <View className="mb-10 items-center">
           <Text className="text-3xl font-bold text-primary">JLMIRROR</Text>
           <Text className="mt-2 text-sm text-muted-foreground">
@@ -126,7 +124,7 @@ export default function LoginScreen() {
             className="mt-6 items-center"
           >
             <Text className="text-xs text-muted-foreground">
-              ← Voltar para a pagina inicial
+              ← Voltar para a página inicial
             </Text>
           </Pressable>
         </View>

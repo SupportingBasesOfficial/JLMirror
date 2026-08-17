@@ -11,8 +11,8 @@ import {
   Platform,
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useAuth } from "@/lib/auth-context";
-import { ApiError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context.js";
+import { ApiError } from "@/lib/api-client.js";
 import { mfaVerifySchema } from "@repo/shared-validation";
 
 export default function MfaVerifyScreen() {
@@ -29,20 +29,21 @@ export default function MfaVerifyScreen() {
     setLoading(true);
 
     try {
-      const parsed = mfaVerifySchema.parse({ code });
-      if (!challengeToken) {
-        setError("Challenge token ausente");
-        return;
-      }
-      await verifyMfa(challengeToken, parsed.code);
-      // AuthProvider atualizou o estado — AuthGate redireciona para /(tabs)
+      // CORREÇÃO P2: Injeta o token recebido no esquema completo de validação do Zod
+      const parsed = mfaVerifySchema.parse({
+        code,
+        challenge_token: challengeToken || "",
+      });
+
+      await verifyMfa(challengeToken || "", parsed.code);
+      // AuthProvider atualizou o estado — AuthGate redireciona para /(tabs) automaticamente
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("Codigo invalido");
+        setError("Código inválido");
       }
     } finally {
       setLoading(false);
@@ -57,10 +58,10 @@ export default function MfaVerifyScreen() {
       <View className="flex-1 items-center justify-center px-6">
         <View className="mb-8 items-center">
           <Text className="text-2xl font-bold text-foreground">
-            Verificacao MFA
+            Verificação MFA
           </Text>
           <Text className="mt-2 text-sm text-muted-foreground">
-            Digite o codigo de 6 digitos do seu autenticador
+            Digite o código de 6 dígitos do seu autenticador
           </Text>
         </View>
 

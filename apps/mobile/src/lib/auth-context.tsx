@@ -9,21 +9,21 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { api } from "./api-client";
+import { api } from "./api-client.js";
 import {
   apiRoutes,
   type LoginResponse,
   type AuthMeResponse,
   type AuthUser,
   type TenantMembership,
-} from "./api-routes";
+} from "./api-routes.js";
 import {
   saveTokens,
   getAccessToken,
   getRefreshToken,
   saveUserData,
   clearAll,
-} from "./secure-storage";
+} from "./secure-storage.js";
 
 interface AuthState {
   user: AuthUser | null;
@@ -42,6 +42,11 @@ interface AuthContextValue extends AuthState {
   verifyMfa: (challengeToken: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+}
+
+interface RefreshResponse {
+  access_token: string;
+  refresh_token: string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -74,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Tenta buscar /auth/me para validar o token
+      // Tenta buscar /auth/me para validar o token ativo
       try {
         const me: AuthMeResponse = await api.get(apiRoutes.auth.me);
         setState({
@@ -85,20 +90,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
         });
       } catch {
-        // Token invalido — tenta refresh
+        // Token expirado ou inválido — tenta refresh automático de sessão
         const refreshToken = await getRefreshToken();
         if (refreshToken) {
-          const res = await api.post<LoginResponse>(
+          // CORREÇÃO P2: Tipagem correta do retorno restrito do endpoint de refresh
+          const res = await api.post<RefreshResponse>(
             apiRoutes.auth.refresh,
             { refresh_token: refreshToken },
             { skipAuth: true },
           );
+
           await saveTokens(res.access_token, res.refresh_token);
-          await saveUserData(res.user);
+
+          // CORREÇÃO P2: Hidratação em duas etapas invocando /auth/me após renovação das credenciais
+          const meAfterRefresh: AuthMeResponse = await api.get(
+            apiRoutes.auth.me,
+          );
+          await saveUserData(meAfterRefresh.user);
+
           setState({
-            user: res.user,
-            tenants: res.tenants,
-            scope: res.tenants[0]?.scope ?? "tenant",
+            user: meAfterRefresh.user,
+            tenants: meAfterRefresh.tenants,
+            scope: meAfterRefresh.scope,
             isLoading: false,
             isAuthenticated: true,
           });
@@ -144,10 +157,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Login direto (sem MFA) — salva tokens e atualiza estado
       await saveTokens(res.access_token, res.refresh_token);
       await saveUserData(res.user);
+
+      const primaryTenantScope =
+        res.tenants && res.tenants.length > 0
+          ? (res.tenants[0]?.scope ?? "tenant")
+          : "tenant";
+
       setState({
         user: res.user,
         tenants: res.tenants,
-        scope: res.tenants[0]?.scope ?? "tenant",
+        scope: primaryTenantScope,
         isLoading: false,
         isAuthenticated: true,
       });
@@ -167,10 +186,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await saveTokens(res.access_token, res.refresh_token);
       await saveUserData(res.user);
+
+      const primaryTenantScope =
+        res.tenants && res.tenants.length > 0
+          ? (res.tenants[0]?.scope ?? "tenant")
+          : "tenant";
+
       setState({
         user: res.user,
         tenants: res.tenants,
-        scope: res.tenants[0]?.scope ?? "tenant",
+        scope: primaryTenantScope,
         isLoading: false,
         isAuthenticated: true,
       });

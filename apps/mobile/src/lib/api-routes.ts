@@ -1,9 +1,6 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // Centralized API route registry — port de apps/web/lib/api-routes.ts.
 // No mobile nao ha BFF proxy — todas as URLs usam EXPO_PUBLIC_API_URL como base.
-//
-// Tipos de resposta sao co-located aqui, tipos de request vem de
-// @repo/shared-validation (Zod schemas inferidos).
 import type {
   LoginInput,
   MfaVerifyInput,
@@ -39,7 +36,7 @@ export interface LoginResponse {
   user: AuthUser;
   tenants: TenantMembership[];
   mfa_required?: boolean;
-  mfa_challenge_token?: string;
+  challenge_token?: string; // ALINHADO COM O BACKEND
 }
 
 export interface AuthMeResponse {
@@ -85,11 +82,9 @@ export interface DashboardOverviewResponse {
     planned_start_at: string;
     priority: string;
   }[];
-
   ssl_expiring_soon: Array<{ id: string; hostname: string; valid_to: string }>;
   [key: string]: unknown;
 }
-
 // --- Devices ---
 export interface Device {
   id: string;
@@ -264,7 +259,7 @@ export interface AnomalyDetectionsResponse {
   detections: AnomalyDetection[];
 }
 
-// --- Zabbix (fonte primaria de triggers/alertas) ---
+// --- Zabbix ---
 export interface ZabbixHostInterface {
   ip: string;
   type: string;
@@ -330,8 +325,8 @@ export interface ZabbixTrigger {
   triggerid: string;
   description: string;
   expression: string;
-  priority: string; // "0"-"5"
-  value: string; // "0" = OK, "1" = PROBLEM
+  priority: string;
+  value: string;
   state: string;
   status: string;
   url?: string;
@@ -358,7 +353,6 @@ export interface ZabbixItemsResponse {
   items: ZabbixItem[];
 }
 
-// SINCED CONTRACT: Alinhamento de tipo nominal com o validador do monorepo @repo/shared-validation
 export interface ZabbixHistoryEntry {
   itemid: string;
   clock: number;
@@ -369,7 +363,6 @@ export interface ZabbixHistoryEntry {
 export interface ZabbixHistoryResponse {
   data: ZabbixHistoryEntry[];
 }
-
 // ============================================================================
 // Route registry — typed constants for all endpoints
 // ============================================================================

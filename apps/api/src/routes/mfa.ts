@@ -461,13 +461,24 @@ mfaRoute.post("/verify", rateLimitWrite, async (c) => {
       );
     }
 
-    // Gera tokens JWT
-    const { accessToken, refreshToken } = await generateAndStoreTokens({
-      sub: userRow.id,
-      tenant_id: tenantAuth.primaryTenantId,
-      roles: tenantAuth.roles,
-      scope: tenantAuth.scope,
-      tenant_ids: tenantAuth.tenantIds,
+    // CORREÇÃO P1: Captura explícita do tokenHash e persistência na tabela de sessões
+    const { accessToken, refreshToken, refreshTokenHash } =
+      await generateAndStoreTokens({
+        sub: userRow.id,
+        tenant_id: tenantAuth.primaryTenantId,
+        roles: tenantAuth.roles,
+        scope: tenantAuth.scope,
+        tenant_ids: tenantAuth.tenantIds,
+      });
+
+    // Injeção de conformidade estrita de sessão na base de dados (Hypertable RLS)
+    // Injeção de conformidade estrita de sessão na base de dados calibrada
+    await withTenantDb(async (db) => {
+      await db.insert(schema.sessions).values({
+        userId: userRow.id,
+        refreshTokenHash: refreshTokenHash,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Válido por 30 dias
+      });
     });
 
     try {
