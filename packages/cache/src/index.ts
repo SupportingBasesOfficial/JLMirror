@@ -1,7 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import Redis from "ioredis";
-import { query } from "@repo/db";
+import { query, getCurrentTenantId } from "@repo/db";
 
 export {
   circuitCanCall,
@@ -82,11 +82,21 @@ export async function closeCache(): Promise<void> {
   await Promise.all(promises);
 }
 
+/**
+ * Resolve e isola a chave com o prefixo do tenant atual obtido do AsyncLocalStorage.
+ * Chaves com o prefixo explicito "global:" ignoram esta isolação (ex: rate limit global).
+ */
+function resolveKey(key: string): string {
+  if (key.startsWith("global:")) return key;
+  const tenantId = getCurrentTenantId();
+  return tenantId ? `tenant:${tenantId}:${key}` : `global:${key}`;
+}
+
 // Cache get/set para strings
 export async function cacheGet(key: string): Promise<string | null> {
   try {
     const client = createCacheClient();
-    return await client.get(key);
+    return await client.get(resolveKey(key));
   } catch {
     return null;
   }
@@ -99,10 +109,11 @@ export async function cacheSet(
 ): Promise<void> {
   try {
     const client = createCacheClient();
+    const scopedKey = resolveKey(key);
     if (ttlSeconds) {
-      await client.set(key, value, "EX", ttlSeconds);
+      await client.set(scopedKey, value, "EX", ttlSeconds);
     } else {
-      await client.set(key, value);
+      await client.set(scopedKey, value);
     }
   } catch {
     // Silencioso — cache é best-effort
@@ -119,11 +130,12 @@ export async function cacheIncr(
 ): Promise<number> {
   try {
     const client = createCacheClient();
+    const scopedKey = resolveKey(key);
     // INCR é atomico no Redis — cria a key com valor 1 se nao existe
-    const count = await client.incr(key);
+    const count = await client.incr(scopedKey);
     // So define TTL na primeira chamada (count === 1) para nao resetar a janela
     if (count === 1) {
-      await client.expire(key, ttlSeconds);
+      await client.expire(scopedKey, ttlSeconds);
     }
     return count;
   } catch {
@@ -154,7 +166,7 @@ export async function cacheSetJSON(
 export async function cacheDel(key: string): Promise<void> {
   try {
     const client = createCacheClient();
-    await client.del(key);
+    await client.del(resolveKey(key));
   } catch {
     // Silencioso
   }
@@ -164,12 +176,13 @@ export async function cacheDel(key: string): Promise<void> {
 export async function cacheDelByPrefix(prefix: string): Promise<void> {
   try {
     const client = createCacheClient();
+    const scopedPrefix = resolveKey(prefix);
     let cursor = "0";
     do {
       const [nextCursor, keys] = await client.scan(
         cursor,
         "MATCH",
-        `${prefix}*`,
+        `${scopedPrefix}*`,
         "COUNT",
         100,
       );
@@ -237,7 +250,7 @@ export async function cachedQuery<T>(
 export async function publish(channel: string, message: string): Promise<void> {
   try {
     const client = createCacheClient();
-    await client.publish(channel, message);
+    await client.publish(resolveKey(channel), message);
   } catch {
     // Silencioso
   }
@@ -249,9 +262,10 @@ export async function subscribe(
 ): Promise<void> {
   try {
     const client = createPubSubClient();
-    await client.subscribe(channel);
+    const scopedChannel = resolveKey(channel);
+    await client.subscribe(scopedChannel);
     client.on("message", (_channel, message) => {
-      if (_channel === channel) {
+      if (_channel === scopedChannel) {
         handler(message);
       }
     });
@@ -267,7 +281,8 @@ export async function psubscribe(
 ): Promise<void> {
   try {
     const client = createPubSubClient();
-    await client.psubscribe(pattern);
+    const scopedPattern = resolveKey(pattern);
+    await client.psubscribe(scopedPattern);
     client.on("pmessage", (_pattern, channel, message) => {
       if (_pattern === pattern) {
         handler(channel, message);

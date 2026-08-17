@@ -93,6 +93,7 @@ import { startPartitionManager } from "./lib/partition-manager.js";
 import { startCorrelationEngine } from "./lib/correlation-engine.js";
 import { startMetricsCollector } from "./lib/metrics-collector.js";
 import { startZabbixWriteWorker } from "./lib/zabbix-write-processor.js";
+import { startZabbixMetricsWorker } from "./lib/zabbix-metrics-processor.js";
 import { initializeSecrets } from "@repo/secrets";
 import {
   validateEnv,
@@ -103,7 +104,6 @@ import "./types.js";
 
 loadEnv();
 
-// Inicializa Sentry no backend — captura exceções não tratadas e erros 500
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
@@ -116,10 +116,8 @@ if (process.env.SENTRY_DSN) {
   console.warn("[startup] SENTRY_DSN não configurado — Sentry desativado");
 }
 
-// Inicializa registry de segredos com suporte a rotação dinâmica
 initializeSecrets();
 
-// Decodifica chaves JWT de base64 para PEM — necessário porque o .env não suporta multi-line.
 function decodeBase64Key(encoded: string | undefined): string | undefined {
   if (!encoded) return undefined;
   if (encoded.includes("BEGIN ")) {
@@ -133,22 +131,15 @@ process.env.JWT_PUBLIC_KEY = decodeBase64Key(process.env.JWT_PUBLIC_KEY);
 
 const app = new Hono();
 
-// Captura exceções não tratadas e envia ao Sentry com contexto HTTP
 app.onError((err, c) => {
   const correlationId = c.get("correlationId") as string | undefined;
-
   Sentry.captureException(err, {
     level: "error",
     contexts: {
-      http: {
-        method: c.req.method,
-        url: c.req.url,
-        path: c.req.path,
-      },
+      http: { method: c.req.method, url: c.req.url, path: c.req.path },
       ...(correlationId ? { correlation: { id: correlationId } } : {}),
     },
   });
-
   const msg = err instanceof Error ? err.message : "Erro interno do servidor";
   return c.json(
     {
@@ -162,7 +153,6 @@ app.onError((err, c) => {
   );
 });
 
-// Middlewares globais — ordem importa: security headers -> CORS -> compression -> logging -> error handler -> tracing -> body limits -> timeout
 app.use("*", securityHeaders);
 app.use("*", corsMiddleware);
 app.use("*", compressionMiddleware);
@@ -173,37 +163,22 @@ app.use("*", logIngestionMiddleware);
 app.use("*", bodySizeLimit());
 app.use("*", requestTimeout(30_000));
 
-// Rotas públicas (sem autenticação) — montadas ANTES do rate limit global
-// para que healthchecks do Docker e metricas nao esgotem o bucket
 app.route("/api/v1/health", healthRoute);
 app.route("/api/v1/metrics", metricsRoute);
 app.route("/api/v1/docs", docsRoute);
 app.use("/api/v1/auth/*", rateLimitAuth);
 app.route("/api/v1/auth", authRoute);
-
-// TV public endpoint — mounted before JWT auth (uses own token auth)
 app.route("/api/v1/tv", tvRoute);
-
-// Branding public endpoint — mounted before JWT auth (public, no auth needed)
 app.route("/api/v1/branding", brandingRoute);
-
-// Billing — mounted before JWT auth (webhook endpoint is public, others need auth)
 app.route("/api/v1/billing", billingRoute);
-
-// Status page public endpoint — mounted before JWT auth (public, no auth needed)
 app.route("/api/v1/status-page", statusPagePublicRoute);
 
-// Rate limit global — aplicado apos rotas publicas para nao bloquear healthchecks
 app.use("*", rateLimitApi);
 
-// Middlewares de autenticação e isolamento de tenant — aplicados globalmente
-// Rotas publicas (health, metrics, docs, auth, tv/data, branding, billing, status-page) sao montadas ANTES destes middlewares
-// e portanto nao sao afetadas. Todas as demais rotas exigem JWT + tenant context.
 app.use("/api/v1/*", jwtAuth);
 app.use("/api/v1/*", tenantContext);
 app.use("/api/v1/*", auditMiddleware);
 
-// Rotas protegidas — modulos ATIVOS (sem requireModule)
 app.route("/api/v1/zabbix", zabbixRoute);
 app.route("/api/v1/mfa", mfaRoute);
 app.route("/api/v1/rbac", rbacRoute);
@@ -214,8 +189,6 @@ app.route("/api/v1/settings", settingsRoute);
 app.route("/api/v1/dashboard", dashboardRoute);
 app.route("/api/v1/ws", wsRoute);
 
-// Rotas protegidas — modulos DESATIVADOS (requireModule bloqueia se flag off)
-// requireModule aplicado em ambos path e path/* para cobrir rota raiz e sub-rotas
 app.use("/api/v1/devices", requireModule("module_devices"));
 app.use("/api/v1/devices/*", requireModule("module_devices"));
 app.route("/api/v1/devices", devicesRoute);
@@ -413,12 +386,18 @@ app.use("*", async (c, next) => {
 
 const port = Number(process.env.API_PORT ?? 3001);
 
-// Startup sequence: valida env -> espera DB -> inicia servidor -> workers -> graceful shutdown
+// Startup sequence blindada contra condições de corrida (Race Conditions)
 async function bootstrap(): Promise<void> {
+  // 1. Valida o ambiente e garante isolamento do SO
   validateEnv();
+
+  // 2. Aguarda a estabilização do banco de dados e executa migrações pendentes em segurança
   await waitForDatabase();
+
+  // 3. Registra os escutadores para um encerramento limpo (Graceful Shutdown)
   setupGracefulShutdown();
 
+  // 4. Inicia o servidor HTTP base do Hono Node Server
   const server = serve(
     {
       fetch: app.fetch,
@@ -431,10 +410,10 @@ async function bootstrap(): Promise<void> {
     },
   );
 
-  // Hook WebSocket no server HTTP retornado por serve()
+  // 5. Acopla o ecossistema de WebSockets em tempo real
   setupWebSocket(server as unknown as Server);
 
-  // Inicia workers em background via BullMQ (filas duráveis Redis)
+  // 6. Ativa os workers em background APÓS a infraestrutura de dados estar pronta
   await startTaskScheduler();
   await startAlertingEngine();
   await startDeviceSync();
@@ -442,6 +421,9 @@ async function bootstrap(): Promise<void> {
   await startCorrelationEngine();
   await startMetricsCollector();
   await startZabbixWriteWorker();
+
+  // 7. Ativa o novo pipeline industrial de absorção de telemetria assíncrona
+  await startZabbixMetricsWorker();
 }
 
 void bootstrap();

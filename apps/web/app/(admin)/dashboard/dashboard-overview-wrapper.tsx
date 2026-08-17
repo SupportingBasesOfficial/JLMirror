@@ -2,45 +2,11 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { cookies } from "next/headers";
 import { serverApiGetWithToken } from "@/lib/api-client";
+import { apiRoutes, type DashboardOverviewResponse } from "@/lib/api-routes";
 import { LoadingState } from "@/components/ui/state-display";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Card, CardHeader } from "@/components/ui/card";
 import { DynamicKpiGrid } from "./dynamic-kpi-grid";
-
-interface DashboardData {
-  kpis: {
-    devices: { total: number; online: number };
-    tickets: { open: number; critical: number };
-    compliance: { total: number; compliant: number; rate: number };
-    ssl: { total: number; expiring: number };
-    backups: { total: number; successful: number; rate: number };
-    firewall: { total: number; active: number };
-    changes: { pending: number; in_progress: number };
-    assets: { total: number };
-    scripts: { total: number };
-    notifications: { unread: number };
-  };
-  recent_activity: Array<{
-    action: string;
-    entity_type: string;
-    created_at: string;
-  }>;
-  recent_tickets: Array<{
-    id: string;
-    subject: string;
-    status: string;
-    priority: string;
-    created_at: string;
-  }>;
-  upcoming_changes: Array<{
-    id: string;
-    rfc_number: string;
-    title: string;
-    planned_start_at: string;
-    priority: string;
-  }>;
-  ssl_expiring_soon: Array<{ id: string; hostname: string; valid_to: string }>;
-}
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -75,8 +41,9 @@ export default async function DashboardOverviewWrapper() {
     return <LoadingState label="Carregando KPIs..." />;
   }
 
-  const result = await serverApiGetWithToken<DashboardData>(
-    "/api/v1/dashboard/overview",
+  // Usa rota centralizada + tipo type-safe DashboardOverviewResponse
+  const result = await serverApiGetWithToken<DashboardOverviewResponse>(
+    apiRoutes.dashboard.overview,
     accessToken,
     refreshToken,
   );

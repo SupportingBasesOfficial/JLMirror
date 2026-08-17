@@ -1,9 +1,18 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
+// Rotas de autenticacao — refatoradas para Drizzle ORM + error handling padronizado.
+//
+// PADRAO DE ERROR HANDLING (consistente em todas as rotas):
+//   400 — VALIDATION_ERROR (Zod parse falhou) ou INVALID_JSON
+//   401 — INVALID_CREDENTIALS, INVALID_TOKEN, TOKEN_REVOKED, SESSION_EXPIRED
+//   403 — USER_INACTIVE, NO_TENANT_ACCESS, TENANT_INACTIVE
+//   404 — USER_NOT_FOUND, SESSION_NOT_FOUND, DEVICE_NOT_FOUND
+//   500 — INTERNAL_ERROR (logado, mensagem generica em producao)
 import { Hono } from "hono";
 import argon2 from "argon2";
 import crypto from "node:crypto";
-import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { logger } from "@repo/logger";
 import {
   verifyToken,
@@ -48,6 +57,57 @@ import "../types.js";
 
 export const authRoute = new Hono();
 
+// Helper: busca tenant auth (roles + tenants) via RPC — logica complexa
+// de join entre tenant_users e tenants permanece na funcao SQL.
+async function fetchTenantAuth(userId: string) {
+  return getUserTenantAuth(userId);
+}
+
+// Helper: busca status MFA TOTP do usuario via Drizzle
+async function fetchMfaStatus(userId: string): Promise<boolean> {
+  return withTenantDb(async (db) => {
+    const [row] = await db
+      .select({ isEnabled: schema.userMfaTotp.isEnabled })
+      .from(schema.userMfaTotp)
+      .where(eq(schema.userMfaTotp.userId, userId))
+      .limit(1);
+    return row?.isEnabled ?? false;
+  });
+}
+
+// Helper: cria challenge MFA via Drizzle
+async function createMfaChallenge(userId: string): Promise<string> {
+  const challengeToken = crypto.randomUUID();
+  await withTenantDb(async (db) => {
+    await db.insert(schema.mfaChallenges).values({
+      userId,
+      method: "totp",
+      challengeToken,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    });
+  });
+  return challengeToken;
+}
+
+// Helper: escreve audit log de login falhado (best-effort, nao bloqueia)
+async function auditLoginFailed(
+  userId: string | null,
+  reason: string,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await writeAuditLog({
+      userId,
+      action: "auth.login.failed",
+      entityType: "users",
+      entityId: userId,
+      metadata: { reason, ...metadata },
+    });
+  } catch {
+    // Audit log falhou — nao bloqueia login
+  }
+}
+
 // POST /api/v1/auth/login
 authRoute.post("/login", async (c) => {
   try {
@@ -58,11 +118,12 @@ authRoute.post("/login", async (c) => {
       return c.json(
         {
           error: {
-            code: "INVALID_CREDENTIALS",
-            message: "Email ou senha inválidos",
+            code: "VALIDATION_ERROR",
+            message: "Dados inválidos",
+            details: parsed.error.flatten(),
           },
         },
-        401,
+        400,
       );
     }
 
@@ -72,32 +133,25 @@ authRoute.post("/login", async (c) => {
       c.req.header("x-real-ip") ||
       null;
 
-    // Busca usuário global em public.users
-    const userResult = await query<{
-      id: string;
-      email: string;
-      password_hash: string;
-      full_name: string | null;
-      is_active: boolean;
-      must_change_password: boolean;
-    }>(
-      "SELECT id, email, password_hash, full_name, is_active, must_change_password FROM public.users WHERE email = $1",
-      [email],
-    );
+    // Busca usuário global em public.users via Drizzle
+    const user = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          passwordHash: schema.users.passwordHash,
+          fullName: schema.users.fullName,
+          isActive: schema.users.isActive,
+          mustChangePassword: schema.users.mustChangePassword,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+      return row;
+    });
 
-    if (userResult.error || !userResult.data?.rows[0]) {
-      // Audit log de login falhado (usuario nao encontrado)
-      try {
-        await writeAuditLog({
-          userId: null,
-          action: "auth.login.failed",
-          entityType: "users",
-          entityId: null,
-          metadata: { email, reason: "user_not_found", ip: clientIp },
-        });
-      } catch {
-        // Audit log falhou — nao bloqueia login
-      }
+    if (!user) {
+      await auditLoginFailed(null, "user_not_found", { email, ip: clientIp });
       logger.warn("Login falhou: usuario nao encontrado", {
         email,
         ip: clientIp,
@@ -113,19 +167,8 @@ authRoute.post("/login", async (c) => {
       );
     }
 
-    const user = userResult.data.rows[0];
-    if (!user.is_active) {
-      try {
-        await writeAuditLog({
-          userId: user.id,
-          action: "auth.login.failed",
-          entityType: "users",
-          entityId: user.id,
-          metadata: { reason: "user_inactive", ip: clientIp },
-        });
-      } catch {
-        // Audit log falhou — nao bloqueia login
-      }
+    if (!user.isActive) {
+      await auditLoginFailed(user.id, "user_inactive", { ip: clientIp });
       logger.warn("Login falhou: usuario inativo", {
         userId: user.id,
         ip: clientIp,
@@ -139,9 +182,8 @@ authRoute.post("/login", async (c) => {
     // Verifica senha com argon2id
     let valid = false;
     try {
-      valid = await argon2.verify(user.password_hash, password);
+      valid = await argon2.verify(user.passwordHash, password);
     } catch (err) {
-      // Hash malformado ou erro interno do argon2
       logger.error("Erro ao verificar senha (argon2)", {
         userId: user.id,
         error: err instanceof Error ? err.message : String(err),
@@ -158,17 +200,7 @@ authRoute.post("/login", async (c) => {
     }
 
     if (!valid) {
-      try {
-        await writeAuditLog({
-          userId: user.id,
-          action: "auth.login.failed",
-          entityType: "users",
-          entityId: user.id,
-          metadata: { reason: "invalid_password", ip: clientIp },
-        });
-      } catch {
-        // Audit log falhou — nao bloqueia login
-      }
+      await auditLoginFailed(user.id, "invalid_password", { ip: clientIp });
       logger.warn("Login falhou: senha invalida", {
         userId: user.id,
         ip: clientIp,
@@ -185,24 +217,10 @@ authRoute.post("/login", async (c) => {
     }
 
     // Busca tenants e roles do usuário via RPC
-    const tenantsResult = await query<{
-      tenant_id: string;
-      role: string;
-      scope: string;
-    }>("SELECT * FROM public.get_tenant_user_auth($1)", [user.id]);
+    const tenantAuth = await fetchTenantAuth(user.id);
 
-    if (tenantsResult.error || !tenantsResult.data?.rows.length) {
-      try {
-        await writeAuditLog({
-          userId: user.id,
-          action: "auth.login.failed",
-          entityType: "users",
-          entityId: user.id,
-          metadata: { reason: "no_tenant_access", ip: clientIp },
-        });
-      } catch {
-        // Audit log falhou — nao bloqueia login
-      }
+    if (!tenantAuth) {
+      await auditLoginFailed(user.id, "no_tenant_access", { ip: clientIp });
       logger.warn("Login falhou: sem tenant", {
         userId: user.id,
         ip: clientIp,
@@ -218,29 +236,11 @@ authRoute.post("/login", async (c) => {
       );
     }
 
-    const roles = tenantsResult.data.rows.map((r) => r.role);
-    const primaryTenantId = tenantsResult.data.rows[0]!.tenant_id;
-    const userScope = tenantsResult.data.rows[0]!.scope as "global" | "tenant";
-    const tenantIds = tenantsResult.data.rows.map((r) => r.tenant_id);
-
     // Verifica se usuário tem MFA TOTP habilitado
-    const mfaResult = await query<{ is_enabled: boolean }>(
-      "SELECT is_enabled FROM public.user_mfa_totp WHERE user_id = $1",
-      [user.id],
-    );
-
-    const mfaEnabled = mfaResult.data?.rows[0]?.is_enabled === true;
+    const mfaEnabled = await fetchMfaStatus(user.id);
 
     if (mfaEnabled) {
-      // Cria challenge MFA em vez de retornar tokens
-      const challengeToken = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-
-      await query(
-        "INSERT INTO public.mfa_challenges (user_id, method, challenge_token, expires_at) VALUES ($1, 'totp', $2, $3)",
-        [user.id, challengeToken, expiresAt],
-      );
-
+      const challengeToken = await createMfaChallenge(user.id);
       logger.info("Login: MFA requerido", { userId: user.id });
       return c.json({
         mfa_required: true,
@@ -249,7 +249,7 @@ authRoute.post("/login", async (c) => {
         user: {
           id: user.id,
           email: user.email,
-          full_name: user.full_name,
+          full_name: user.fullName,
         },
       });
     }
@@ -258,10 +258,10 @@ authRoute.post("/login", async (c) => {
     const { accessToken, refreshToken, refreshTokenHash } =
       await generateAndStoreTokens({
         sub: user.id,
-        tenant_id: primaryTenantId,
-        roles,
-        scope: userScope,
-        tenant_ids: tenantIds,
+        tenant_id: tenantAuth.primaryTenantId,
+        roles: tenantAuth.roles,
+        scope: tenantAuth.scope,
+        tenant_ids: tenantAuth.tenantIds,
       });
 
     // Cria sessao, dispositivo confiavel e atualiza last_login_at
@@ -299,16 +299,12 @@ authRoute.post("/login", async (c) => {
       user: {
         id: user.id,
         email: user.email,
-        full_name: user.full_name,
-        is_active: user.is_active,
-        must_change_password: user.must_change_password,
+        full_name: user.fullName,
+        is_active: user.isActive,
+        must_change_password: user.mustChangePassword,
       },
-      scope: userScope,
-      tenants: tenantsResult.data.rows.map((r) => ({
-        tenant_id: r.tenant_id,
-        role: r.role,
-        scope: r.scope,
-      })),
+      scope: tenantAuth.scope,
+      tenants: tenantAuth.tenants,
     });
   } catch (error) {
     logger.error("Erro interno no login", {
@@ -333,6 +329,7 @@ authRoute.post("/refresh", async (c) => {
           error: {
             code: "VALIDATION_ERROR",
             message: "Refresh token inválido",
+            details: parsed.error.flatten(),
           },
         },
         400,
@@ -427,6 +424,7 @@ authRoute.post("/revoke", async (c) => {
           error: {
             code: "VALIDATION_ERROR",
             message: "Refresh token inválido",
+            details: parsed.error.flatten(),
           },
         },
         400,
@@ -466,18 +464,22 @@ authRoute.get("/me", jwtAuth, async (c) => {
   }
 
   try {
-    const userResult = await query<{
-      id: string;
-      email: string;
-      full_name: string | null;
-      is_active: boolean;
-      must_change_password: boolean;
-    }>(
-      "SELECT id, email, full_name, is_active, must_change_password FROM public.users WHERE id = $1",
-      [user.sub],
-    );
+    const userRow = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          fullName: schema.users.fullName,
+          isActive: schema.users.isActive,
+          mustChangePassword: schema.users.mustChangePassword,
+        })
+        .from(schema.users)
+        .where(eq(schema.users.id, user.sub))
+        .limit(1);
+      return row;
+    });
 
-    if (userResult.error || !userResult.data?.rows[0]) {
+    if (!userRow) {
       return c.json(
         {
           error: { code: "USER_NOT_FOUND", message: "Usuário não encontrado" },
@@ -486,16 +488,12 @@ authRoute.get("/me", jwtAuth, async (c) => {
       );
     }
 
-    const tenantsResult = await query<{
-      tenant_id: string;
-      role: string;
-      scope: string;
-    }>("SELECT * FROM public.get_tenant_user_auth($1)", [user.sub]);
+    const tenantAuth = await fetchTenantAuth(user.sub);
 
     return c.json({
-      user: userResult.data.rows[0],
+      user: userRow,
       scope: user.scope,
-      tenants: tenantsResult.data?.rows ?? [],
+      tenants: tenantAuth?.tenants ?? [],
     });
   } catch (error) {
     logger.error("Erro no /me", {
@@ -510,8 +508,6 @@ authRoute.get("/me", jwtAuth, async (c) => {
 });
 
 // GET /api/v1/auth/ws-token — retorna access token para conexao WebSocket
-// Necessario porque o cookie é HttpOnly e o frontend nao consegue ler direto
-// O token ja tem TTL curto (15min) e é valido apenas para o usuario autenticado
 authRoute.get("/ws-token", jwtAuth, async (c) => {
   const user = c.get("user");
   if (!user) {
@@ -520,7 +516,6 @@ authRoute.get("/ws-token", jwtAuth, async (c) => {
       401,
     );
   }
-  // Re-emite um access token fresco para o WS com TTL padrao
   const { signAccessToken } = await import("@repo/auth");
   const token = signAccessToken({
     sub: user.sub,
@@ -543,16 +538,28 @@ authRoute.get("/sessions", jwtAuth, async (c) => {
   }
 
   try {
-    const result = await query(
-      `SELECT id, device_fingerprint, ip_address, user_agent, device_label,
-         created_at, expires_at
-       FROM public.sessions
-       WHERE user_id = $1 AND expires_at > now()
-       ORDER BY created_at DESC`,
-      [user.sub],
-    );
+    const sessions = await withTenantDb(async (db) => {
+      return db
+        .select({
+          id: schema.sessions.id,
+          deviceFingerprint: schema.sessions.deviceFingerprint,
+          ipAddress: schema.sessions.ipAddress,
+          userAgent: schema.sessions.userAgent,
+          deviceLabel: schema.sessions.deviceLabel,
+          createdAt: schema.sessions.createdAt,
+          expiresAt: schema.sessions.expiresAt,
+        })
+        .from(schema.sessions)
+        .where(
+          and(
+            eq(schema.sessions.userId, user.sub),
+            gt(schema.sessions.expiresAt, new Date()),
+          ),
+        )
+        .orderBy(sql`${schema.sessions.createdAt} DESC`);
+    });
 
-    return c.json({ sessions: result.data?.rows ?? [] });
+    return c.json({ sessions });
   } catch (error) {
     logger.error("Erro ao listar sessões", {
       userId: user.sub,
@@ -612,7 +619,6 @@ authRoute.delete("/sessions", jwtAuth, async (c) => {
   }
 
   try {
-    // Remove todas as sessões do usuário (força re-login em todos os dispositivos)
     await revokeAllSessions(user.sub);
 
     await writeAuditLog({
@@ -645,15 +651,23 @@ authRoute.get("/devices", jwtAuth, async (c) => {
   }
 
   try {
-    const result = await query(
-      `SELECT id, device_fingerprint, device_label, ip_address, user_agent, trusted_at, last_seen_at
-       FROM public.trusted_devices
-       WHERE user_id = $1
-       ORDER BY last_seen_at DESC`,
-      [user.sub],
-    );
+    const devices = await withTenantDb(async (db) => {
+      return db
+        .select({
+          id: schema.trustedDevices.id,
+          deviceFingerprint: schema.trustedDevices.deviceFingerprint,
+          deviceLabel: schema.trustedDevices.deviceLabel,
+          ipAddress: schema.trustedDevices.ipAddress,
+          userAgent: schema.trustedDevices.userAgent,
+          trustedAt: schema.trustedDevices.trustedAt,
+          lastSeenAt: schema.trustedDevices.lastSeenAt,
+        })
+        .from(schema.trustedDevices)
+        .where(eq(schema.trustedDevices.userId, user.sub))
+        .orderBy(sql`${schema.trustedDevices.lastSeenAt} DESC`);
+    });
 
-    return c.json({ devices: result.data?.rows ?? [] });
+    return c.json({ devices });
   } catch (error) {
     logger.error("Erro ao listar dispositivos", {
       userId: user.sub,
@@ -679,24 +693,41 @@ authRoute.delete("/devices/:deviceId", jwtAuth, async (c) => {
   const deviceId = c.req.param("deviceId");
 
   try {
-    // Remove dispositivo confiável e todas as sessões associadas ao fingerprint
-    const deviceResult = await query<{ device_fingerprint: string }>(
-      "SELECT device_fingerprint FROM public.trusted_devices WHERE id = $1 AND user_id = $2",
-      [deviceId, user.sub],
-    );
+    await withTenantDb(async (db) => {
+      // Busca fingerprint do dispositivo
+      const [device] = await db
+        .select({ deviceFingerprint: schema.trustedDevices.deviceFingerprint })
+        .from(schema.trustedDevices)
+        .where(
+          and(
+            eq(schema.trustedDevices.id, deviceId),
+            eq(schema.trustedDevices.userId, user.sub),
+          ),
+        )
+        .limit(1);
 
-    if (deviceResult.data?.rows[0]) {
-      const fingerprint = deviceResult.data.rows[0].device_fingerprint;
-      await query(
-        "DELETE FROM public.sessions WHERE user_id = $1 AND device_fingerprint = $2",
-        [user.sub, fingerprint],
-      );
-    }
+      if (device) {
+        // Remove sessoes associadas ao fingerprint
+        await db
+          .delete(schema.sessions)
+          .where(
+            and(
+              eq(schema.sessions.userId, user.sub),
+              eq(schema.sessions.deviceFingerprint, device.deviceFingerprint),
+            ),
+          );
+      }
 
-    await query(
-      "DELETE FROM public.trusted_devices WHERE id = $1 AND user_id = $2",
-      [deviceId, user.sub],
-    );
+      // Remove dispositivo confiavel
+      await db
+        .delete(schema.trustedDevices)
+        .where(
+          and(
+            eq(schema.trustedDevices.id, deviceId),
+            eq(schema.trustedDevices.userId, user.sub),
+          ),
+        );
+    });
 
     await writeAuditLog({
       userId: user.sub,
@@ -749,13 +780,17 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
     const { current_password, new_password } =
       parsed.data as ChangePasswordInput;
 
-    // Busca senha atual do usuário
-    const userResult = await query<{ password_hash: string }>(
-      "SELECT password_hash FROM public.users WHERE id = $1",
-      [user.sub],
-    );
+    // Busca senha atual do usuário via Drizzle
+    const userRow = await withTenantDb(async (db) => {
+      const [row] = await db
+        .select({ passwordHash: schema.users.passwordHash })
+        .from(schema.users)
+        .where(eq(schema.users.id, user.sub))
+        .limit(1);
+      return row;
+    });
 
-    if (userResult.error || !userResult.data?.rows[0]) {
+    if (!userRow) {
       return c.json(
         {
           error: { code: "USER_NOT_FOUND", message: "Usuário não encontrado" },
@@ -767,10 +802,7 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
     // Verifica senha atual
     let valid = false;
     try {
-      valid = await argon2.verify(
-        userResult.data.rows[0].password_hash,
-        current_password,
-      );
+      valid = await argon2.verify(userRow.passwordHash, current_password);
     } catch (err) {
       logger.error("Erro ao verificar senha atual (argon2)", {
         userId: user.sub,
@@ -801,11 +833,13 @@ authRoute.post("/change-password", jwtAuth, async (c) => {
     // Hash da nova senha
     const newHash = await argon2.hash(new_password);
 
-    // Atualiza senha e remove flag must_change_password
-    await query(
-      "UPDATE public.users SET password_hash = $1, must_change_password = false WHERE id = $2",
-      [newHash, user.sub],
-    );
+    // Atualiza senha e remove flag must_change_password via Drizzle
+    await withTenantDb(async (db) => {
+      await db
+        .update(schema.users)
+        .set({ passwordHash: newHash, mustChangePassword: false })
+        .where(eq(schema.users.id, user.sub));
+    });
 
     // Revoga todas as sessões existentes para forçar re-login com nova senha
     await revokeAllSessions(user.sub);
@@ -846,6 +880,7 @@ authRoute.post("/forgot-password", async (c) => {
           error: {
             code: "VALIDATION_ERROR",
             message: parsed.error.issues[0]?.message ?? "Email inválido",
+            details: parsed.error.flatten(),
           },
         },
         400,
@@ -855,8 +890,6 @@ authRoute.post("/forgot-password", async (c) => {
     const requestIp =
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 
-    // Processamento assincrono nao-bloqueante seria ideal, mas await mantem
-    // timing constante independente do email existir ou nao
     await requestPasswordReset(
       (parsed.data as ForgotPasswordInput).email,
       requestIp,

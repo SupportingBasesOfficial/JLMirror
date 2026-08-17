@@ -2,6 +2,7 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { cookies } from "next/headers";
 import { serverApiGetWithToken } from "@/lib/api-client";
+import { apiRoutes } from "@/lib/api-routes";
 import { DeviceGrid } from "@/components/device-grid";
 import { DeviceSearch } from "@/components/device-search";
 import { StateDisplay } from "@/components/ui/state-display";
@@ -10,8 +11,9 @@ import { Folder, AlertTriangle } from "lucide-react";
 import type { ZabbixHost, ZabbixItem, ZabbixTrigger } from "@repo/zabbix";
 
 async function getZabbixDevices(accessToken: string, refreshToken?: string) {
+  // Usa rota centralizada de apiRoutes
   const result = await serverApiGetWithToken<{ devices: ZabbixHost[] }>(
-    "/api/v1/zabbix/devices",
+    apiRoutes.zabbix.devices,
     accessToken,
     refreshToken,
   );
@@ -19,8 +21,9 @@ async function getZabbixDevices(accessToken: string, refreshToken?: string) {
 }
 
 async function getZabbixTriggers(accessToken: string, refreshToken?: string) {
+  // Usa rota centralizada de apiRoutes
   const result = await serverApiGetWithToken<{ data: ZabbixTrigger[] }>(
-    "/api/v1/zabbix/triggers",
+    apiRoutes.zabbix.triggers,
     accessToken,
     refreshToken,
   );
@@ -44,6 +47,9 @@ async function getBatchItems(
     return { data: { items: [], itemsByHost: {} }, error: null };
   }
   const hostIdsParam = hostIds.join(",");
+  // Rota de batch items — nao centralizada em apiRoutes pois e um endpoint
+  // especializado com query string dinamica. Mantida como string literal
+  // documentada aqui.
   return serverApiGetWithToken<{
     items: ZabbixItem[];
     itemsByHost: Record<string, ZabbixItem[]>;

@@ -8,6 +8,7 @@ import { logger } from "@repo/logger";
 import { zabbixDashboardPrefsSchema } from "@repo/shared-validation";
 import type { ZabbixItem } from "@repo/zabbix";
 import { syncTenantDevices } from "../../lib/device-sync.js";
+import { groupZabbixItemsByHost } from "../../lib/zabbix-analytics.js";
 import {
   createZabbixClient,
   zabbixErrorResponse,
@@ -25,9 +26,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json({ connected: false });
-    }
+    if (!ctx) return c.json({ connected: false });
 
     try {
       const connected = await ctx.client.ping();
@@ -43,13 +42,9 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const tenantId = user.tenant_id;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Admin global ve todos os hosts de todos os host groups do Zabbix
-      // Tenant normal ve apenas os hosts do seu host_group_id (IDOR protection)
       const isGlobalAdmin = user.scope === "global";
       const devices = await ctx.client.getDevices(
         isGlobalAdmin ? undefined : ctx.hostGroupId,
@@ -76,16 +71,11 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const hostId = c.req.param("hostId");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Verifica se o host pertence ao tenant antes de retornar (IDOR protection)
       const belongs = await verifyHostOwnership(ctx, hostId);
-      if (!belongs) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongs) return c.json(accessDeniedResponse(), 403);
 
       const host = await ctx.client.getDevice(hostId);
       if (!host) {
@@ -113,7 +103,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       );
     }
   });
-
   // POST /api/v1/zabbix/sync
   zabbixRoute.post("/sync", async (c) => {
     const user = c.get("user");
@@ -185,16 +174,11 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const hostId = c.req.param("hostId");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Verifica posse do host antes de retornar items (IDOR protection)
       const belongs = await verifyHostOwnership(ctx, hostId);
-      if (!belongs) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongs) return c.json(accessDeniedResponse(), 403);
 
       const items = await ctx.client.getItems(hostId);
       return c.json({ items });
@@ -213,8 +197,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
   });
 
   // GET /api/v1/zabbix/devices-items-batch?host_ids=1,2,3
-  // Busca items de multiplos hosts em uma unica chamada (evita N+1 do frontend)
-  // Filtra apenas items uteis para metricas de dashboard (CPU, rede, memoria, disco)
   zabbixRoute.get("/devices-items-batch", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
@@ -233,11 +215,8 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     }
 
     const hostIds = hostIdsParam.split(",").filter(Boolean);
-    if (hostIds.length === 0) {
-      return c.json({ items: [] });
-    }
+    if (hostIds.length === 0) return c.json({ items: [] });
 
-    // Limite de 500 hosts por request (evita sobrecarga)
     if (hostIds.length > 500) {
       return c.json(
         {
@@ -251,9 +230,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     }
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const startedAt = Date.now();
@@ -266,12 +243,8 @@ export function registerHostRoutes(zabbixRoute: Hono) {
         durationMs: Date.now() - startedAt,
       });
 
-      // Agrupa items por hostid para facilitar consumo no frontend
-      const itemsByHost: Record<string, ZabbixItem[]> = {};
-      for (const item of items) {
-        if (!itemsByHost[item.hostid]) itemsByHost[item.hostid] = [];
-        itemsByHost[item.hostid]!.push(item);
-      }
+      // PURIFICADO: Delega o agrupamento denso em memória para a função dedicada do core lógicos
+      const itemsByHost = groupZabbixItemsByHost(items);
 
       return c.json({ items, itemsByHost });
     } catch (error) {
@@ -292,7 +265,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       );
     }
   });
-
   // GET /api/v1/zabbix/devices/:hostId/prefs
   zabbixRoute.get("/devices/:hostId/prefs", async (c) => {
     const user = c.get("user");
@@ -314,7 +286,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
         [userId, hostId, tenantId],
       );
 
-      if (result.data?.rows[0]) {
+      if (result.data?.rows?.[0]) {
         return c.json({ prefs: result.data.rows[0] });
       }
 
@@ -358,7 +330,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       }
 
       const d = parsed.data;
-
       const result = await query(
         `INSERT INTO tenant_template.dashboard_prefs
           (tenant_id, user_id, zabbix_host_id, device_type, visible_categories, collapsed_categories, hidden_metrics, pinned_metrics)
@@ -414,9 +385,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();
@@ -426,12 +395,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      // Forca o host a ser criado no host_group_id do tenant (IDOR protection)
-      const hostData = {
-        ...parsed.data,
-        groupids: [ctx.hostGroupId],
-      };
-      // Enfileira write — retorna 202 Accepted
+      const hostData = { ...parsed.data, groupids: [ctx.hostGroupId] };
       const jobId = await enqueueWriteJob({
         tenantId,
         userId,
@@ -453,16 +417,11 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const hostId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Verifica posse do host antes de atualizar (IDOR protection)
       const belongs = await verifyHostOwnership(ctx, hostId);
-      if (!belongs) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongs) return c.json(accessDeniedResponse(), 403);
 
       const body = await c.req.json();
       const { zabbixUpdateHostSchema } =
@@ -471,7 +430,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      // Nao permite alterar groupids — host deve permanecer no grupo do tenant
       const { groupids, ...updateData } = parsed.data;
       void groupids;
       const jobId = await enqueueWriteJob({
@@ -486,7 +444,6 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       return c.json(zabbixErrorResponse(error), 502);
     }
   });
-
   // DELETE /api/v1/zabbix/hosts/:id
   zabbixRoute.delete("/hosts/:id", async (c) => {
     const user = c.get("user");
@@ -495,16 +452,11 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const hostId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Verifica posse do host antes de deletar (IDOR protection)
       const belongs = await verifyHostOwnership(ctx, hostId);
-      if (!belongs) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongs) return c.json(accessDeniedResponse(), 403);
 
       const jobId = await enqueueWriteJob({
         tenantId,
@@ -526,9 +478,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();
@@ -538,11 +488,9 @@ export function registerHostRoutes(zabbixRoute: Hono) {
       if (!parsed.success) {
         return c.json(validationErrorResponse(parsed.error.flatten()), 400);
       }
-      // Verifica se o hostid informado pertence ao tenant (IDOR protection)
       const belongs = await verifyHostOwnership(ctx, parsed.data.hostid);
-      if (!belongs) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongs) return c.json(accessDeniedResponse(), 403);
+
       const jobId = await enqueueWriteJob({
         tenantId,
         userId,
@@ -564,9 +512,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const itemId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();
@@ -597,9 +543,7 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     const itemId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const jobId = await enqueueWriteJob({
@@ -615,17 +559,14 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     }
   });
 
-  // POST /api/v1/zabbix/items/:id/execute — forca "Check Now" em um item
-  // Executa sincrono pois e uma operacao rapida de baixo risco
+  // POST /api/v1/zabbix/items/:id/execute
   zabbixRoute.post("/items/:id/execute", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
     const itemId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const result = await ctx.client.executeItem(itemId);
@@ -654,13 +595,9 @@ export function registerHostRoutes(zabbixRoute: Hono) {
     }
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Filtra apenas hosts do tenant (IDOR protection)
-      // Admin global ve todos os hosts
       const devices = await ctx.client.getDevices(
         ctx.isGlobalAdmin ? undefined : ctx.hostGroupId,
       );

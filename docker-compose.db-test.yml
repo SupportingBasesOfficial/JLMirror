@@ -1,0 +1,40 @@
+# ============================================================================
+# JLMIRROR — Isolated Test Database for Schema Validation
+#
+# Purpose: Stress-test /refactor-blueprint/ideal_schema.sql in a REAL
+# TimescaleDB-enabled Postgres 16 instance, fully isolated from the
+# production stack (jlmirror-postgres / jlmirror-net).
+#
+# Usage:
+#   docker compose -f docker-compose.db-test.yml up -d
+#   docker compose -f docker-compose.db-test.yml down -v   (to tear down)
+#
+# This does NOT touch the production docker-compose.yml, volumes, or network.
+# ============================================================================
+services:
+  db-test:
+    image: timescale/timescaledb:latest-pg16
+    container_name: jlmirror-db-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: test_password_local_only
+      POSTGRES_DB: jlmirror_schema_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - db-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d jlmirror_schema_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - jlmirror-db-test-net
+
+volumes:
+  db-test-data:
+
+networks:
+  jlmirror-db-test-net:
+    driver: bridge

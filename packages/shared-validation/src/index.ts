@@ -2,6 +2,10 @@
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { z } from "zod";
 
+// Re-exporta o modulo ponte que conecta tipos Drizzle (DB) aos schemas Zod (API).
+// Ver db-types.ts para detalhes do alinhamento compile-time.
+export * from "./db-types";
+
 // ========== Auth Schemas ==========
 export const loginInputSchema = z.object({
   email: z.string().email(),
@@ -2218,6 +2222,24 @@ export const pushBroadcastSchema = z.object({
   message: z.string().min(1).max(2000),
 });
 export type PushBroadcastInput = z.infer<typeof pushBroadcastSchema>;
+
+// Push nativo (Expo / APNs / FCM) — token simples, sem keys VAPID
+export const nativePushSubscribeSchema = z.object({
+  push_token: z.string().min(10).max(500),
+  platform: z.enum(["ios", "android"]),
+  device_type: z.string().max(100).optional(),
+  user_agent: z.string().max(500).optional(),
+});
+export type NativePushSubscribeInput = z.infer<
+  typeof nativePushSubscribeSchema
+>;
+
+export const nativePushUnsubscribeSchema = z.object({
+  push_token: z.string().min(10).max(500),
+});
+export type NativePushUnsubscribeInput = z.infer<
+  typeof nativePushUnsubscribeSchema
+>;
 
 // ========== Anomaly Schemas ==========
 export const anomalyAnalyzeSchema = z.object({

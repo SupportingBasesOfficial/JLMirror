@@ -1,6 +1,14 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import { query } from "@repo/db";
+// Correlation Engine — agrupa alertas Zabbix por janela temporal, host group, tags e severidade.
+// Reduz alert fatigue: 10 hosts caindo = 1 grupo correlacionado, não 10 alertas separados.
+// Usa BullMQ com fila durável Redis — sobrevive a restarts e múltiplas réplicas.
+//
+// RLS INTEGRATION: O poll inicial (busca de tenants) roda sem tenant context.
+// Cada processTenantCorrelation() e envolvido em runWithTenant(tenant.tenant_id)
+// para que todas as queries DB (rules, event_groups, event_group_members,
+// notification_log) tenham RLS enforcement via withTenantDb().
+import { query, runWithTenant } from "@repo/db";
 import { logger } from "@repo/logger";
 import {
   BlindedZabbixClient,
@@ -107,7 +115,12 @@ async function pollAndCorrelate(): Promise<void> {
 
   for (const tenant of tenantsResult.data.rows) {
     try {
-      await processTenantCorrelation(tenant);
+      // Propaga tenant_id para AsyncLocalStorage para que withTenantDb()
+      // injete SET LOCAL app.current_tenant_id em todas as queries DB
+      // dentro de processTenantCorrelation (rules, event_groups, members).
+      await runWithTenant(tenant.tenant_id, () =>
+        processTenantCorrelation(tenant),
+      );
     } catch (err) {
       logger.error("Erro no tenant (correlacao)", {
         tenantId: tenant.tenant_id,

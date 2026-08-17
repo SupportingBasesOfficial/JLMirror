@@ -96,6 +96,10 @@ export interface ZabbixTrigger {
   items?: ZabbixItem[];
   lastchange: string;
   lastEvent?: ZabbixEvent;
+  // Tags do trigger (selectTags) — espelha ZabbixProblemTag para paridade mobile
+  tags?: ZabbixProblemTag[];
+  // Suppressed via lastEvent (problem.get retorna suppressed; trigger.get via selectLastEvent)
+  suppressed?: boolean;
 }
 
 export interface ZabbixProblemTag {
@@ -130,6 +134,7 @@ export interface ZabbixEvent {
   acknowledged: number;
   name?: string;
   severity?: number;
+  suppressed?: boolean;
   hosts?: ZabbixHost[];
 }
 
@@ -836,7 +841,10 @@ export class BlindedZabbixClient {
         "acknowledged",
         "clock",
         "severity",
+        "suppressed",
       ],
+      // selectTags retorna tags do trigger (paridade com problem.get tags)
+      selectTags: ["tag", "value"],
       // only_true retorna apenas triggers em estado de problema (value=1)
       // Sem isso, o limite de 200 pode cortar triggers ativos
       only_true: options?.activeOnly ?? true,

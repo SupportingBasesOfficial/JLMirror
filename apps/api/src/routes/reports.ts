@@ -664,7 +664,7 @@ reportsRoute.post(
       });
 
       // Retorna o arquivo binário diretamente
-      return new Response(fileBuffer, {
+      return new Response(new Uint8Array(fileBuffer), {
         status: 200,
         headers: {
           "Content-Type": mimeType,

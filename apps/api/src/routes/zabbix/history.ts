@@ -1,12 +1,19 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-// Rotas de history, trends, graphs, triggers e overview
+// Rotas de history, trends, graphs, triggers e overview.
+//
+// RLS INTEGRATION: As rotas ja executam dentro do middleware tenantContext
+// (que seta AsyncLocalStorage via runWithTenant), entao withTenantDb() le
+// o tenant_id do contexto automaticamente.
 
 import type { Hono } from "hono";
 import type { ZabbixItem } from "@repo/zabbix";
 import { cacheGetJSON, cacheSetJSON } from "@repo/cache";
-import { query } from "@repo/db";
-import { downsamplePoints } from "../../lib/downsample.js";
+import {
+  getHistoryFromCache,
+  processTimeSeries,
+  processBatchSeries,
+} from "../../lib/zabbix-analytics.js";
 import {
   createZabbixClient,
   zabbixErrorResponse,
@@ -16,27 +23,6 @@ import {
   verifyHostOwnership,
   enqueueWriteJob,
 } from "./shared.js";
-
-// Le history do TSDB (zabbix_history_cache) — retorna null se nao houver dados
-async function getHistoryFromCache(
-  tenantId: string,
-  itemId: string,
-  from: number,
-  to: number,
-): Promise<Array<{ clock: number; value: string }> | null> {
-  try {
-    const result = await query<{ clock: number; value: string }>(
-      `SELECT clock, value FROM public.zabbix_history_cache
-       WHERE tenant_id = $1 AND itemid = $2 AND clock >= $3 AND clock <= $4
-       ORDER BY clock ASC LIMIT 5000`,
-      [tenantId, itemId, from, to],
-    );
-    if (result.error || !result.data?.rows.length) return null;
-    return result.data.rows;
-  } catch {
-    return null;
-  }
-}
 
 export function registerHistoryRoutes(zabbixRoute: Hono) {
   // GET /api/v1/zabbix/history?item_id=...&from=...&to=...&value_type=...
@@ -65,45 +51,29 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Cache de series temporais em Redis (TTL 5s) — reduz 95% das chamadas ao Zabbix
       const cacheKey = `zabbix:history:${tenantId}:${itemId}:${from}:${to}:${valueType ?? "all"}`;
       const cached = await cacheGetJSON<{
         data: unknown[];
         downsampled: boolean;
       }>(cacheKey);
-      if (cached) {
-        return c.json(cached);
-      }
+      if (cached) return c.json(cached);
 
-      // 1. Tenta ler do TSDB (zabbix_history_cache) primeiro — connector streaming
-      const tsdbData = await getHistoryFromCache(tenantId, itemId, from, to);
+      // 1. Tenta ler do TSDB encapsulado no motor analítico
+      const tsdbData = await getHistoryFromCache(itemId, from, to);
       if (tsdbData && tsdbData.length > 0) {
-        const points = downsamplePoints(tsdbData, 500);
-        const result = {
-          data: points,
-          downsampled: tsdbData.length > 500,
-          source: "tsdb",
-        };
+        const { points, downsampled } = processTimeSeries(tsdbData, 500);
+        const result = { data: points, downsampled, source: "tsdb" };
         await cacheSetJSON(cacheKey, result, 5);
         return c.json(result);
       }
 
-      // 2. Fallback: busca direto na API do Zabbix se TSDB nao tem dados
+      // 2. Fallback: busca direto na API do Zabbix se o TSDB não tem dados
       const history = await ctx.client.getHistory(itemId, from, to, valueType);
-      const points = downsamplePoints(
-        history.map((h) => ({ clock: h.clock, value: h.value })),
-        500,
-      );
-      const result = {
-        data: points,
-        downsampled: history.length > 500,
-        source: "zabbix_api",
-      };
+      const { points, downsampled } = processTimeSeries(history, 500);
+      const result = { data: points, downsampled, source: "zabbix_api" };
       await cacheSetJSON(cacheKey, result, 5);
       return c.json(result);
     } catch (error) {
@@ -150,9 +120,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const history = await ctx.client.getHistoryBatch(
@@ -161,16 +129,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
         to,
         valueType,
       );
-      const series = itemIds.map((itemId) => {
-        const rawPoints = history
-          .filter((h) => h.itemid === itemId)
-          .map((h) => ({ clock: h.clock, value: h.value }));
-        return {
-          itemid: itemId,
-          points: downsamplePoints(rawPoints, 500),
-          downsampled: rawPoints.length > 500,
-        };
-      });
+      const series = processBatchSeries(itemIds, history, 500);
       return c.json({ data: series });
     } catch (error) {
       return c.json(zabbixErrorResponse(error), 502);
@@ -178,7 +137,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
   });
 
   // GET /api/v1/zabbix/trends?item_ids=1,2,3&from=...&to=...&value_type=0
-  // Trends — dados consolidados por hora (min/max/avg) para graficos de longo prazo
+
   zabbixRoute.get("/trends", async (c) => {
     const user = c.get("user");
     const tenantId = user.tenant_id;
@@ -203,14 +162,12 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const itemIds = itemIdsStr.split(",");
     const from = fromStr
       ? Number(fromStr)
-      : Math.floor(Date.now() / 1000) - 86400; // default 24h
+      : Math.floor(Date.now() / 1000) - 86400;
     const to = toStr ? Number(toStr) : Math.floor(Date.now() / 1000);
     const valueType = valueTypeStr ? Number(valueTypeStr) : undefined;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const trends = await ctx.client.getTrends(itemIds, from, to, valueType);
@@ -239,17 +196,12 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const hostId = c.req.query("host_id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Se hostId informado, verifica posse (IDOR protection)
       if (hostId) {
         const belongs = await verifyHostOwnership(ctx, hostId);
-        if (!belongs) {
-          return c.json(accessDeniedResponse(), 403);
-        }
+        if (!belongs) return c.json(accessDeniedResponse(), 403);
       }
       const graphs = await ctx.client.getGraphs(hostId ?? undefined);
       return c.json({ data: graphs });
@@ -257,7 +209,6 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
       return c.json(zabbixErrorResponse(error), 502);
     }
   });
-
   // GET /api/v1/zabbix/graphs/:graphid/data?from=UNIX&to=UNIX
   zabbixRoute.get("/graphs/:graphid/data", async (c) => {
     const user = c.get("user");
@@ -267,13 +218,10 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const to = c.req.query("to");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Busca apenas graphs dos hosts do tenant (IDOR protection)
-      // Admin global ve todos os hosts
+      // IDOR Protection: Busca apenas graphs dos hosts do tenant
       const devices = await ctx.client.getDevices(
         ctx.isGlobalAdmin ? undefined : ctx.hostGroupId,
       );
@@ -290,14 +238,11 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
         );
       }
 
-      // Verifica se o graph pertence a um host do tenant
       const graphHosts = graph.hosts ?? [];
       const belongsToTenant =
         graphHosts.length === 0 ||
         graphHosts.some((h) => tenantHostIds.has(h.hostid));
-      if (!belongsToTenant) {
-        return c.json(accessDeniedResponse(), 403);
-      }
+      if (!belongsToTenant) return c.json(accessDeniedResponse(), 403);
 
       const itemIds = (graph.gitems ?? graph.items ?? []).map(
         (gi) => gi.itemid,
@@ -326,10 +271,13 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
         const gitem = (graph.gitems ?? graph.items ?? []).find(
           (gi) => gi.itemid === itemId,
         );
-        const rawPoints = history
+
+        // Delega o agrupamento analítico e amostragem para a função dedicada do core
+        const pointsArray = history
           .filter((h) => h.itemid === itemId)
           .map((h) => ({ clock: h.clock, value: h.value }));
-        const points = downsamplePoints(rawPoints, 500);
+        const { points, downsampled } = processTimeSeries(pointsArray, 500);
+
         return {
           itemid: itemId,
           name: item?.name ?? `Item ${itemId}`,
@@ -338,7 +286,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
           color: gitem?.color ?? "#666666",
           drawtype: gitem?.drawtype ?? 0,
           points,
-          downsampled: rawPoints.length > 500,
+          downsampled,
         };
       });
 
@@ -355,17 +303,12 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const hostId = c.req.query("host_id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Se hostId informado, verifica posse (IDOR protection)
       if (hostId) {
         const belongs = await verifyHostOwnership(ctx, hostId);
-        if (!belongs) {
-          return c.json(accessDeniedResponse(), 403);
-        }
+        if (!belongs) return c.json(accessDeniedResponse(), 403);
       }
       const hostIds = hostId ? [hostId] : undefined;
       const triggers = await ctx.client.getTriggers(hostIds);
@@ -391,9 +334,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();
@@ -424,9 +365,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const triggerId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();
@@ -460,9 +399,7 @@ export function registerHistoryRoutes(zabbixRoute: Hono) {
     const triggerId = c.req.param("id");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const jobId = await enqueueWriteJob({

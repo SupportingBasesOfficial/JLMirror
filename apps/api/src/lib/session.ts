@@ -1,8 +1,10 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 // Criacao de sessao e dispositivo confiavel — extrai logica repetida de auth.ts
+// Refatorado para usar Drizzle ORM em vez de query() raw SQL.
 
-import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, and } from "drizzle-orm";
 import { logger } from "@repo/logger";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -24,47 +26,75 @@ export async function createSession({
   ipAddress = null,
   userAgent = null,
 }: CreateSessionParams): Promise<void> {
-  const result = await query(
-    `INSERT INTO public.sessions (user_id, refresh_token_hash, expires_at, device_fingerprint, ip_address, user_agent)
-     VALUES ($1, $2, $3, $4, $5::inet, $6)`,
-    [
-      userId,
-      refreshTokenHash,
-      new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-      deviceFingerprint,
-      ipAddress,
-      userAgent,
-    ],
-  );
+  try {
+    await withTenantDb(async (db) => {
+      // Insere sessao
+      await db.insert(schema.sessions).values({
+        userId,
+        refreshTokenHash,
+        expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+        deviceFingerprint: deviceFingerprint ?? null,
+        deviceLabel: deviceLabel ?? null,
+        ipAddress: ipAddress ?? null,
+        userAgent: userAgent ?? null,
+      });
 
-  if (result.error) {
-    logger.error("Erro ao criar sessao", { error: result.error.message });
+      // Upsert dispositivo confiavel se fingerprint fornecido
+      if (deviceFingerprint) {
+        await db
+          .insert(schema.trustedDevices)
+          .values({
+            userId,
+            deviceFingerprint,
+            deviceLabel: deviceLabel ?? null,
+            ipAddress: ipAddress ?? null,
+            userAgent: userAgent ?? null,
+            lastSeenAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: [
+              schema.trustedDevices.userId,
+              schema.trustedDevices.deviceFingerprint,
+            ],
+            set: {
+              lastSeenAt: new Date(),
+              ipAddress: ipAddress ?? null,
+              userAgent: userAgent ?? null,
+            },
+          });
+      }
+
+      // Atualiza last_login_at
+      await db
+        .update(schema.users)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(schema.users.id, userId));
+    });
+  } catch (error) {
+    logger.error("Erro ao criar sessao", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
-
-  if (deviceFingerprint) {
-    await query(
-      `INSERT INTO public.trusted_devices (user_id, device_fingerprint, device_label, ip_address, user_agent, last_seen_at)
-       VALUES ($1, $2, $3, $4::inet, $5, now())
-       ON CONFLICT (user_id, device_fingerprint) DO UPDATE SET last_seen_at = now(), ip_address = $4::inet, user_agent = $5`,
-      [userId, deviceFingerprint, deviceLabel, ipAddress, userAgent],
-    );
-  }
-
-  await query("UPDATE public.users SET last_login_at = now() WHERE id = $1", [
-    userId,
-  ]);
 }
 
 export async function revokeAllSessions(userId: string): Promise<void> {
-  await query("DELETE FROM public.sessions WHERE user_id = $1", [userId]);
+  await withTenantDb(async (db) => {
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+  });
 }
 
 export async function revokeSession(
   userId: string,
   sessionId: string,
 ): Promise<void> {
-  await query("DELETE FROM public.sessions WHERE id = $1 AND user_id = $2", [
-    sessionId,
-    userId,
-  ]);
+  await withTenantDb(async (db) => {
+    await db
+      .delete(schema.sessions)
+      .where(
+        and(
+          eq(schema.sessions.id, sessionId),
+          eq(schema.sessions.userId, userId),
+        ),
+      );
+  });
 }

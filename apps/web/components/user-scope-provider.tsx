@@ -10,6 +10,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { apiRoutes } from "@/lib/api-routes";
 
 type UserScope = "global" | "tenant";
 
@@ -40,7 +41,7 @@ export function UserScopeProvider({ children }: { children: ReactNode }) {
 
     async function fetchScope() {
       try {
-        const res = await fetch("/api/v1/auth/me", { credentials: "include" });
+        const res = await fetch(apiRoutes.auth.me, { credentials: "include" });
         if (res.status === 401) {
           // Token ausente ou expirado — redireciona para login
           // Evita redirect se ja estamos na pagina de login (causa reload infinito)

@@ -1,11 +1,14 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
+// Partition Manager — cria partições mensais futuras e droppa partições antigas.
+// Roda diariamente via BullMQ.
+//
+// RLS NOTES: Este worker opera em nivel de schema (DDL: CREATE/DROP TABLE) que
+// nao e afetado por RLS. Nao usa runWithTenant pois precisa acessar pg_tables
+// (catalogo do PostgreSQL) e criar/droppar particoes globais.
 import { query } from "@repo/db";
 import { logger } from "@repo/logger";
 import { registerRepeatableJob, startWorker } from "./queue.js";
-
-// Partition Manager — cria partições mensais futuras e droppa partições antigas
-// Roda diariamente via BullMQ
 
 interface PartitionedTable {
   name: string;
@@ -23,18 +26,18 @@ const QUEUE_NAME = "partition-manager";
 const PARTITION_LOOKAHEAD_MONTHS = 3;
 
 export async function startPartitionManager(): Promise<void> {
-  await registerRepeatableJob(
-    QUEUE_NAME,
-    "manage-partitions",
-    { pattern: "0 2 * * *" },
-  );
+  await registerRepeatableJob(QUEUE_NAME, "manage-partitions", {
+    pattern: "0 2 * * *",
+  });
 
   startWorker(QUEUE_NAME, async () => {
     try {
       await createFuturePartitions();
       await dropOldPartitions();
     } catch (err) {
-      logger.error("Erro no partition manager", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Erro no partition manager", {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   });
 }
@@ -76,9 +79,16 @@ async function createFuturePartitions(): Promise<void> {
       );
 
       if (createResult.error) {
-        logger.error("Erro ao criar particao", { partition: partitionName, error: createResult.error.message });
+        logger.error("Erro ao criar particao", {
+          partition: partitionName,
+          error: createResult.error.message,
+        });
       } else {
-        logger.info("Particao criada", { partition: partitionName, start: monthStart.toISOString().substring(0, 10), end: monthEnd.toISOString().substring(0, 10) });
+        logger.info("Particao criada", {
+          partition: partitionName,
+          start: monthStart.toISOString().substring(0, 10),
+          end: monthEnd.toISOString().substring(0, 10),
+        });
       }
     }
   }
@@ -116,9 +126,15 @@ async function dropOldPartitions(): Promise<void> {
           `DROP TABLE IF EXISTS public.${row.tablename} CASCADE`,
         );
         if (dropResult.error) {
-          logger.error("Erro ao droppar particao", { partition: row.tablename, error: dropResult.error.message });
+          logger.error("Erro ao droppar particao", {
+            partition: row.tablename,
+            error: dropResult.error.message,
+          });
         } else {
-          logger.info("Particao droppada (retention)", { partition: row.tablename, retentionMonths: table.retentionMonths });
+          logger.info("Particao droppada (retention)", {
+            partition: row.tablename,
+            retentionMonths: table.retentionMonths,
+          });
         }
       }
     }

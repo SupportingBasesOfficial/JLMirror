@@ -15,6 +15,12 @@ import {
   getDeviceLabel,
 } from "@/lib/device-fingerprint";
 import { useTenantBranding } from "@/lib/use-tenant-branding";
+import {
+  apiRoutes,
+  type LoginResponse,
+  type MfaVerifyResponse,
+} from "@/lib/api-routes";
+import type { LoginInput, MfaVerifyInput } from "@repo/shared-validation";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,11 +29,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
-  const [, setMfaUser] = useState<{
-    id: string;
-    email: string;
-    full_name: string | null;
-  } | null>(null);
+  const [, setMfaUser] = useState<LoginResponse["user"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -37,18 +39,24 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      // Payload type-safe: LoginInput (Zod schema de @repo/shared-validation)
+      // garante que email/password/device_fingerprint match o schema do backend.
+      const payload: LoginInput = {
+        email,
+        password,
+        device_fingerprint: generateDeviceFingerprint(),
+        device_label: getDeviceLabel(),
+      };
+
+      const res = await fetch(apiRoutes.auth.login, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          device_fingerprint: generateDeviceFingerprint(),
-          device_label: getDeviceLabel(),
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as LoginResponse & {
+        error?: { code: string; message: string };
+      };
 
       if (!res.ok) {
         setError(data.error?.message ?? "Erro ao fazer login");
@@ -56,7 +64,7 @@ export default function LoginPage() {
       }
 
       if (data.mfa_required) {
-        setChallengeToken(data.challenge_token);
+        setChallengeToken(data.challenge_token ?? null);
         setMfaUser(data.user);
         return;
       }
@@ -86,16 +94,22 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/mfa/verify", {
+      // Payload type-safe: MfaVerifyInput (Zod schema) garante que
+      // challenge_token + code match o schema do backend.
+      const payload: MfaVerifyInput = {
+        challenge_token: challengeToken,
+        code: mfaCode,
+      };
+
+      const res = await fetch(apiRoutes.auth.mfaVerify, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          challenge_token: challengeToken,
-          code: mfaCode,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as MfaVerifyResponse & {
+        error?: { code: string; message: string };
+      };
 
       if (!res.ok) {
         setError(data.error?.message ?? "Código inválido");

@@ -110,6 +110,14 @@ export async function runWithTenant<T>(
   return tenantStorage.run(tenantId, fn);
 }
 
+// Retorna o tenant_id ativo no AsyncLocalStorage atual, ou null se
+// nao houver contexto de tenant (ex: rotas publicas, JL staff global).
+// Usado por withTenantDb() em drizzle.ts para injetar SET LOCAL
+// app.current_tenant_id em transacoes Drizzle para RLS.
+export function getCurrentTenantId(): string | undefined {
+  return tenantStorage.getStore();
+}
+
 // Fecha o pool — usado no graceful shutdown
 export async function closePool(): Promise<void> {
   if (_pool) {

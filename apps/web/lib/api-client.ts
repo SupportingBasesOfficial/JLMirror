@@ -1,6 +1,7 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
 import { env } from "@/env";
+import { apiRoutes } from "@/lib/api-routes";
 
 export type ApiResult<T> =
   | { data: T; error: null }
@@ -68,7 +69,7 @@ export async function serverApiGetWithToken<T>(
 
     // Se 401 e tem refresh token, tenta renovar e refaz a request
     if (res.status === 401 && refreshToken) {
-      const refreshRes = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
+      const refreshRes = await fetch(`${BASE_URL}${apiRoutes.auth.refresh}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: refreshToken }),

@@ -1,0 +1,29 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@repo/shared-validation": [
+        "../../packages/shared-validation/src/index.ts"
+      ],
+      "@repo/logger": ["../../packages/logger/src/index.ts"],
+      "@repo/db/types": ["../../packages/db/src/types.ts"],
+      "@repo/db": ["../../packages/db/src/index.ts"]
+    },
+    "baseUrl": ".",
+    "types": ["expo-router", "node"]
+  },
+  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -5,6 +5,10 @@
 import type { Hono } from "hono";
 import { zabbixAcknowledgeSchema } from "@repo/shared-validation";
 import {
+  aggregateProblemSeverity,
+  type ZabbixProblemRaw,
+} from "../../lib/zabbix-analytics.js";
+import {
   createZabbixClient,
   zabbixErrorResponse,
   configNotFoundResponse,
@@ -15,6 +19,33 @@ import {
 } from "./shared.js";
 
 export function registerProblemsRoutes(zabbixRoute: Hono) {
+  // GET /api/v1/zabbix/problems/summary
+  // Retorna a sumarização condensada de severidades para consumo reativo do NOC e Dashboards
+  zabbixRoute.get("/problems/summary", async (c) => {
+    const user = c.get("user");
+    const tenantId = user.tenant_id;
+    const hostId = c.req.query("host_id");
+
+    const ctx = await createZabbixClient(tenantId, user.scope === "global");
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
+
+    try {
+      if (hostId) {
+        const belongs = await verifyHostOwnership(ctx, hostId);
+        if (!belongs) return c.json(accessDeniedResponse(), 403);
+      }
+      const hostIds = hostId ? [hostId] : undefined;
+      const problems = await ctx.client.getProblems(hostIds, {});
+
+      const summary = aggregateProblemSeverity(
+        problems as unknown as ZabbixProblemRaw[],
+      );
+      return c.json({ data: summary });
+    } catch (error) {
+      return c.json(zabbixErrorResponse(error), 502);
+    }
+  });
+
   // GET /api/v1/zabbix/problems?host_id=...&acknowledged=false
   zabbixRoute.get("/problems", async (c) => {
     const user = c.get("user");
@@ -23,17 +54,12 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const acknowledged = c.req.query("acknowledged");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Se hostId informado, verifica posse (IDOR protection)
       if (hostId) {
         const belongs = await verifyHostOwnership(ctx, hostId);
-        if (!belongs) {
-          return c.json(accessDeniedResponse(), 403);
-        }
+        if (!belongs) return c.json(accessDeniedResponse(), 403);
       }
       const hostIds = hostId ? [hostId] : undefined;
       const options: { acknowledged?: boolean } = {};
@@ -58,17 +84,12 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const to = c.req.query("to");
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
-      // Se hostId informado, verifica posse (IDOR protection)
       if (hostId) {
         const belongs = await verifyHostOwnership(ctx, hostId);
-        if (!belongs) {
-          return c.json(accessDeniedResponse(), 403);
-        }
+        if (!belongs) return c.json(accessDeniedResponse(), 403);
       }
       const hostIds = hostId ? [hostId] : [];
       const options: {
@@ -98,9 +119,7 @@ export function registerProblemsRoutes(zabbixRoute: Hono) {
     const userId = user.sub;
 
     const ctx = await createZabbixClient(tenantId, user.scope === "global");
-    if (!ctx) {
-      return c.json(configNotFoundResponse(), 503);
-    }
+    if (!ctx) return c.json(configNotFoundResponse(), 503);
 
     try {
       const body = await c.req.json();

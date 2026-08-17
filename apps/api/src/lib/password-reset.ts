@@ -1,12 +1,18 @@
 // @ai-context: .zero-error/architecture-map.md#logic-core
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-import crypto from "node:crypto";
-import { query } from "@repo/db";
-import { logger } from "@repo/logger";
-import { sendSmtpEmail } from "./notification-delivery.js";
-
 // Logica de negocio do fluxo "esqueci minha senha" — extraida das rotas
 // para manter Ingress fino (rotas delegam para ca).
+// Refatorado para usar Drizzle ORM nas tabelas mapeadas (users,
+// password_reset_tokens, sessions). A consulta a tenant_settings
+// (SMTP config) permanece via query() raw SQL pois tenant_settings
+// ainda nao foi mapeada no Phase 1 do Drizzle.
+
+import crypto from "node:crypto";
+import { query } from "@repo/db";
+import { withTenantDb, schema } from "@repo/db/drizzle";
+import { eq, and, isNull, gt } from "drizzle-orm";
+import { logger } from "@repo/logger";
+import { sendSmtpEmail } from "./notification-delivery.js";
 
 const TOKEN_TTL_MINUTES = 60;
 
@@ -21,6 +27,7 @@ interface SmtpConfig {
 
 // Resolve config SMTP: env vars do sistema primeiro, fallback para
 // tenant_settings do tenant do usuario (smtp_enabled = true).
+// Mantem query() raw SQL pois tenant_settings nao esta mapeada no Drizzle Phase 1.
 async function resolveSmtpConfig(userId: string): Promise<SmtpConfig | null> {
   if (process.env.SMTP_HOST && process.env.SMTP_FROM_EMAIL) {
     return {
@@ -74,16 +81,20 @@ export async function requestPasswordReset(
   email: string,
   requestIp: string | null,
 ): Promise<void> {
-  const userResult = await query<{
-    id: string;
-    full_name: string | null;
-    is_active: boolean;
-  }>("SELECT id, full_name, is_active FROM public.users WHERE email = $1", [
-    email,
-  ]);
+  const user = await withTenantDb(async (db) => {
+    const [row] = await db
+      .select({
+        id: schema.users.id,
+        fullName: schema.users.fullName,
+        isActive: schema.users.isActive,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+    return row;
+  });
 
-  const user = userResult.data?.rows[0];
-  if (!user || !user.is_active) {
+  if (!user || !user.isActive) {
     // Nao revela se o email existe — resposta identica em ambos os casos
     logger.info("Solicitacao de reset para email inexistente ou inativo", {
       email,
@@ -92,19 +103,28 @@ export async function requestPasswordReset(
   }
 
   // Invalida tokens anteriores nao usados do mesmo usuario
-  await query(
-    "DELETE FROM public.password_reset_tokens WHERE user_id = $1 AND used_at IS NULL",
-    [user.id],
-  );
+  await withTenantDb(async (db) => {
+    await db
+      .delete(schema.passwordResetTokens)
+      .where(
+        and(
+          eq(schema.passwordResetTokens.userId, user.id),
+          isNull(schema.passwordResetTokens.usedAt),
+        ),
+      );
+  });
 
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(rawToken);
 
-  await query(
-    `INSERT INTO public.password_reset_tokens (user_id, token_hash, expires_at, requested_ip)
-     VALUES ($1, $2, timezone('utc'::text, now()) + INTERVAL '${TOKEN_TTL_MINUTES} minutes', $3)`,
-    [user.id, tokenHash, requestIp],
-  );
+  await withTenantDb(async (db) => {
+    await db.insert(schema.passwordResetTokens).values({
+      userId: user.id,
+      tokenHash,
+      expiresAt: new Date(Date.now() + TOKEN_TTL_MINUTES * 60 * 1000),
+      requestedIp: requestIp ?? null,
+    });
+  });
 
   const smtp = await resolveSmtpConfig(user.id);
   if (!smtp) {
@@ -116,7 +136,7 @@ export async function requestPasswordReset(
 
   const webUrl = process.env.WEB_URL ?? "http://localhost:3000";
   const resetLink = `${webUrl}/auth/reset-password?token=${rawToken}`;
-  const displayName = user.full_name ?? email;
+  const displayName = user.fullName ?? email;
 
   const sendResult = await sendSmtpEmail({
     host: smtp.host,
@@ -155,15 +175,22 @@ export async function validateResetToken(
 ): Promise<string | null> {
   const tokenHash = hashToken(token);
 
-  const result = await query<{ user_id: string }>(
-    `SELECT user_id FROM public.password_reset_tokens
-     WHERE token_hash = $1 AND used_at IS NULL
-       AND expires_at > timezone('utc'::text, now())
-     LIMIT 1`,
-    [tokenHash],
-  );
+  const result = await withTenantDb(async (db) => {
+    const [row] = await db
+      .select({ userId: schema.passwordResetTokens.userId })
+      .from(schema.passwordResetTokens)
+      .where(
+        and(
+          eq(schema.passwordResetTokens.tokenHash, tokenHash),
+          isNull(schema.passwordResetTokens.usedAt),
+          gt(schema.passwordResetTokens.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    return row;
+  });
 
-  return result.data?.rows[0]?.user_id ?? null;
+  return result?.userId ?? null;
 }
 
 // Consome o token: marca como usado, atualiza a senha e revoga sessoes.
@@ -178,18 +205,22 @@ export async function consumeResetToken(
 
   const tokenHash = hashToken(token);
 
-  await query(
-    "UPDATE public.password_reset_tokens SET used_at = timezone('utc'::text, now()) WHERE token_hash = $1",
-    [tokenHash],
-  );
+  await withTenantDb(async (db) => {
+    // Marca token como usado
+    await db
+      .update(schema.passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(schema.passwordResetTokens.tokenHash, tokenHash));
 
-  await query(
-    "UPDATE public.users SET password_hash = $1, must_change_password = false WHERE id = $2",
-    [newPasswordHash, userId],
-  );
+    // Atualiza senha e remove flag must_change_password
+    await db
+      .update(schema.users)
+      .set({ passwordHash: newPasswordHash, mustChangePassword: false })
+      .where(eq(schema.users.id, userId));
 
-  // Revoga todas as sessoes — forca re-login com a nova senha
-  await query("DELETE FROM public.sessions WHERE user_id = $1", [userId]);
+    // Revoga todas as sessoes — forca re-login com a nova senha
+    await db.delete(schema.sessions).where(eq(schema.sessions.userId, userId));
+  });
 
   return { success: true, userId };
 }
