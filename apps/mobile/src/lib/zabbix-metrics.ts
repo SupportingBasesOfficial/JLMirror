@@ -1,5 +1,7 @@
+// @ai-context: .zero-error/architecture-map.md#ingress
+// @ai-restriction: .zero-error/code-standards.md#error-handling
 // Utilidades para categorizar e formatar metricas do Zabbix (port do web)
-import type { ZabbixItem } from "@/lib/api-routes";
+import type { ZabbixItem } from "@/lib/api-routes.js";
 
 export type { ZabbixItem };
 
@@ -104,7 +106,6 @@ export function detectDeviceType(items: ZabbixItem[]): DeviceType {
   return "unknown";
 }
 
-/** Encontra um item cuja key_ contem o padrao. */
 export function findItem(
   items: ZabbixItem[],
   keyPattern: string,
@@ -112,7 +113,34 @@ export function findItem(
   return items.find((i) => i.key_.includes(keyPattern));
 }
 
-/** Formata valor numerico com units do Zabbix. */
+export function findItems(
+  items: ZabbixItem[],
+  keyPattern: string,
+): ZabbixItem[] {
+  return items.filter((i) => i.key_.includes(keyPattern));
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + " GB";
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + " MB";
+  if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return bytes.toFixed(0) + " B";
+}
+
+export function formatUptime(seconds: number): string {
+  if (seconds >= 86400) {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    return `${d}d ${h}h`;
+  }
+  if (seconds >= 3600) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  }
+  return Math.floor(seconds / 60) + "m";
+}
+
 export function formatMetricValue(
   value: string | undefined,
   units: string | undefined,
@@ -134,12 +162,7 @@ export function formatMetricValue(
     return num.toFixed(0) + " bps";
   }
   if (u === "%") return num.toFixed(2) + "%";
-  if (u === "s") {
-    if (num >= 86400) return Math.floor(num / 86400) + "d";
-    if (num >= 3600) return Math.floor(num / 3600) + "h";
-    return Math.floor(num / 60) + "m";
-  }
-  if (u === "uptime") {
+  if (u === "s" || u === "uptime") {
     if (num >= 86400) return Math.floor(num / 86400) + "d";
     if (num >= 3600) return Math.floor(num / 3600) + "h";
     return Math.floor(num / 60) + "m";
@@ -147,18 +170,60 @@ export function formatMetricValue(
   return num.toFixed(2) + u;
 }
 
-/** Extrai porcentagem 0-100 de um item (para gauges e barras). */
 export function extractPercent(
   item: ZabbixItem | undefined,
 ): number | undefined {
   if (!item?.lastvalue) return undefined;
   const num = Number.parseFloat(item.lastvalue);
   if (Number.isNaN(num)) return undefined;
-  // Items com units "%" ja sao porcentagem
   if (item.units === "%") return num;
-  // vm.memory.util tambem e porcentagem
   if (item.key_.includes("util")) return num;
-  // system.cpu.util tambem
   if (item.key_.startsWith("system.cpu.util")) return num;
   return undefined;
+}
+
+// ============================================================================
+// ====== SANEAMENTO E BLINDAGEM: Helpers de Elite para o Ecrã Mobile =====
+// ============================================================================
+
+/**
+ * Efetua de forma segura o parse de strings opcionais do Zabbix.
+ * Protege contra campos undefined ou nulos que quebram o compilador estrito.
+ */
+export function safeParseFloat(value: string | null | undefined): number {
+  if (!value || value.trim() === "") return 0;
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Converte coleções dinâmicas de histórico para o formato cartesiano exigido pelo Skia.
+ * Abstrai a complexidade do mapeamento temporal impedindo erros de conformidade visual.
+ */
+export function mapToCartesianSeries(
+  rawValues: ReadonlyArray<
+    number | { time: number; value: number } | { value: number } | unknown
+  >,
+  timeRangeSeconds: number = 3600,
+): { time: number; value: number }[] {
+  if (!Array.isArray(rawValues) || rawValues.length === 0) return [];
+
+  const now = Math.floor(Date.now() / 1000);
+  const step = Math.floor(timeRangeSeconds / Math.max(rawValues.length, 1));
+
+  return rawValues.map((v, idx) => {
+    if (typeof v === "object" && v !== null && "time" in v && "value" in v) {
+      return { time: Number(v.time), value: Number(v.value) || 0 };
+    }
+    if (typeof v === "object" && v !== null && "value" in v) {
+      return {
+        time: now - (rawValues.length - 1 - idx) * step,
+        value: Number(v.value) || 0,
+      };
+    }
+    return {
+      time: now - (rawValues.length - 1 - idx) * step,
+      value: Number(v) || 0,
+    };
+  });
 }

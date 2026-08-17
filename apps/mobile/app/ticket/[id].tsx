@@ -18,6 +18,7 @@ import { api } from "@/lib/api-client";
 import { apiRoutes } from "@/lib/api-routes";
 import type { TicketComment } from "@/lib/api-routes";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ScreenHeader } from "@/components/ui/screen-header";
 import { useQueryClient } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -26,6 +27,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "#f59e0b",
   medium: "#0d9488",
   low: "#525252",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  urgent: "Urgente",
+  high: "Alta",
+  medium: "Media",
+  low: "Baixa",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -37,11 +45,19 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: "Cancelado",
 };
 
+function formatMins(mins: number | null): string {
+  if (mins == null) return "—";
+  if (mins < 60) return `${mins}m`;
+  if (mins < 1440) return `${(mins / 60).toFixed(1)}h`;
+  return `${(mins / 1440).toFixed(1)}d`;
+}
+
 export default function TicketDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useTicket(id);
   const [comment, setComment] = useState("");
+  const [isInternal, setIsInternal] = useState(false);
   const [sending, setSending] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -49,8 +65,12 @@ export default function TicketDetailScreen() {
     if (!comment.trim() || !id) return;
     setSending(true);
     try {
-      await api.post(apiRoutes.tickets.comments(id), { body: comment.trim() });
+      await api.post(apiRoutes.tickets.comments(id), {
+        body: comment.trim(),
+        is_internal: isInternal,
+      });
       setComment("");
+      setIsInternal(false);
       // Invalida cache para refetch
       queryClient.invalidateQueries({ queryKey: ["tickets", "detail", id] });
       queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
@@ -83,15 +103,24 @@ export default function TicketDetailScreen() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator size="large" color="#0d9488" />
+      <View className="flex-1 bg-background">
+        <ScreenHeader title="Ticket" />
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#0d9488" />
+        </View>
       </View>
     );
   }
 
   if (isError || !data) {
     return (
-      <EmptyState icon="alert-circle-outline" message="Ticket nao encontrado" />
+      <View className="flex-1 bg-background">
+        <ScreenHeader title="Ticket" />
+        <EmptyState
+          icon="alert-circle-outline"
+          message="Ticket nao encontrado"
+        />
+      </View>
     );
   }
 
@@ -103,6 +132,10 @@ export default function TicketDetailScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       className="flex-1 bg-background"
     >
+      <ScreenHeader
+        title={`#${ticket.ticket_number}`}
+        subtitle={ticket.subject}
+      />
       <ScrollView contentContainerClassName="px-4 pt-4 pb-8 gap-4">
         {/* Header do ticket */}
         <View className="rounded-lg bg-card p-4 border border-border">
@@ -134,7 +167,7 @@ export default function TicketDetailScreen() {
                 className="text-xs font-medium"
                 style={{ color: priorityColor }}
               >
-                {ticket.priority}
+                {PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
               </Text>
             </View>
             <Pressable
@@ -187,11 +220,50 @@ export default function TicketDetailScreen() {
               value={ticket.requester_email}
             />
           )}
+          {ticket.assigned_to && (
+            <MetaRow
+              icon="headset-outline"
+              label="Atribuido"
+              value={ticket.assigned_to}
+            />
+          )}
           <MetaRow
             icon="calendar-outline"
             label="Criado"
             value={new Date(ticket.created_at).toLocaleString("pt-BR")}
           />
+          {ticket.response_time_mins != null && (
+            <MetaRow
+              icon="timer-outline"
+              label="Tempo Resposta"
+              value={formatMins(ticket.response_time_mins)}
+            />
+          )}
+          {ticket.resolution_time_mins != null && (
+            <MetaRow
+              icon="checkmark-done-outline"
+              label="Tempo Resolucao"
+              value={formatMins(ticket.resolution_time_mins)}
+            />
+          )}
+          {ticket.rating != null && (
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="star-outline" size={16} color="#525252" />
+                <Text className="text-sm text-muted-foreground">Avaliacao</Text>
+              </View>
+              <View className="flex-row items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Ionicons
+                    key={star}
+                    name={star <= ticket.rating! ? "star" : "star-outline"}
+                    size={12}
+                    color={star <= ticket.rating! ? "#f59e0b" : "#525252"}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Comentarios */}
@@ -211,9 +283,18 @@ export default function TicketDetailScreen() {
                   className="rounded-lg bg-card p-3 border border-border"
                 >
                   <View className="flex-row items-center justify-between mb-1">
-                    <Text className="text-xs font-semibold text-primary">
-                      {c.author_name}
-                    </Text>
+                    <View className="flex-row items-center gap-2">
+                      <Text className="text-xs font-semibold text-primary">
+                        {c.author_name}
+                      </Text>
+                      {c.is_internal && (
+                        <View className="px-1.5 py-0.5 rounded bg-secondary">
+                          <Text className="text-[10px] text-muted-foreground">
+                            Interno
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text className="text-xs text-muted-foreground">
                       {new Date(c.created_at).toLocaleString("pt-BR", {
                         day: "2-digit",
@@ -232,29 +313,44 @@ export default function TicketDetailScreen() {
       </ScrollView>
 
       {/* Input de comentario fixo no bottom */}
-      <View className="border-t border-border bg-card px-4 py-3 flex-row items-end gap-2">
-        <TextInput
-          value={comment}
-          onChangeText={setComment}
-          placeholder="Adicionar comentario..."
-          placeholderTextColor="#525252"
-          multiline
-          className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground"
-          style={{ maxHeight: 100 }}
-          editable={!sending}
-        />
+      <View className="border-t border-border bg-card px-4 py-3 gap-2">
         <Pressable
-          onPress={handleAddComment}
-          disabled={!comment.trim() || sending}
-          className="w-10 h-10 rounded-lg bg-primary items-center justify-center"
-          style={{ opacity: !comment.trim() || sending ? 0.5 : 1 }}
+          onPress={() => setIsInternal(!isInternal)}
+          className="flex-row items-center gap-2 active:opacity-70"
         >
-          {sending ? (
-            <ActivityIndicator size="small" color="#f0fdfa" />
-          ) : (
-            <Ionicons name="send" size={18} color="#f0fdfa" />
-          )}
+          <Ionicons
+            name={isInternal ? "checkbox" : "square-outline"}
+            size={16}
+            color={isInternal ? "#0d9488" : "#737373"}
+          />
+          <Text className="text-xs text-muted-foreground">
+            Comentario interno
+          </Text>
         </Pressable>
+        <View className="flex-row items-end gap-2">
+          <TextInput
+            value={comment}
+            onChangeText={setComment}
+            placeholder="Adicionar comentario..."
+            placeholderTextColor="#525252"
+            multiline
+            className="flex-1 rounded-lg bg-background border border-border px-3 py-2 text-sm text-foreground"
+            style={{ maxHeight: 100 }}
+            editable={!sending}
+          />
+          <Pressable
+            onPress={handleAddComment}
+            disabled={!comment.trim() || sending}
+            className="w-10 h-10 rounded-lg bg-primary items-center justify-center"
+            style={{ opacity: !comment.trim() || sending ? 0.5 : 1 }}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#f0fdfa" />
+            ) : (
+              <Ionicons name="send" size={18} color="#f0fdfa" />
+            )}
+          </Pressable>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );

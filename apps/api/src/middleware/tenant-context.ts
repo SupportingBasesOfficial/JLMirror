@@ -17,13 +17,16 @@ export const tenantContext = createMiddleware(async (c, next) => {
     );
   }
 
+  // Se for staff global, permite personificar um tenant específico via cabeçalho X-Tenant-ID
+  const targetTenantId = c.req.header("x-tenant-id") || user.tenant_id;
+
   // Usuarios global (JL staff) podem acessar rotas sem tenant_id — operam em public.*
-  if (user.scope === "global" && !user.tenant_id) {
+  if (user.scope === "global" && !targetTenantId) {
     await next();
     return;
   }
 
-  if (!user.tenant_id) {
+  if (!targetTenantId) {
     return c.json(
       {
         error: {
@@ -35,9 +38,24 @@ export const tenantContext = createMiddleware(async (c, next) => {
     );
   }
 
+  // Validação estrita do formato UUID para o cabeçalho injetado antes de entrar no fluxo assíncrono
+  const UUID_REGEX =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!UUID_REGEX.test(targetTenantId)) {
+    return c.json(
+      {
+        error: {
+          code: "INVALID_TENANT_ID",
+          message: "O ID do tenant configurado no cabeçalho é inválido",
+        },
+      },
+      400,
+    );
+  }
+
   // runWithTenant propaga tenant_id via AsyncLocalStorage para todas as
   // queries async dentro da request, incluindo handlers e imports dinamicos
-  await runWithTenant(user.tenant_id, async () => {
+  await runWithTenant(targetTenantId, async () => {
     await next();
   });
 });

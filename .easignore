@@ -1,0 +1,14 @@
+# Minimal .easignore — only exclude clearly unnecessary files
+.git
+.github
+.husky
+docs
+node_modules
+coverage
+.next
+.expo
+Dockerfile
+docker-compose*.yml
+# Native dirs — EAS generates these via prebuild, don't upload local copies
+apps/mobile/android
+apps/mobile/ios

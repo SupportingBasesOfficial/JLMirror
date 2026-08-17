@@ -14,7 +14,6 @@ import { logger } from "@repo/logger";
 import { BlindedZabbixClient, decryptTokenParts } from "@repo/zabbix";
 import { startWorker } from "./queue.js";
 import { getTenantZabbixConfig } from "../routes/zabbix/shared.js";
-import { pushNotificationToUser } from "../routes/ws.js";
 
 // Interface do job de escrita Zabbix
 interface ZabbixWriteJobData {
@@ -77,6 +76,9 @@ export async function startZabbixWriteWorker(): Promise<void> {
           operation,
         });
 
+        // BLINDAGEM ANTI-CIRCULAR: Importação dinâmica para evitar travar a inicialização do processo Node.js
+        const { pushNotificationToUser } = await import("../routes/ws.js");
+
         // Notifica o usuario via WebSocket
         await pushNotificationToUser(tenantId, userId, {
           type: "zabbix_write_complete",
@@ -97,6 +99,9 @@ export async function startZabbixWriteWorker(): Promise<void> {
           operation,
           error: errorMessage,
         });
+
+        // BLINDAGEM ANTI-CIRCULAR: Importação dinâmica também no bloco de captura de erro
+        const { pushNotificationToUser } = await import("../routes/ws.js");
 
         // Notifica o usuario via WebSocket sobre a falha
         await pushNotificationToUser(tenantId, userId, {

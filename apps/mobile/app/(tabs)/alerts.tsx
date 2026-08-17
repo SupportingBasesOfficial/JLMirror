@@ -1,5 +1,5 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
-// Alerts — triggers ativos do Zabbix agrupados por severidade + WebSocket live + busca
+// Alerts — triggers ativos do Zabbix agrupados por severidade (igual web)
 import { useState, useMemo, useCallback } from "react";
 import {
   View,
@@ -17,36 +17,7 @@ import { AlertItem } from "@/components/ui/alert-item";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Ionicons } from "@expo/vector-icons";
 
-// Filtros alinhados com prioridade do Zabbix: critical (4-5), warning (2-3), info (0-1)
-type SeverityFilter = "all" | "critical" | "warning" | "info";
-const SEVERITY_FILTERS: SeverityFilter[] = [
-  "all",
-  "critical",
-  "warning",
-  "info",
-];
-
-const FILTER_LABELS: Record<SeverityFilter, string> = {
-  all: "Todos",
-  critical: "Criticos",
-  warning: "Avisos",
-  info: "Info",
-};
-
-function matchesFilter(
-  trigger: ZabbixTrigger,
-  filter: SeverityFilter,
-): boolean {
-  if (filter === "all") return true;
-  const p = Number.parseInt(trigger.priority, 10);
-  if (filter === "critical") return p >= 4;
-  if (filter === "warning") return p === 2 || p === 3;
-  if (filter === "info") return p <= 1;
-  return false;
-}
-
 export default function AlertsScreen() {
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [liveCount, setLiveCount] = useState(0);
   const [search, setSearch] = useState("");
 
@@ -56,7 +27,6 @@ export default function AlertsScreen() {
     },
   );
 
-  // WebSocket para notificacoes em tempo real
   const handleNotification = useCallback((_notification: WsNotification) => {
     setLiveCount((c) => c + 1);
   }, []);
@@ -68,34 +38,31 @@ export default function AlertsScreen() {
 
   const allTriggers = useMemo(() => data?.data ?? [], [data]);
 
+  // Filtra por busca
   const filtered = useMemo(() => {
-    let result = allTriggers.filter((t) => matchesFilter(t, severityFilter));
-    if (search.trim()) {
-      const q = search.toLowerCase().trim();
-      result = result.filter(
-        (t) =>
-          t.description.toLowerCase().includes(q) ||
-          t.hosts?.some(
-            (h) =>
-              h.name.toLowerCase().includes(q) ||
-              h.host.toLowerCase().includes(q),
-          ),
-      );
-    }
-    return result;
-  }, [allTriggers, severityFilter, search]);
+    if (!search.trim()) return allTriggers;
+    const q = search.toLowerCase().trim();
+    return allTriggers.filter(
+      (t) =>
+        t.description.toLowerCase().includes(q) ||
+        t.hosts?.some(
+          (h) =>
+            h.name.toLowerCase().includes(q) ||
+            h.host.toLowerCase().includes(q),
+        ),
+    );
+  }, [allTriggers, search]);
 
-  // Agrupamento por severidade para contagem no header
-  const counts = useMemo(() => {
-    const c = { critical: 0, warning: 0, info: 0 };
-    for (const t of allTriggers) {
-      const p = Number.parseInt(t.priority, 10);
-      if (p >= 4) c.critical++;
-      else if (p >= 2) c.warning++;
-      else c.info++;
-    }
-    return c;
-  }, [allTriggers]);
+  // Agrupa por severidade (igual web)
+  const criticalTriggers = filtered.filter(
+    (t) => t.priority === "4" || t.priority === "5",
+  );
+  const warningTriggers = filtered.filter(
+    (t) => t.priority === "2" || t.priority === "3",
+  );
+  const infoTriggers = filtered.filter(
+    (t) => t.priority === "0" || t.priority === "1",
+  );
 
   if (isLoading) {
     return (
@@ -117,7 +84,7 @@ export default function AlertsScreen() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      contentContainerClassName="px-4 pt-4 pb-8 gap-3"
+      contentContainerClassName="px-4 pt-4 pb-8 gap-4"
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
@@ -129,15 +96,51 @@ export default function AlertsScreen() {
         />
       }
     >
-      {/* Status WebSocket + notificacoes live */}
-      <View className="flex-row items-center justify-between rounded-lg bg-card p-3 border border-border">
+      {/* Header com contadores (igual web) */}
+      <View className="flex-row items-center justify-between">
+        <Text className="text-lg font-bold text-foreground">
+          Alertas Ativos
+        </Text>
+        <View className="flex-row items-center gap-3">
+          <View className="flex-row items-center gap-1">
+            <View
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: "#dc2626" }}
+            />
+            <Text className="text-xs text-muted-foreground">
+              {criticalTriggers.length} crit.
+            </Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <View
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: "#f59e0b" }}
+            />
+            <Text className="text-xs text-muted-foreground">
+              {warningTriggers.length} aviso
+            </Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            <View
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: "#525252" }}
+            />
+            <Text className="text-xs text-muted-foreground">
+              {infoTriggers.length} info
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Status WebSocket */}
+      <View className="flex-row items-center justify-between rounded-lg bg-card p-2.5 border border-border">
         <View className="flex-row items-center gap-2">
           <View
             className="w-2 h-2 rounded-full"
             style={{ backgroundColor: isConnected ? "#0d9488" : "#525252" }}
           />
           <Text className="text-xs text-muted-foreground">
-            {isConnected ? "Tempo real conectado" : "Reconectando..."}
+            {isConnected ? "Tempo real" : "Reconectando..."}
           </Text>
         </View>
         {liveCount > 0 && (
@@ -175,86 +178,90 @@ export default function AlertsScreen() {
         )}
       </View>
 
-      {/* Resumo por severidade */}
-      <View className="flex-row gap-2">
-        <SummaryChip color="#dc2626" label="Criticos" count={counts.critical} />
-        <SummaryChip color="#f59e0b" label="Avisos" count={counts.warning} />
-        <SummaryChip color="#525252" label="Info" count={counts.info} />
-      </View>
+      {/* Secao Criticos */}
+      {criticalTriggers.length > 0 && (
+        <SeveritySection
+          title="Criticos"
+          count={criticalTriggers.length}
+          color="#dc2626"
+          triggers={criticalTriggers}
+        />
+      )}
 
-      {/* Filtros de severidade */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerClassName="gap-2"
-      >
-        {SEVERITY_FILTERS.map((severity) => (
-          <Pressable
-            key={severity}
-            onPress={() => setSeverityFilter(severity)}
-            className={`px-3 py-1.5 rounded-lg border ${
-              severityFilter === severity
-                ? "bg-primary border-primary"
-                : "bg-card border-border"
-            }`}
-          >
-            <Text
-              className={`text-xs font-medium ${
-                severityFilter === severity
-                  ? "text-primary-foreground"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {FILTER_LABELS[severity]}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      {/* Secao Avisos */}
+      {warningTriggers.length > 0 && (
+        <SeveritySection
+          title="Avisos"
+          count={warningTriggers.length}
+          color="#f59e0b"
+          triggers={warningTriggers}
+        />
+      )}
 
-      {/* Contador */}
-      <Text className="text-xs text-muted-foreground">
-        {filtered.length} alerta{filtered.length !== 1 ? "s" : ""} ativo
-        {filtered.length !== 1 ? "s" : ""}
-      </Text>
+      {/* Secao Info */}
+      {infoTriggers.length > 0 && (
+        <SeveritySection
+          title="Info"
+          count={infoTriggers.length}
+          color="#525252"
+          triggers={infoTriggers}
+        />
+      )}
 
-      {/* Lista */}
-      {filtered.length === 0 ? (
+      {/* Empty state */}
+      {filtered.length === 0 && (
         <EmptyState
           icon="checkmark-circle-outline"
-          message="Nenhum alerta ativo"
+          message={search ? "Nenhum alerta encontrado" : "Nenhum alerta ativo"}
         />
-      ) : (
-        <View className="gap-3">
-          {filtered.map((trigger: ZabbixTrigger) => (
-            <AlertItem key={trigger.triggerid} alert={trigger} />
-          ))}
-        </View>
       )}
     </ScrollView>
   );
 }
 
-function SummaryChip({
-  color,
-  label,
+// ============================================================================
+// Secao por severidade — header com ponto colorido + lista de alerts
+// ============================================================================
+function SeveritySection({
+  title,
   count,
+  color,
+  triggers,
 }: {
-  color: string;
-  label: string;
+  title: string;
   count: number;
+  color: string;
+  triggers: ZabbixTrigger[];
 }) {
   return (
-    <View className="flex-1 flex-row items-center justify-between rounded-lg bg-card p-3 border border-border">
+    <View className="gap-2">
+      {/* Header da secao */}
       <View className="flex-row items-center gap-2">
         <View
           className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: color }}
+          style={{
+            backgroundColor: color,
+            shadowColor: color,
+            shadowOpacity: 0.5,
+            shadowRadius: 4,
+            shadowOffset: { width: 0, height: 0 },
+          }}
         />
-        <Text className="text-xs text-muted-foreground">{label}</Text>
+        <Text
+          className="text-xs font-bold uppercase tracking-wider"
+          style={{ color }}
+        >
+          {title}
+        </Text>
+        <Text className="text-xs text-muted-foreground">({count})</Text>
       </View>
-      <Text className="text-sm font-bold" style={{ color }}>
-        {count}
-      </Text>
+
+      {/* Lista de alerts */}
+      <View className="gap-1.5">
+        {triggers.map((trigger) => (
+          <AlertItem key={trigger.triggerid} alert={trigger} />
+        ))}
+      </View>
     </View>
   );
 }

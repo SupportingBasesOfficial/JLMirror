@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
@@ -33,9 +32,9 @@ export default function LoginScreen() {
     try {
       // Valida com Zod antes de enviar
       const parsed = loginInputSchema.parse({ email, password });
-      console.log("[Login] Tentando login com:", parsed.email);
+      console.warn("[Login] Tentando login com:", parsed.email);
       const res = await login(parsed.email, parsed.password);
-      console.log("[Login] Resposta:", JSON.stringify(res).substring(0, 200));
+      console.warn("[Login] Resposta:", JSON.stringify(res).substring(0, 200));
 
       // Se MFA requerido, navega para verificacao
       if (res.mfa_required && res.mfa_challenge_token) {
@@ -47,7 +46,7 @@ export default function LoginScreen() {
       // Se nao tem MFA, o AuthProvider ja atualizou o estado e o AuthGate
       // vai redirecionar para /(tabs) automaticamente.
     } catch (err: unknown) {
-      console.log("[Login] Erro:", err);
+      console.warn("[Login] Erro:", err);
       if (err instanceof ApiError) {
         setError(err.message);
       } else if (err instanceof Error) {
@@ -104,9 +103,7 @@ export default function LoginScreen() {
             />
           </View>
 
-          {error && (
-            <Text className="text-sm text-destructive">{error}</Text>
-          )}
+          {error && <Text className="text-sm text-destructive">{error}</Text>}
 
           <Pressable
             onPress={handleLogin}
@@ -117,18 +114,21 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color="#f0fdfa" />
             ) : (
-              <Text className="font-semibold text-primary-foreground">Entrar</Text>
+              <Text className="font-semibold text-primary-foreground">
+                Entrar
+              </Text>
             )}
           </Pressable>
 
-          {/* Credenciais de teste */}
-          <View className="mt-6 rounded-lg bg-secondary p-3">
+          {/* Link para landing page */}
+          <Pressable
+            onPress={() => router.push("/(auth)/landing")}
+            className="mt-6 items-center"
+          >
             <Text className="text-xs text-muted-foreground">
-              Credenciais de teste:{"\n"}
-              admin@jlmirror.com / admin123{"\n"}
-              mauricio@acopecas.com.br / admin123
+              ← Voltar para a pagina inicial
             </Text>
-          </View>
+          </Pressable>
         </View>
       </View>
     </KeyboardAvoidingView>

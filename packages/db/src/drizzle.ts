@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { pool, getCurrentTenantId } from "./index";
 import * as schema from "./schema";
 
-type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
+export type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
 
 // Lazily instantiate so importing this module never opens a connection by
 // itself — the underlying pool is only created on first real query, exactly
@@ -52,7 +52,8 @@ export async function withTenantDb<T>(
     throw new Error("tenant_id inválido: deve ser um UUID");
   }
 
-  // Transacao Drizzle com SET LOCAL para RLS
+  // Transacao Drizzle com SET LOCAL para RLS. Mantemos o cast estrito
+  // para DrizzleDb apenas no retorno seguro do callback do contexto transacional.
   return getDb().transaction(async (tx) => {
     await tx.execute(
       sql.raw(`SET LOCAL app.current_tenant_id = '${tenantId}'`),

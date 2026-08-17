@@ -91,3 +91,9 @@ check-triggers.cjs
 
 # --- Config de IDEs duplicadas ---
 .cursorrules
+
+# JLMIRROR SecOps & Compliance Restrictions
+*.dump
+*.json
+*.jpeg
+.env.staging

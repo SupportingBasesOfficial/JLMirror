@@ -38,6 +38,10 @@ react {
     //   A list containing the node command and its flags. Default is just 'node'.
     // nodeExecutableAndArgs = ["node"]
 
+    // Passa o entry file como caminho absoluto para contornar o bug do
+    // getMetroServerRoot() que resolve o entry file do monorepo root.
+    extraPackagerArgs = ["--entry-file", projectRoot + "/../../node_modules/expo-router/entry.js"]
+
     //
     //   The path to the CLI configuration file. Default is empty.
     // bundleConfig = file(../rn-cli.config.js)

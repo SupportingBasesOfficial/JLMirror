@@ -55,6 +55,10 @@ const CACHE_TTL_MAP: Array<{ pattern: RegExp; ttl: number }> = [
 const DEFAULT_CACHE_TTL = 10;
 
 zabbixRoute.use("/*", async (c, next) => {
+  // BLINDAGEM DE PERFORMANCE: Ignora completamente rotas de streaming de conector
+  // para evitar loops maciços e redundantes de varrimento/invalidação do Redis sob alta carga
+  if (c.req.path.startsWith("/connector")) return next();
+
   const user = c.get("user");
   const tenantId = user?.tenant_id;
   if (!tenantId) return next();

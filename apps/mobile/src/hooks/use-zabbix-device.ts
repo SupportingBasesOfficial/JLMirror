@@ -33,12 +33,15 @@ export function useZabbixHistory(
   itemId: string | null | undefined,
   from?: number,
   to?: number,
+  valueType?: number,
 ) {
   return useQuery<ZabbixHistoryResponse>({
-    queryKey: ["zabbix", "history", itemId, from, to],
-    queryFn: () => api.get(apiRoutes.zabbix.history(itemId!, from, to)),
+    queryKey: ["zabbix", "history", itemId, from, to, valueType],
+    queryFn: () =>
+      api.get(apiRoutes.zabbix.history(itemId!, from, to, valueType)),
     enabled: !!itemId,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
+    refetchOnMount: false,
   });
 }
 

@@ -18,7 +18,13 @@
 // dependency on `pg` or the connection pool is introduced, so this
 // module is safe to import from browser/edge bundles.
 import type { z } from "zod";
-import type { User, NewUser } from "@repo/db/types";
+import type {
+  User,
+  NewUser,
+  NewRole,
+  TenantCustomRole,
+  NewTenantCustomRole,
+} from "@repo/db/types";
 
 import {
   loginInputSchema,
@@ -26,7 +32,7 @@ import {
   createCustomRoleSchema,
   createRoleSchema,
   adminCreateUserSchema,
-} from "./index";
+} from "./index.js";
 
 // ====== 1. Re-export Drizzle types for repository layer ======
 export type {
@@ -70,17 +76,6 @@ export type {
 } from "@repo/db/types";
 
 // ====== 2. Compile-time type alignment assertions ======
-// These utility types produce a compile error if the Zod-inferred
-// type for a key diverges from the Drizzle Insert type for the
-// corresponding field. They are never instantiated at runtime —
-// they exist purely for static verification.
-//
-// Usage: if someone renames `full_name` to `name` in the DB schema
-// (the historical bug documented in current_architecture_audit.md),
-// the assertion below will fail at compile time, preventing
-// regression.
-
-// Verifica que o campo `email` é string em ambos os lados
 type AssertEmailAlignment = z.infer<
   typeof loginInputSchema
 >["email"] extends string
@@ -90,7 +85,6 @@ type AssertEmailAlignment = z.infer<
   : never;
 type _EmailOk = AssertEmailAlignment extends true ? true : never;
 
-// Verifica que `full_name` (API) corresponde a `fullName` (DB)
 type AssertFullNameAlignment = z.infer<
   typeof createTenantUserSchema
 >["full_name"] extends string | undefined
@@ -100,7 +94,6 @@ type AssertFullNameAlignment = z.infer<
   : never;
 type _FullNameOk = AssertFullNameAlignment extends true ? true : never;
 
-// Verifica que `role` (API) corresponde a `role` (DB tenant_users)
 type AssertRoleAlignment = z.infer<
   typeof createTenantUserSchema
 >["role"] extends string
@@ -108,7 +101,6 @@ type AssertRoleAlignment = z.infer<
   : never;
 type _RoleOk = AssertRoleAlignment extends true ? true : never;
 
-// Verifica que `key` (API custom role) corresponde a `key` (DB)
 type AssertCustomRoleKeyAlignment = z.infer<
   typeof createCustomRoleSchema
 >["key"] extends string
@@ -120,8 +112,6 @@ type _CustomRoleKeyOk = AssertCustomRoleKeyAlignment extends true
   ? true
   : never;
 
-// Verifica que `must_change_password` (API) corresponde a
-// `mustChangePassword` (DB)
 type AssertMustChangePasswordAlignment = z.infer<
   typeof adminCreateUserSchema
 >["must_change_password"] extends boolean
@@ -134,8 +124,6 @@ type _MustChangePasswordOk = AssertMustChangePasswordAlignment extends true
   : never;
 
 // ====== 3. Snake-to-camel mapping helpers ======
-// Converte chaves snake_case (API) para camelCase (Drizzle).
-// Uso típico no repository: `db.insert(users).values(toDbUser(apiPayload))`.
 export type SnakeToCamel<S extends string> =
   S extends `${infer Head}_${infer Tail}`
     ? `${Head}${Capitalize<SnakeToCamel<Tail>>}`
@@ -148,21 +136,14 @@ export type CamelToSnake<S extends string> =
       : `${Head}_${Uncapitalize<Tail>}${CamelToSnake<Tail>}`
     : S;
 
-// Mapeia um tipo com chaves snake_case para chaves camelCase,
-// preservando os tipos dos valores.
 export type SnakeToCamelObject<T extends Record<string, unknown>> = {
   [K in keyof T as SnakeToCamel<K & string>]: T[K];
 };
 
-// Mapeia um tipo com chaves camelCase para chaves snake_case.
 export type CamelToSnakeObject<T extends Record<string, unknown>> = {
   [K in keyof T as CamelToSnake<K & string>]: T[K];
 };
 
-// Helpers concretos para as entidades core mapeadas no Phase 1.
-// Estes tipos garantem que o payload da API (snake_case) pode ser
-// convertido para o formato de insert do Drizzle (camelCase) sem
-// perda de informação de tipo.
 export type ApiUserPayload = z.infer<typeof adminCreateUserSchema>;
 export type DbUserInsert = NewUser;
 
@@ -171,3 +152,26 @@ export type DbCustomRoleInsert = NewTenantCustomRole;
 
 export type ApiRolePayload = z.infer<typeof createRoleSchema>;
 export type DbRoleInsert = NewRole;
+
+// ============================================================
+// ====== 4. BLINDAGEM: Contratos Industriais do BullMQ ======
+// ============================================================
+
+/**
+ * Esquema de validação estrito para jobs inseridos na fila assíncrona de telemetria.
+ * Sincroniza o contrato entre a rota HTTP connector-stream e o worker background.
+ */
+export interface ZabbixMetricsJobPayload {
+  tenantId: string;
+  payload: string; // Payload serializado em formato texto para preservar a Event Loop HTTP principal
+  timestamp: number;
+}
+
+export interface ZabbixMetricsHistoryEntry {
+  itemid: string;
+  hostid?: string;
+  clock: number;
+  ns?: number;
+  value: string;
+  value_type?: number;
+}

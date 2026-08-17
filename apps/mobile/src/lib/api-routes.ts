@@ -63,7 +63,30 @@ export interface DashboardOverviewResponse {
     firewall: { total: number; active: number };
     changes: { pending: number; in_progress: number };
     assets: { total: number };
+    scripts: { total: number };
+    notifications: { unread: number };
   };
+  recent_activity: {
+    action: string;
+    entity_type: string;
+    created_at: string;
+  }[];
+  recent_tickets: {
+    id: string;
+    subject: string;
+    status: string;
+    priority: string;
+    created_at: string;
+  }[];
+  upcoming_changes: {
+    id: string;
+    rfc_number: string;
+    title: string;
+    planned_start_at: string;
+    priority: string;
+  }[];
+
+  ssl_expiring_soon: Array<{ id: string; hostname: string; valid_to: string }>;
   [key: string]: unknown;
 }
 
@@ -93,12 +116,18 @@ export interface Ticket {
   description: string | null;
   status: string;
   priority: string;
+  source: string | null;
   category_id: string | null;
   category_name?: string;
   category_color?: string;
   requester_name: string | null;
   requester_email: string | null;
+  requester_phone: string | null;
   assigned_to: string | null;
+  assigned_name?: string | null;
+  tags: string[];
+  sla_response_due: string | null;
+  sla_resolution_due: string | null;
   is_overdue: boolean;
   response_time_mins: number | null;
   resolution_time_mins: number | null;
@@ -119,9 +148,93 @@ export interface TicketComment {
   created_at: string;
 }
 
+export interface TicketStats {
+  total: string;
+  by_status: { status: string; count: string }[];
+  by_priority: { priority: string; count: string }[];
+  sla: {
+    overdue: string;
+    open_tickets: string;
+    avg_response_mins: string | null;
+    avg_resolution_mins: string | null;
+    avg_rating: string | null;
+  };
+  by_category: {
+    name: string;
+    color: string;
+    ticket_count: string;
+    open_count: string;
+  }[];
+}
+
+export interface TicketCategory {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  sla_response_hours: number;
+  sla_resolution_hours: number;
+  is_active: boolean;
+}
+
 export interface TicketDetailResponse {
   ticket: Ticket;
   comments: TicketComment[];
+}
+
+// --- Profile ---
+export interface ProfileData {
+  id: string;
+  email: string;
+  full_name: string | null;
+  display_name: string | null;
+  bio: string | null;
+  phone: string | null;
+  location: string | null;
+  timezone: string | null;
+  locale: string | null;
+  job_title: string | null;
+  department: string | null;
+  skills: string[] | null;
+  social_links: Record<string, string> | null;
+  avatar_initials: string | null;
+  avatar_color: string | null;
+  notification_email: boolean | null;
+  notification_push: boolean | null;
+  notification_sms: boolean | null;
+  notification_digest_frequency: string | null;
+  quiet_hours_start: string | null;
+  quiet_hours_end: string | null;
+  theme: string | null;
+  density: string | null;
+  sidebar_collapsed: boolean | null;
+  role: string;
+  tenant_name: string | null;
+}
+
+export interface ProfileResponse {
+  profile: ProfileData;
+}
+
+export interface UserSession {
+  id: string;
+  device_type: string;
+  device_name: string | null;
+  ip_address: string | null;
+  location: string | null;
+  is_active: boolean;
+  last_activity: string;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface SecurityEvent {
+  id: string;
+  event_type: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -152,18 +265,32 @@ export interface AnomalyDetectionsResponse {
 }
 
 // --- Zabbix (fonte primaria de triggers/alertas) ---
+export interface ZabbixHostInterface {
+  ip: string;
+  type: string;
+  port: string;
+  dns: string;
+}
+
+export interface ZabbixHostGroup {
+  groupid: string;
+  name: string;
+}
+
 export interface ZabbixHost {
   hostid: string;
   host: string;
   name: string;
-  status: number; // 0 = monitored, 1 = not monitored
+  status: string;
   available?: number;
-  interfaces?: Array<{
-    interfaceid: string;
-    ip: string;
-    type: number;
-    port: number;
-  }>;
+  parentTemplates?: Array<{ templateid: string; host: string; name: string }>;
+  hostgroups?: ZabbixHostGroup[];
+  inventory?: Record<string, string> | [];
+  interfaces?: ZabbixHostInterface[];
+}
+
+export interface ZabbixDevicesListResponse {
+  devices: ZabbixHost[];
 }
 
 export interface ZabbixItem {
@@ -179,6 +306,11 @@ export interface ZabbixItem {
   status?: number;
 }
 
+export interface ZabbixProblemTag {
+  tag: string;
+  value: string;
+}
+
 export interface ZabbixEvent {
   eventid: string;
   objectid: string;
@@ -190,6 +322,7 @@ export interface ZabbixEvent {
   acknowledged: number;
   name?: string;
   severity?: number;
+  suppressed?: boolean;
   hosts?: ZabbixHost[];
 }
 
@@ -209,6 +342,8 @@ export interface ZabbixTrigger {
   items?: ZabbixItem[];
   lastchange: string;
   lastEvent?: ZabbixEvent;
+  tags?: ZabbixProblemTag[];
+  suppressed?: boolean;
 }
 
 export interface ZabbixTriggersResponse {
@@ -223,6 +358,7 @@ export interface ZabbixItemsResponse {
   items: ZabbixItem[];
 }
 
+// SINCED CONTRACT: Alinhamento de tipo nominal com o validador do monorepo @repo/shared-validation
 export interface ZabbixHistoryEntry {
   itemid: string;
   clock: number;
@@ -261,15 +397,7 @@ export const apiRoutes = {
     list: `${API_BASE}/devices`,
     detail: (id: string) => `${API_BASE}/devices/${id}`,
   },
-  tickets: {
-    list: `${API_BASE}/tickets`,
-    create: `${API_BASE}/tickets`,
-    detail: (id: string) => `${API_BASE}/tickets/${id}`,
-    update: (id: string) => `${API_BASE}/tickets/${id}`,
-    comments: (id: string) => `${API_BASE}/tickets/${id}/comments`,
-    categories: `${API_BASE}/tickets/categories`,
-    stats: `${API_BASE}/tickets/stats`,
-  },
+
   anomaly: {
     overview: `${API_BASE}/anomaly`,
     detections: `${API_BASE}/anomaly/detections`,
@@ -285,11 +413,17 @@ export const apiRoutes = {
         : `${API_BASE}/zabbix/triggers`,
     problems: `${API_BASE}/zabbix/problems`,
     events: `${API_BASE}/zabbix/events`,
-    history: (itemId: string, from?: number, to?: number) => {
+    history: (
+      itemId: string,
+      from?: number,
+      to?: number,
+      valueType?: number,
+    ) => {
       const qs = new URLSearchParams();
       qs.set("item_id", itemId);
       if (from) qs.set("from", String(from));
       if (to) qs.set("to", String(to));
+      if (valueType != null) qs.set("value_type", String(valueType));
       return `${API_BASE}/zabbix/history?${qs.toString()}`;
     },
     historyBatch: (itemIds: string[], from?: number, to?: number) => {
@@ -317,6 +451,22 @@ export const apiRoutes = {
   profile: {
     get: `${API_BASE}/profile`,
     update: `${API_BASE}/profile`,
+    avatar: `${API_BASE}/profile/avatar`,
+    preferences: `${API_BASE}/profile/preferences`,
+    sessions: `${API_BASE}/profile/sessions`,
+    sessionRevoke: (id: string) => `${API_BASE}/profile/sessions/${id}`,
+    securityLog: (limit: number) =>
+      `${API_BASE}/profile/security-log?limit=${limit}`,
+  },
+  tickets: {
+    list: `${API_BASE}/tickets`,
+    create: `${API_BASE}/tickets`,
+    detail: (id: string) => `${API_BASE}/tickets/${id}`,
+    update: (id: string) => `${API_BASE}/tickets/${id}`,
+    comments: (id: string) => `${API_BASE}/tickets/${id}/comments`,
+    categories: `${API_BASE}/tickets/categories`,
+    categoryDetail: (id: string) => `${API_BASE}/tickets/categories/${id}`,
+    stats: `${API_BASE}/tickets/stats`,
   },
   settings: {
     modules: `${API_BASE}/settings/modules`,

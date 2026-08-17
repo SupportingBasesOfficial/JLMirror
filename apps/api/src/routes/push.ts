@@ -11,6 +11,8 @@ import {
   pushSubscribeSchema,
   pushUnsubscribeSchema,
   pushBroadcastSchema,
+  nativePushSubscribeSchema,
+  nativePushUnsubscribeSchema,
 } from "@repo/shared-validation";
 import { writeAuditLog } from "../lib/audit.js";
 import {
@@ -363,6 +365,128 @@ pushRoute.post(
       });
       return c.json(
         { error: { code: "SEND_ERROR", message: "Erro ao enviar broadcast" } },
+        500,
+      );
+    }
+  },
+);
+
+// ========== Native Push (APNs/FCM via Expo) ==========
+
+// POST /api/v1/push/native/subscribe — inscreve device nativo (iOS/Android)
+pushRoute.post(
+  "/native/subscribe",
+  requirePermission("notifications:write"),
+  rateLimitWrite,
+  validate({ schema: nativePushSubscribeSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const tenantId = user?.tenant_id ?? null;
+    const userId = user?.sub ?? null;
+    const body = c.get("validatedData") as {
+      push_token: string;
+      platform: "ios" | "android";
+      device_type?: string;
+      user_agent?: string;
+    };
+
+    const { push_token, platform, device_type, user_agent } = body;
+
+    try {
+      // Upsert — se ja existe o push_token+user_id, atualiza
+      const result = await query<{ id: string }>(
+        `INSERT INTO public.push_subscriptions (tenant_id, user_id, endpoint, p256dh_key, auth_key, push_token, platform, device_type, user_agent, is_active)
+       VALUES ($1, $2, $3, NULL, NULL, $4, $5, $6, $7, true)
+       ON CONFLICT DO UPDATE SET
+         push_token = EXCLUDED.push_token,
+         platform = EXCLUDED.platform,
+         device_type = EXCLUDED.device_type,
+         user_agent = EXCLUDED.user_agent,
+         is_active = true,
+         updated_at = timezone('utc'::text, now())
+       WHERE push_subscriptions.push_token = $4 AND push_subscriptions.user_id = $2
+       RETURNING id`,
+        [
+          tenantId,
+          userId,
+          `expo://${push_token}`,
+          push_token,
+          platform,
+          device_type ?? null,
+          user_agent ?? null,
+        ],
+      );
+
+      // Se nao fez update (nao existia), faz insert
+      if (!result.data?.rows[0]) {
+        const insertResult = await query<{ id: string }>(
+          `INSERT INTO public.push_subscriptions (tenant_id, user_id, endpoint, p256dh_key, auth_key, push_token, platform, device_type, user_agent, is_active)
+           VALUES ($1, $2, $3, NULL, NULL, $4, $5, $6, $7, true)
+           RETURNING id`,
+          [
+            tenantId,
+            userId,
+            `expo://${push_token}`,
+            push_token,
+            platform,
+            device_type ?? null,
+            user_agent ?? null,
+          ],
+        );
+
+        if (insertResult.error || !insertResult.data?.rows[0]) {
+          return c.json(
+            { error: { code: "CREATE_ERROR", message: "Erro ao inscrever" } },
+            500,
+          );
+        }
+
+        return c.json({ id: insertResult.data.rows[0].id, subscribed: true });
+      }
+
+      logger.info("Native push subscription criada", {
+        subId: result.data.rows[0].id,
+        userId,
+        platform,
+      });
+
+      return c.json({ id: result.data.rows[0].id, subscribed: true });
+    } catch (error) {
+      logger.error("Erro ao inscrever native push", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "CREATE_ERROR", message: "Erro ao inscrever" } },
+        500,
+      );
+    }
+  },
+);
+
+// POST /api/v1/push/native/unsubscribe — remove device nativo
+pushRoute.post(
+  "/native/unsubscribe",
+  requirePermission("notifications:write"),
+  rateLimitWrite,
+  validate({ schema: nativePushUnsubscribeSchema }),
+  async (c) => {
+    const user = c.get("user");
+    const userId = user?.sub ?? null;
+    const body = c.get("validatedData") as { push_token: string };
+
+    try {
+      await query(
+        "UPDATE public.push_subscriptions SET is_active = false WHERE push_token = $1 AND user_id = $2",
+        [body.push_token, userId],
+      );
+
+      return c.json({ unsubscribed: true });
+    } catch (error) {
+      logger.error("Erro ao desinscrever native push", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return c.json(
+        { error: { code: "UPDATE_ERROR", message: "Erro ao desinscrever" } },
         500,
       );
     }

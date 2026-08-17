@@ -1,5 +1,5 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
-// Criar ticket — formulario simples com subject, description, priority
+// Criar ticket — formulario com subject, description, priority, categoria, requester
 import { useState } from "react";
 import {
   View,
@@ -14,9 +14,10 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { api } from "@/lib/api-client";
-import { apiRoutes } from "@/lib/api-routes";
-import { useQueryClient } from "@tanstack/react-query";
+import { apiRoutes, type TicketCategory } from "@/lib/api-routes";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
+import { ScreenHeader } from "@/components/ui/screen-header";
 
 const PRIORITIES = [
   { value: "low", label: "Baixa", color: "#525252" },
@@ -31,7 +32,17 @@ export default function NewTicketScreen() {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<string>("medium");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [requesterName, setRequesterName] = useState("");
+  const [requesterEmail, setRequesterEmail] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Busca categorias
+  const { data: categoriesData } = useQuery<{ categories: TicketCategory[] }>({
+    queryKey: ["tickets", "categories"],
+    queryFn: () => api.get(apiRoutes.tickets.categories),
+  });
+  const categories = categoriesData?.categories ?? [];
 
   async function handleCreate() {
     if (!subject.trim()) {
@@ -44,13 +55,19 @@ export default function NewTicketScreen() {
         subject: subject.trim(),
         description: description.trim() || null,
         priority,
+        source: "mobile",
       };
+      if (categoryId) payload.category_id = categoryId;
+      if (requesterName.trim()) payload.requester_name = requesterName.trim();
+      if (requesterEmail.trim())
+        payload.requester_email = requesterEmail.trim();
+
       const result = await api.post<{ id: string }>(
         apiRoutes.tickets.create,
         payload,
       );
       queryClient.invalidateQueries({ queryKey: ["tickets", "list"] });
-      // Navega para o detalhe do ticket recem-criado
+      queryClient.invalidateQueries({ queryKey: ["tickets", "stats"] });
       if (result?.id) {
         router.replace(`/ticket/${result.id}`);
       } else {
@@ -71,18 +88,8 @@ export default function NewTicketScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       className="flex-1 bg-background"
     >
+      <ScreenHeader title="Novo Ticket" />
       <ScrollView contentContainerClassName="px-4 pt-4 pb-8 gap-4">
-        {/* Header */}
-        <View className="flex-row items-center gap-3">
-          <Pressable
-            onPress={() => router.back()}
-            className="active:opacity-70"
-          >
-            <Ionicons name="arrow-back" size={24} color="#0d9488" />
-          </Pressable>
-          <Text className="text-xl font-bold text-foreground">Novo Ticket</Text>
-        </View>
-
         {/* Assunto */}
         <View className="gap-1.5">
           <Text className="text-sm font-semibold text-foreground">
@@ -142,6 +149,88 @@ export default function NewTicketScreen() {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        {/* Categoria */}
+        {categories.length > 0 && (
+          <View className="gap-1.5">
+            <Text className="text-sm font-semibold text-foreground">
+              Categoria
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerClassName="gap-2"
+            >
+              <Pressable
+                onPress={() => setCategoryId(null)}
+                className={`px-3 py-2 rounded-lg border ${
+                  categoryId === null ? "border-foreground" : "border-border"
+                }`}
+                style={{
+                  backgroundColor: categoryId === null ? "#262626" : undefined,
+                }}
+              >
+                <Text className="text-xs font-medium text-muted-foreground">
+                  Nenhuma
+                </Text>
+              </Pressable>
+              {categories.map((cat) => (
+                <Pressable
+                  key={cat.id}
+                  onPress={() => setCategoryId(cat.id)}
+                  className={`px-3 py-2 rounded-lg border flex-row items-center gap-1.5 ${
+                    categoryId === cat.id
+                      ? "border-foreground"
+                      : "border-border"
+                  }`}
+                  style={{
+                    backgroundColor:
+                      categoryId === cat.id ? `${cat.color}20` : undefined,
+                  }}
+                >
+                  <View
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <Text
+                    className="text-xs font-medium"
+                    style={{
+                      color: categoryId === cat.id ? cat.color : "#737373",
+                    }}
+                  >
+                    {cat.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Solicitante */}
+        <View className="gap-1.5">
+          <Text className="text-sm font-semibold text-foreground">
+            Solicitante (opcional)
+          </Text>
+          <TextInput
+            value={requesterName}
+            onChangeText={setRequesterName}
+            placeholder="Nome do solicitante"
+            placeholderTextColor="#525252"
+            className="rounded-lg bg-card border border-border px-3 py-3 text-sm text-foreground"
+            maxLength={100}
+          />
+          <TextInput
+            value={requesterEmail}
+            onChangeText={setRequesterEmail}
+            placeholder="email@empresa.com"
+            placeholderTextColor="#525252"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            className="rounded-lg bg-card border border-border px-3 py-3 text-sm text-foreground"
+            maxLength={100}
+          />
         </View>
 
         {/* Botao criar */}

@@ -1,28 +1,24 @@
 // @ai-context: .zero-error/architecture-map.md#ingress
 // @ai-restriction: .zero-error/code-standards.md#error-handling
-// Endpoint receptor para Zabbix connector streaming.
-// O Zabbix 7.4 envia batches de history via HTTP POST para este endpoint.
-// Os dados sao armazenados no zabbix_history_cache (TimescaleDB hypertable).
-//
-// RLS INTEGRATION: O tenant_id e resolvido via connector token (nao JWT).
-// Apos resolver o tenant_id, envolvemos o insert em runWithTenant() para que
-// withTenantDb() injete SET LOCAL app.current_tenant_id e a RLS policy
-// do zabbix_history_cache seja enforced.
+// Endpoint receptor assíncrono para Zabbix connector streaming.
+// O Zabbix envia batches de history via HTTP POST para este endpoint.
+// Os dados são enfileirados no Redis via BullMQ para processamento em background,
+// evitando o bloqueio da Event Loop e exaustão de conexões no PostgreSQL.
 //
 // ERROR HANDLING MATRIX:
 //   401 — Token nao fornecido / token invalido
-//   500 — Erro ao armazenar dados / erro interno
+//   400 — Payload vazio ou inválido
+//   500 — Erro interno de enfileiramento
 
 import { Hono } from "hono";
-import { runWithTenant, query } from "@repo/db";
-import { withTenantDb, schema } from "@repo/db/drizzle";
+import { query } from "@repo/db";
+import { createCacheClient } from "@repo/cache";
 import { logger } from "@repo/logger";
 
 export const connectorStreamRoute = new Hono();
 
 // POST /api/v1/zabbix/connector/stream
 // Recebe dados do Zabbix connector — autenticado via Bearer token.
-// O token e mapeado para tenant_id via tenant_routes.zabbix_connector_token.
 connectorStreamRoute.post("/stream", async (c) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -34,8 +30,8 @@ connectorStreamRoute.post("/stream", async (c) => {
 
   const connectorToken = authHeader.slice(7);
 
-  // Busca tenant pelo connector token — query raw pois nao temos RLS context
-  // ainda (o token resolve o tenant, nao o JWT).
+  // Busca tenant pelo connector token — query de infraestrutura otimizada.
+  // Como chaves do cache usam resolveKey, buscamos o token usando uma query direta.
   const tenantResult = await query<{ tenant_id: string }>(
     `SELECT tenant_id FROM public.tenant_routes
      WHERE zabbix_connector_token = $1 AND status = 'active'`,
@@ -52,57 +48,51 @@ connectorStreamRoute.post("/stream", async (c) => {
   const tenantId = tenantResult.data.rows[0].tenant_id;
 
   try {
-    const body = await c.req.json();
-
-    // Zabbix connector envia formato: { data: [{ itemid, hostid, clock, ns, value, value_type }, ...] }
-    // Ou formato flat: [{ itemid, hostid, clock, ns, value, value_type }, ...]
-    const entries: Array<{
-      itemid: string;
-      hostid?: string;
-      clock: number;
-      ns?: number;
-      value: string;
-      value_type?: number;
-    }> = Array.isArray(body) ? body : (body.data ?? []);
-
-    if (entries.length === 0) {
-      return c.json({ ok: true, received: 0 });
+    // Captura o corpo bruto como texto para evitar travar o parsing de JSON na thread HTTP principal
+    const rawBody = await c.req.text();
+    if (
+      !rawBody ||
+      rawBody.trim() === "" ||
+      rawBody === "[]" ||
+      rawBody === "{}"
+    ) {
+      return c.json({ ok: true, received: 0, status: "ignored" });
     }
 
-    // Propaga tenant_id para AsyncLocalStorage para que withTenantDb() injete
-    // SET LOCAL app.current_tenant_id e a RLS policy do zabbix_history_cache
-    // seja enforced no INSERT.
-    await runWithTenant(tenantId, async () => {
-      await withTenantDb(async (db) => {
-        // Bulk INSERT via Drizzle — mapeia entries para colunas do schema.
-        // Usa Drizzle's insert().values() com array para bulk insert.
-        await db.insert(schema.zabbixHistoryCache).values(
-          entries.map((e) => ({
-            tenantId,
-            itemid: e.itemid,
-            hostid: e.hostid ?? "0",
-            clock: e.clock,
-            ns: e.ns ?? 0,
-            value: e.value,
-            valueType: e.value_type ?? 0,
-          })),
-        );
-      });
-    });
+    // Instancia o cliente redis do package de cache comum para empurrar o job na fila do BullMQ
+    const redis = createCacheClient();
 
-    logger.info("History cache atualizado", {
+    // Cria o contrato do Job para o BullMQ processar de forma assíncrona.
+    // Usamos uma estrutura compacta e otimizada para o Redis.
+    const jobData = JSON.stringify({
       tenantId,
-      received: entries.length,
+      payload: rawBody,
+      timestamp: Date.now(),
     });
 
-    return c.json({ ok: true, received: entries.length });
+    // Empurra diretamente para a lista do BullMQ nativo do JLMIRROR (bulletproof queue ingest)
+    // Nome padrão da fila: zabbix-metrics-queue
+    await redis.lpush("bullmq:zabbix-metrics-queue:jobs", jobData);
+
+    // Retorna status 202 Accepted — O padrão enterprise para ingestão assíncrona de webhooks
+    c.status(202);
+    return c.json({
+      ok: true,
+      status: "enqueued",
+      tenantId,
+    });
   } catch (error) {
-    logger.error("Erro no connector stream", {
+    logger.error("Erro fatal na ingestão assíncrona do conector stream", {
       tenantId,
       error: error instanceof Error ? error.message : String(error),
     });
     return c.json(
-      { error: { code: "INTERNAL_ERROR", message: "Erro ao armazenar dados" } },
+      {
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Erro ao enfileirar dados para processamento",
+        },
+      },
       500,
     );
   }
@@ -110,5 +100,5 @@ connectorStreamRoute.post("/stream", async (c) => {
 
 // GET /api/v1/zabbix/connector/health — health check do connector
 connectorStreamRoute.get("/health", (c) => {
-  return c.json({ status: "ok", service: "zabbix-connector-stream" });
+  return c.json({ status: "ok", service: "zabbix-connector-stream-async" });
 });

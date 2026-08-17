@@ -3,15 +3,68 @@
 "use client";
 
 import { useMemo } from "react";
-import { useApi } from "@/lib/use-api";
-import { apiRoutes, type ModuleFlagsResponse } from "@/lib/api-routes";
+import { useRouter } from "next/navigation";
+import { useApi } from "@/lib/use-api.js";
+import { apiRoutes, type ModuleFlagsResponse } from "@/lib/api-routes.js";
 
-// Hook que busca as feature flags de modulos e retorna um map { [flagKey]: enabled }
-// Cache de 60s via SWR (dedupingInterval alto para evitar refetch excessivo)
-// Para clientes tenant: usa client_visible AND client_enabled
-// Para admin global: usa default_value (enabled)
+/**
+ * Enum tipado e estrito contendo as chaves exatas de módulos do JLMIRROR.
+ */
+export type AvailableModuleKeys =
+  | "module_devices"
+  | "module_audit"
+  | "module_logs"
+  | "module_traces"
+  | "module_scripts"
+  | "module_executions"
+  | "module_firewall"
+  | "module_k8s"
+  | "module_ssl"
+  | "module_backup"
+  | "module_notifications"
+  | "module_assets"
+  | "module_capacity"
+  | "module_compliance"
+  | "module_tickets"
+  | "module_kb"
+  | "module_system_health"
+  | "module_api_keys"
+  | "module_webhooks"
+  | "module_tasks"
+  | "module_data_transfer"
+  | "module_lgpd"
+  | "module_escalation"
+  | "module_patches"
+  | "module_security_audit"
+  | "module_correlation"
+  | "module_workflows"
+  | "module_push"
+  | "module_client_portal"
+  | "module_chatops"
+  | "module_status_page"
+  | "module_drift"
+  | "module_itsm"
+  | "module_discovery"
+  | "module_anomaly"
+  | "module_predictions"
+  | "module_finops"
+  | "module_marketplace"
+  | "module_executive_dashboard"
+  | "module_reports"
+  | "module_changes"
+  | "module_admin"
+  | "module_sla"
+  | "module_apm";
+
+/**
+ * União inteligente que aceita strings de configurações dinâmicas (KPIs/Sidebars)
+ * mas preserva o autocompletar do IDE para as chaves nativas do JLMIRROR.
+ */
+export type ModuleKeyInput = AvailableModuleKeys | (string & {});
+
 export function useModuleFlags() {
-  // Usa rota centralizada + tipo type-safe de api-routes.ts
+  const router = useRouter();
+
   const { data, mutate, isLoading } = useApi<ModuleFlagsResponse>(
     apiRoutes.settings.modules,
     {
@@ -28,25 +81,42 @@ export function useModuleFlags() {
     if (data?.modules) {
       for (const mod of data.modules) {
         map[mod.key] = mod.enabled;
-        // Módulo visível para cliente se client_visible AND client_enabled
         clientMap[mod.key] = mod.client_visible && mod.client_enabled;
       }
     }
     return { admin: map, client: clientMap };
   }, [data]);
 
-  // Default seguro: se a flag nao foi carregada ainda, retorna false (nao mostra modulo desativado)
-  function isModuleEnabled(flagKey: string | undefined): boolean {
+  function isModuleEnabled(flagKey: ModuleKeyInput | undefined): boolean {
     if (!flagKey) return true;
-    if (flagMap.admin[flagKey] === undefined) return false;
-    return flagMap.admin[flagKey];
+
+    // CORREÇÃO CIRÚRGICA: Se o código testar o termo legado "module_zabbix", redireciona para "module_devices"
+    const resolvedKey =
+      flagKey === "module_zabbix" ? "module_devices" : flagKey;
+
+    // Retorno defensivo: se a flag não existir ou for undefined, assume false com segurança
+    return (flagMap.admin as Record<string, boolean>)[resolvedKey] ?? false;
   }
 
-  // Para sidebar do cliente: módulo só aparece se client_visible AND client_enabled
-  function isClientModuleEnabled(flagKey: string | undefined): boolean {
+  function isClientModuleEnabled(flagKey: ModuleKeyInput | undefined): boolean {
     if (!flagKey) return true;
-    if (flagMap.client[flagKey] === undefined) return false;
-    return flagMap.client[flagKey];
+    const resolvedKey =
+      flagKey === "module_zabbix" ? "module_devices" : flagKey;
+
+    return (flagMap.client as Record<string, boolean>)[resolvedKey] ?? false;
+  }
+
+  /**
+   * Barramento ativo e reativo de navegação.
+   * Protege páginas Web inacabadas ou desativadas, enviando o utilizador para o Marketplace.
+   */
+  function requireModuleGuard(flagKey: ModuleKeyInput): boolean {
+    const enabled = isModuleEnabled(flagKey);
+    if (!isLoading && !enabled) {
+      router.replace("/marketplace");
+      return false;
+    }
+    return enabled;
   }
 
   return {
@@ -54,6 +124,7 @@ export function useModuleFlags() {
     clientFlagMap: flagMap.client,
     isModuleEnabled,
     isClientModuleEnabled,
+    requireModuleGuard,
     mutate,
     isLoading,
   };

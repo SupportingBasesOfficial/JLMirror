@@ -6,6 +6,7 @@ import "../src/theme/global.css";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 import { setupQueryPersistence } from "@/lib/query-persistence";
@@ -40,8 +41,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
     const inAuthGroup = segments[0] === "(auth)";
 
+    // Se nao autenticado, so pode ficar dentro de (auth)
     if (!isAuthenticated && !inAuthGroup) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/landing");
     } else if (isAuthenticated && inAuthGroup) {
       router.replace("/(tabs)");
     }
@@ -57,18 +59,38 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate>
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="device/[id]" options={{ headerShown: false }} />
-            <Stack.Screen name="ticket/[id]" options={{ headerShown: false }} />
-          </Stack>
-        </AuthGate>
-      </AuthProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate>
+            <StatusBar style="light" />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="device/[id]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ticket/[id]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="ticket/new"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="profile/edit"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="profile/sessions"
+                options={{ headerShown: false }}
+              />
+            </Stack>
+          </AuthGate>
+        </AuthProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }

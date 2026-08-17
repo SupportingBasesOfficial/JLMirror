@@ -25,7 +25,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "analyze": "ANALYZE=true pnpm build",
-    "prepare": "husky",
+    "prepare": "node -e \"try{require('fs').accessSync('.git');require('child_process').execSync('husky')}catch(e){}\"",
     "clean": "rimraf **/node_modules **/.next **/dist .turbo",
     "db:migrate": "tsx -r dotenv/config packages/db/src/migrate.ts up",
     "db:migrate:down": "tsx packages/db/src/migrate.ts down",
@@ -41,12 +41,13 @@
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
-    "@commitlint/cli": "^21.2.1",
-    "@commitlint/config-conventional": "^21.2.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@next/bundle-analyzer": "^16.3.0",
     "@playwright/test": "^1.61.1",
+    "@repo/typescript-config": "workspace:*",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.10.5",
     "@types/pg": "^8.11.10",
@@ -59,7 +60,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
-    "lint-staged": "^17.0.8",
+    "lint-staged": "^16.4.0",
     "next": "^16.3.0",
     "next-themes": "^0.4.6",
     "node-pg-migrate": "^7.9.1",
@@ -71,8 +72,7 @@
     "turbo": "^2.10.4",
     "typescript": "5.9.2",
     "vite": "^6.3.5",
-    "vitest": "^4.1.10",
-    "@repo/typescript-config": "workspace:*"
+    "vitest": "^4.1.10"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -85,7 +85,7 @@
   },
   "packageManager": "pnpm@9.0.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "dependencies": {
     "pino": "^10.3.1"
