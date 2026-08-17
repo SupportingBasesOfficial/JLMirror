@@ -16,6 +16,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # Injeta a infraestrutura distributed para suporte de testes integrados e RLS
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_secure_password
+          POSTGRES_DB: jlmirror_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,6 +65,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Go (Required for gitleaks)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: Install repository dependencies
         run: pnpm install --frozen-lockfile
 
@@ -56,6 +87,7 @@ jobs:
         run: |
           pip install semgrep
           go install github.com/gitleaks/gitleaks/v8@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
 
       - name: Verify integrity (immutable files)
         run: |
@@ -64,7 +96,7 @@ jobs:
               const r = m.verifyIntegrity('.zero-error');
               if (!r.valid) {
                 console.error('INTEGRITY VIOLATION:');
-                r.violations.forEach(v => console.error('  - ' + v.file + ': ' + v.reason));
+                r.violations.forEach(v => console.error('  - ' + v.file + ': ' +v.reason));
                 process.exit(1);
               }
               console.log('Integrity: OK');
@@ -75,6 +107,12 @@ jobs:
           "
 
       - name: Run AI Black Box validators (CI mode — supreme judge)
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgres://postgres:postgres_secure_password@localhost:5432/jlmirror_test
+          REDIS_URL: redis://localhost:6379/0
+          STRESS_CONNECTOR_TOKEN: mock-zabbix-connector-token-secure-uuid
+          PORT: 3001
         run: node .zero-error/validators/index.js ci
 
       - name: Upload AI Black Box report
