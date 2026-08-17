@@ -4,8 +4,8 @@
 
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useApi } from "@/lib/use-api.js";
-import { apiRoutes, type ModuleFlagsResponse } from "@/lib/api-routes.js";
+import { useApi } from "@/lib/use-api";
+import { apiRoutes, type ModuleFlagsResponse } from "@/lib/api-routes";
 
 /**
  * Enum tipado e estrito contendo as chaves exatas de módulos do JLMIRROR.
