@@ -6,13 +6,13 @@
   "types": "./src/index.tsx",
   "files": ["src"],
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "lucide-react": "^1.24.0",
-    "sonner": "^2.0.7"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "lucide-react": "^1.35.0",
+    "sonner": "^2.0.8"
   },
   "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5"
   }
 }
